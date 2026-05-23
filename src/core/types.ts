@@ -2,12 +2,40 @@ import type { ComponentType } from "react";
 
 export const WORKSPACE_SCHEMA_VERSION = 1;
 
+export type WorkspaceCanvasBounds = {
+  width: number;
+  height: number;
+};
+
 export type WorkspacePreferences = {
   scale: number;
+  fontSize: number;
+  showGrid: boolean;
+  canvasBounds: WorkspaceCanvasBounds;
   density: "compact" | "comfortable";
   themeMode: "system" | "light" | "dark";
-  fontFamily: "system" | "serif" | "mono";
-  themePreset: "neutral" | "graphite" | "contrast";
+  fontFamily: "system" | "humanist" | "serif" | "mono" | "compact";
+  themePreset: "neutral" | "graphite" | "contrast" | "blueprint";
+  colorOverrides: Partial<WorkspaceColorTokens>;
+  panelMenu: PanelMenuPreferences;
+};
+
+export type WorkspaceColorTokens = {
+  page: string;
+  canvas: string;
+  panel: string;
+  panelHeader: string;
+  text: string;
+  muted: string;
+  border: string;
+  button: string;
+  menu: string;
+};
+
+export type PanelMenuPreferences = {
+  moduleOrder: string[];
+  hiddenModuleIds: string[];
+  panelSort: "registered" | "title";
 };
 
 export type WorkspaceState = {
@@ -25,6 +53,35 @@ export type WorkspaceTab = {
   panels: PanelInstance[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type SavedTabTemplate = {
+  id: string;
+  title: string;
+  sourceTitle: string;
+  panels: SavedPanelTemplate[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SavedPanelTemplate = {
+  moduleId: string;
+  panelType: string;
+  title: string;
+  geometry: PanelGeometry;
+};
+
+export type WorkspaceTabTemplateDocument = {
+  kind: "jarri.workspace.tabs";
+  schemaVersion: number;
+  exportedAt: string;
+  templates: SavedTabTemplate[];
+};
+
+export type PanelDisplayState = {
+  mode: "normal" | "minimized";
+  restoreGeometry?: PanelGeometry;
+  minimizedAt?: string;
 };
 
 export type PanelGeometry = {
@@ -55,6 +112,7 @@ export type PanelInstance = {
   stateVersion: number;
   panelState: unknown;
   dirty?: DirtyStateSnapshot;
+  display?: PanelDisplayState;
   createdAt: string;
   updatedAt: string;
 };
@@ -95,6 +153,7 @@ export type PanelNormalizeResult = {
 export type PanelBodyProps = {
   panel: PanelInstance;
   preferences: WorkspacePreferences;
+  modules: Array<Pick<WorkspaceModuleDefinition, "moduleId" | "title">>;
   updatePanelState: (panelState: unknown) => void;
   updatePreferences: (preferences: Partial<WorkspacePreferences>) => void;
 };

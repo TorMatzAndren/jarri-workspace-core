@@ -40,12 +40,23 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
     ],
     preferences: {
       scale: 1,
+      fontSize: 14,
+      showGrid: true,
+      canvasBounds: {
+        width: 1800,
+        height: 1100,
+      },
       density: "compact",
       themeMode: "system",
       fontFamily: "system",
       themePreset: "neutral",
+      colorOverrides: {},
+      panelMenu: {
+        moduleOrder: ["core", "demo"],
+        hiddenModuleIds: [],
+        panelSort: "registered",
+      },
     },
     registryVersion: "runtime-v1",
   };
 }
-

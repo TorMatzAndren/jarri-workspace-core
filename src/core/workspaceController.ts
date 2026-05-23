@@ -3,32 +3,53 @@ import { createId, nowIso } from "./id";
 import {
   geometryFromPanelDefinition,
   nextFocusOrder,
+  repairFocusOrder,
 } from "./layoutEngine";
 import type { LayoutPersistence } from "./layoutPersistence";
 import type { PanelRegistry } from "./panelRegistry";
+import {
+  createLocalTabTemplateStorage,
+  createTemplateDocument,
+  createTemplateFromTab,
+  normalizeTemplateDocument,
+  tabFromTemplate,
+  type TabTemplateStorage,
+} from "./tabTemplates";
 import type {
+  PanelDefinition,
   PanelGeometry,
   PanelInstance,
+  SavedTabTemplate,
   WorkspacePreferences,
   WorkspaceState,
 } from "./types";
+
+const FOCUS_ORDER_COMPACT_THRESHOLD = 500;
 
 type WorkspaceControllerDependencies = {
   registry: PanelRegistry;
   persistence: LayoutPersistence;
   defaultWorkspaceFactory: () => WorkspaceState;
+  tabTemplateStorage?: TabTemplateStorage;
 };
 
 export type WorkspaceController = {
   workspace: WorkspaceState;
   activeTab: WorkspaceState["tabs"][number];
   initialRepairLabel: string;
-  availablePanels: ReturnType<PanelRegistry["listPanels"]>;
+  availablePanels: PanelDefinition[];
   selectTab: (tabId: string) => void;
   createTab: () => void;
+  renameTab: (tabId: string, title: string) => void;
   closeTab: (tabId: string) => void;
+  savedTabTemplates: SavedTabTemplate[];
+  saveActiveTabTemplate: () => void;
+  loadTabTemplate: (templateId: string) => void;
+  exportTabsJson: () => string;
+  importTabsJson: (json: string) => { imported: number; warnings: string[] };
   createPanel: (moduleId: string, panelType: string) => void;
   closePanel: (panelId: string) => void;
+  togglePanelMinimized: (panelId: string) => void;
   focusPanel: (panelId: string) => void;
   updatePanelGeometry: (panelId: string, geometry: PanelGeometry) => void;
   updatePanelState: (panelId: string, panelState: unknown) => void;
@@ -40,13 +61,24 @@ export function useWorkspaceController({
   registry,
   persistence,
   defaultWorkspaceFactory,
+  tabTemplateStorage,
 }: WorkspaceControllerDependencies): WorkspaceController {
   const [initialLoad] = useState(() => persistence.loadWorkspace());
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialLoad.state);
+  const [templateStorage] = useState(
+    () => tabTemplateStorage ?? createLocalTabTemplateStorage(),
+  );
+  const [savedTabTemplates, setSavedTabTemplates] = useState<SavedTabTemplate[]>(
+    () => templateStorage.load(),
+  );
 
   useEffect(() => {
     persistence.saveWorkspace(workspace);
   }, [persistence, workspace]);
+
+  useEffect(() => {
+    templateStorage.save(savedTabTemplates);
+  }, [savedTabTemplates, templateStorage]);
 
   const activeTab = useMemo(
     () =>
@@ -110,6 +142,21 @@ export function useWorkspaceController({
     }));
   }
 
+  function renameTab(tabId: string, title: string) {
+    const nextTitle = title.trim();
+    if (!nextTitle) {
+      return;
+    }
+
+    const now = nowIso();
+    setWorkspace((current) => ({
+      ...current,
+      tabs: current.tabs.map((tab) =>
+        tab.id === tabId ? { ...tab, title: nextTitle, updatedAt: now } : tab,
+      ),
+    }));
+  }
+
   function closeTab(tabId: string) {
     setWorkspace((current) => {
       if (current.tabs.length <= 1) {
@@ -126,10 +173,96 @@ export function useWorkspaceController({
     });
   }
 
+  function saveActiveTabTemplate() {
+    const tab = activeTab;
+    if (!tab) {
+      return;
+    }
+
+    setSavedTabTemplates((current) => [...current, createTemplateFromTab(tab)]);
+  }
+
+  function loadTabTemplate(templateId: string) {
+    const template = savedTabTemplates.find((candidate) => candidate.id === templateId);
+    if (!template) {
+      return;
+    }
+
+    const tab = tabFromTemplate(template, registry);
+    setWorkspace((current) => ({
+      ...current,
+      activeTabId: tab.id,
+      tabs: [...current.tabs, tab],
+    }));
+  }
+
+  function exportTabsJson() {
+    const currentTabTemplates = workspace.tabs.map(createTemplateFromTab);
+    return JSON.stringify(
+      createTemplateDocument([...savedTabTemplates, ...currentTabTemplates]),
+      null,
+      2,
+    );
+  }
+
+  function importTabsJson(json: string) {
+    const warnings: string[] = [];
+
+    try {
+      const document = normalizeTemplateDocument(JSON.parse(json));
+      const templates = document.templates;
+      if (templates.length === 0) {
+        warnings.push("No valid panel setups were found.");
+      }
+      setSavedTabTemplates((current) => [...current, ...templates]);
+      return { imported: templates.length, warnings };
+    } catch {
+      return { imported: 0, warnings: ["Import failed because JSON was invalid."] };
+    }
+  }
+
+
+  function togglePanelMinimized(panelId: string) {
+    const now = nowIso();
+
+    updateActiveTab((panels) =>
+      panels.map((panel) => {
+        if (panel.id !== panelId) {
+          return panel;
+        }
+
+        if (panel.display?.mode === "minimized") {
+          return {
+            ...panel,
+            geometry: panel.display.restoreGeometry ?? panel.geometry,
+            display: {
+              mode: "normal",
+            },
+            updatedAt: now,
+          };
+        }
+
+        return {
+          ...panel,
+          display: {
+            mode: "minimized",
+            restoreGeometry: panel.geometry,
+            minimizedAt: now,
+          },
+          updatedAt: now,
+        };
+      }),
+    );
+  }
+
   function focusPanel(panelId: string) {
     updateActiveTab((panels) => {
-      const nextFocus = nextFocusOrder(panels);
-      return panels.map((panel) =>
+      const basePanels =
+        nextFocusOrder(panels) > FOCUS_ORDER_COMPACT_THRESHOLD
+          ? repairFocusOrder(panels)
+          : panels;
+      const nextFocus = nextFocusOrder(basePanels);
+      return basePanels.map((panel) =>
         panel.id === panelId ? { ...panel, focusOrder: nextFocus } : panel,
       );
     });
@@ -177,10 +310,19 @@ export function useWorkspaceController({
       .filter((panel) => panel.panelType !== "missing"),
     selectTab: (tabId) => setWorkspace((current) => ({ ...current, activeTabId: tabId })),
     createTab,
+    renameTab,
     closeTab,
+    savedTabTemplates,
+    saveActiveTabTemplate,
+    loadTabTemplate,
+    exportTabsJson,
+    importTabsJson,
     createPanel,
     closePanel: (panelId) =>
-      updateActiveTab((panels) => panels.filter((panel) => panel.id !== panelId)),
+      updateActiveTab((panels) =>
+        repairFocusOrder(panels.filter((panel) => panel.id !== panelId)),
+      ),
+    togglePanelMinimized,
     focusPanel,
     updatePanelGeometry,
     updatePanelState,
@@ -188,4 +330,3 @@ export function useWorkspaceController({
     resetWorkspace,
   };
 }
-

@@ -9,24 +9,29 @@ export type GeometryInteraction = {
   startPointerX: number;
   startPointerY: number;
   startGeometry: PanelGeometry;
+  scale: number;
 };
 
 export function snapToGrid(value: number, gridSize = GRID_SIZE) {
   return Math.round(value / gridSize) * gridSize;
 }
 
+export function snapUpToGrid(value: number, gridSize = GRID_SIZE) {
+  return Math.ceil(value / gridSize) * gridSize;
+}
+
 export function normalizeGeometry(
   input: Partial<PanelGeometry> | undefined,
   fallback: PanelGeometry,
 ): PanelGeometry {
-  const minWidth = finiteNumber(input?.minWidth, fallback.minWidth ?? 260);
-  const minHeight = finiteNumber(input?.minHeight, fallback.minHeight ?? 160);
+  const minWidth = snapUpToGrid(finiteNumber(input?.minWidth, fallback.minWidth ?? 260));
+  const minHeight = snapUpToGrid(finiteNumber(input?.minHeight, fallback.minHeight ?? 160));
 
   return {
-    x: Math.max(0, Math.round(finiteNumber(input?.x, fallback.x))),
-    y: Math.max(0, Math.round(finiteNumber(input?.y, fallback.y))),
-    width: Math.max(minWidth, Math.round(finiteNumber(input?.width, fallback.width))),
-    height: Math.max(minHeight, Math.round(finiteNumber(input?.height, fallback.height))),
+    x: Math.max(0, snapToGrid(finiteNumber(input?.x, fallback.x))),
+    y: Math.max(0, snapToGrid(finiteNumber(input?.y, fallback.y))),
+    width: Math.max(minWidth, snapToGrid(finiteNumber(input?.width, fallback.width))),
+    height: Math.max(minHeight, snapToGrid(finiteNumber(input?.height, fallback.height))),
     minWidth,
     minHeight,
   };
@@ -49,13 +54,13 @@ export function geometryFromPanelDefinition(
 }
 
 export function enforceMinSize(geometry: PanelGeometry): PanelGeometry {
-  const minWidth = geometry.minWidth ?? 260;
-  const minHeight = geometry.minHeight ?? 160;
+  const minWidth = snapUpToGrid(geometry.minWidth ?? 260);
+  const minHeight = snapUpToGrid(geometry.minHeight ?? 160);
 
   return {
     ...geometry,
-    width: Math.max(minWidth, geometry.width),
-    height: Math.max(minHeight, geometry.height),
+    width: snapToGrid(Math.max(minWidth, geometry.width)),
+    height: snapToGrid(Math.max(minHeight, geometry.height)),
     minWidth,
     minHeight,
   };
@@ -76,6 +81,7 @@ export function beginGeometryInteraction(
   panel: PanelInstance,
   pointerX: number,
   pointerY: number,
+  scale: number,
 ): GeometryInteraction {
   return {
     mode,
@@ -83,6 +89,7 @@ export function beginGeometryInteraction(
     startPointerX: pointerX,
     startPointerY: pointerY,
     startGeometry: panel.geometry,
+    scale: normalizeScale(scale),
   };
 }
 
@@ -91,8 +98,8 @@ export function previewGeometryInteraction(
   pointerX: number,
   pointerY: number,
 ): PanelGeometry {
-  const deltaX = pointerX - interaction.startPointerX;
-  const deltaY = pointerY - interaction.startPointerY;
+  const deltaX = (pointerX - interaction.startPointerX) / interaction.scale;
+  const deltaY = (pointerY - interaction.startPointerY) / interaction.scale;
 
   if (interaction.mode === "move") {
     return {
@@ -119,7 +126,16 @@ export function commitGeometryInteraction(geometry: PanelGeometry): PanelGeometr
   });
 }
 
+export function cancelGeometryInteraction(
+  interaction: GeometryInteraction,
+): PanelGeometry {
+  return interaction.startGeometry;
+}
+
+export function normalizeScale(scale: number) {
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
 function finiteNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
-

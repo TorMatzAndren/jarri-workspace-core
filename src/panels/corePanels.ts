@@ -8,8 +8,8 @@ const missingPanelDefinition: PanelDefinition = {
   title: "Missing Panel",
   description: "Inert projection for unavailable panel definitions.",
   category: "core",
-  defaultGeometry: { x: 40, y: 40, width: 420, height: 240 },
-  minGeometry: { width: 320, height: 180 },
+  defaultGeometry: { x: 48, y: 48, width: 420, height: 240 },
+  minGeometry: { width: 324, height: 180 },
   stateVersion: 1,
   capabilities: {
     closable: true,
@@ -33,8 +33,8 @@ const settingsPanelDefinition: PanelDefinition = {
   title: "Settings",
   description: "Framework-level Workspace Core preferences.",
   category: "core",
-  defaultGeometry: { x: 920, y: 410, width: 420, height: 360 },
-  minGeometry: { width: 340, height: 300 },
+  defaultGeometry: { x: 924, y: 408, width: 456, height: 456 },
+  minGeometry: { width: 360, height: 336 },
   stateVersion: 1,
   capabilities: {
     closable: true,
@@ -54,4 +54,3 @@ export const coreModule: WorkspaceModuleDefinition = {
   version: "1.0.0",
   panels: [missingPanelDefinition, settingsPanelDefinition],
 };
-

@@ -207,8 +207,8 @@ export const demoPanelDefinitions: PanelDefinition[] = [
     title: "Truth Demo",
     description: "Truth-first panel projection without persisted runtime truth.",
     category: "domain",
-    defaultGeometry: { x: 24, y: 24, width: 520, height: 300 },
-    minGeometry: { width: 340, height: 220 },
+    defaultGeometry: { x: 24, y: 24, width: 528, height: 300 },
+    minGeometry: { width: 348, height: 228 },
     stateVersion: 1,
     capabilities: {
       closable: true,
@@ -228,7 +228,7 @@ export const demoPanelDefinitions: PanelDefinition[] = [
     title: "Timeline Demo",
     description: "Temporal/replay primitive boundary demo.",
     category: "temporal",
-    defaultGeometry: { x: 568, y: 24, width: 560, height: 360 },
+    defaultGeometry: { x: 576, y: 24, width: 564, height: 360 },
     minGeometry: { width: 360, height: 240 },
     stateVersion: 1,
     capabilities: {
@@ -253,8 +253,8 @@ export const demoPanelDefinitions: PanelDefinition[] = [
     title: "Advisory Log Demo",
     description: "Advisory output separated from source truth.",
     category: "advisory",
-    defaultGeometry: { x: 160, y: 410, width: 720, height: 320 },
-    minGeometry: { width: 380, height: 240 },
+    defaultGeometry: { x: 156, y: 408, width: 720, height: 324 },
+    minGeometry: { width: 384, height: 240 },
     stateVersion: 1,
     capabilities: {
       closable: true,
@@ -273,4 +273,3 @@ export const demoPanelDefinitions: PanelDefinition[] = [
     Component: AdvisoryLogDemoPanel,
   },
 ];
-

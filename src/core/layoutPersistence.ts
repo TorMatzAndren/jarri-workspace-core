@@ -7,6 +7,7 @@ import type {
   PanelInstance,
   PersistedModuleRecord,
   PersistedWorkspaceDocument,
+  WorkspaceColorTokens,
   WorkspacePreferences,
   WorkspaceState,
   WorkspaceTab,
@@ -176,21 +177,83 @@ function normalizePreferences(input: unknown): WorkspacePreferences {
   const themeMode =
     raw.themeMode === "light" || raw.themeMode === "dark" ? raw.themeMode : "system";
   const fontFamily =
-    raw.fontFamily === "serif" || raw.fontFamily === "mono"
+    raw.fontFamily === "humanist" ||
+    raw.fontFamily === "serif" ||
+    raw.fontFamily === "mono" ||
+    raw.fontFamily === "compact"
       ? raw.fontFamily
       : "system";
   const themePreset =
-    raw.themePreset === "graphite" || raw.themePreset === "contrast"
+    raw.themePreset === "graphite" ||
+    raw.themePreset === "contrast" ||
+    raw.themePreset === "blueprint"
       ? raw.themePreset
       : "neutral";
 
   return {
     scale: clamp(finiteNumber(raw.scale, 1), 0.75, 1.35),
+    fontSize: clamp(finiteNumber(raw.fontSize, 14), 12, 18),
+    showGrid: typeof raw.showGrid === "boolean" ? raw.showGrid : true,
+    canvasBounds: normalizeCanvasBounds(raw.canvasBounds),
     density,
     themeMode,
     fontFamily,
     themePreset,
+    colorOverrides: normalizeColorOverrides(raw.colorOverrides),
+    panelMenu: normalizePanelMenuPreferences(raw.panelMenu),
   };
+}
+
+function normalizePanelMenuPreferences(input: unknown): WorkspacePreferences["panelMenu"] {
+  const raw = isRecord(input) ? input : {};
+  const moduleOrder = Array.isArray(raw.moduleOrder)
+    ? raw.moduleOrder.filter((entry): entry is string => typeof entry === "string")
+    : ["core", "demo"];
+  const hiddenModuleIds = Array.isArray(raw.hiddenModuleIds)
+    ? raw.hiddenModuleIds.filter((entry): entry is string => typeof entry === "string")
+    : [];
+
+  return {
+    moduleOrder,
+    hiddenModuleIds,
+    panelSort: raw.panelSort === "title" ? "title" : "registered",
+  };
+}
+
+function normalizeCanvasBounds(input: unknown): WorkspacePreferences["canvasBounds"] {
+  const raw = isRecord(input) ? input : {};
+  return {
+    width: clamp(finiteNumber(raw.width, 1800), 900, 12000),
+    height: clamp(finiteNumber(raw.height, 1100), 700, 12000),
+  };
+}
+
+function normalizeColorOverrides(input: unknown): Partial<WorkspaceColorTokens> {
+  if (!isRecord(input)) {
+    return {};
+  }
+
+  const keys: Array<keyof WorkspaceColorTokens> = [
+    "page",
+    "canvas",
+    "panel",
+    "panelHeader",
+    "text",
+    "muted",
+    "border",
+    "button",
+    "menu",
+  ];
+  const result: Partial<WorkspaceColorTokens> = {};
+
+  for (const key of keys) {
+    const value = input[key];
+    if (typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)) {
+      result[key] = value;
+    }
+  }
+
+  return result;
 }
 
 function normalizePanelGeometry(
@@ -214,6 +277,31 @@ function normalizePanelGeometry(
     },
     fallback,
   );
+}
+
+
+function normalizePanelDisplay(input: unknown): PanelInstance["display"] {
+  if (!isRecord(input)) {
+    return undefined;
+  }
+
+  const mode = input.mode === "minimized" ? "minimized" : "normal";
+  const restoreGeometry = isRecord(input.restoreGeometry)
+    ? normalizeGeometry(input.restoreGeometry, SAFE_PANEL_GEOMETRY)
+    : undefined;
+
+  if (mode === "minimized") {
+    return {
+      mode,
+      restoreGeometry,
+      minimizedAt: typeof input.minimizedAt === "string" ? input.minimizedAt : undefined,
+    };
+  }
+
+  return {
+    mode: "normal",
+    restoreGeometry,
+  };
 }
 
 function missingPanelState(moduleId: string, panelType: string, originalState: unknown) {
@@ -341,4 +429,3 @@ function finiteNumber(value: unknown, fallback: number) {
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
-
