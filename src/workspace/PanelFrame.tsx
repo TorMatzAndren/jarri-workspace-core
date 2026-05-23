@@ -1,38 +1,38 @@
 import { useEffect, useRef, useState } from "react";
-import { registry } from "../panels/registry";
-import type { PanelGeometry, PanelInstance } from "../core/types";
-
-type DragState =
-  | null
-  | {
-      mode: "move" | "resize";
-      startX: number;
-      startY: number;
-      startGeometry: PanelGeometry;
-    };
+import {
+  beginGeometryInteraction,
+  previewGeometryInteraction,
+  type GeometryInteraction,
+} from "../core/layoutEngine";
+import type { PanelRegistry } from "../core/panelRegistry";
+import type {
+  PanelGeometry,
+  PanelInstance,
+  WorkspacePreferences,
+} from "../core/types";
 
 type Props = {
+  registry: PanelRegistry;
   panel: PanelInstance;
+  preferences: WorkspacePreferences;
   onFocus: (panelId: string) => void;
   onClose: (panelId: string) => void;
   onGeometryChange: (panelId: string, geometry: PanelGeometry) => void;
   onPanelStateChange: (panelId: string, panelState: unknown) => void;
+  onPreferencesChange: (preferences: Partial<WorkspacePreferences>) => void;
 };
 
-const GRID = 12;
-
-function snap(value: number) {
-  return Math.round(value / GRID) * GRID;
-}
-
 export function PanelFrame({
+  registry,
   panel,
+  preferences,
   onFocus,
   onClose,
   onGeometryChange,
   onPanelStateChange,
+  onPreferencesChange,
 }: Props) {
-  const [dragState, setDragState] = useState<DragState>(null);
+  const [dragState, setDragState] = useState<GeometryInteraction | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const definition = registry.getPanel(panel.moduleId, panel.panelType);
   const Component = definition?.Component;
@@ -45,27 +45,10 @@ export function PanelFrame({
     const activeDrag = dragState;
 
     function handlePointerMove(event: PointerEvent) {
-      const deltaX = event.clientX - activeDrag.startX;
-      const deltaY = event.clientY - activeDrag.startY;
-      const minWidth =
-        panel.geometry.minWidth ?? definition?.minGeometry.width ?? 260;
-      const minHeight =
-        panel.geometry.minHeight ?? definition?.minGeometry.height ?? 160;
-
-      if (activeDrag.mode === "move") {
-        onGeometryChange(panel.id, {
-          ...panel.geometry,
-          x: Math.max(0, snap(activeDrag.startGeometry.x + deltaX)),
-          y: Math.max(0, snap(activeDrag.startGeometry.y + deltaY)),
-        });
-        return;
-      }
-
-      onGeometryChange(panel.id, {
-        ...panel.geometry,
-        width: Math.max(minWidth, snap(activeDrag.startGeometry.width + deltaX)),
-        height: Math.max(minHeight, snap(activeDrag.startGeometry.height + deltaY)),
-      });
+      onGeometryChange(
+        panel.id,
+        previewGeometryInteraction(activeDrag, event.clientX, event.clientY),
+      );
     }
 
     function handlePointerUp() {
@@ -79,18 +62,13 @@ export function PanelFrame({
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
-  }, [definition, dragState, onGeometryChange, panel]);
+  }, [dragState, onGeometryChange, panel.id]);
 
   function beginDrag(event: React.PointerEvent, mode: "move" | "resize") {
     event.preventDefault();
     event.stopPropagation();
     onFocus(panel.id);
-    setDragState({
-      mode,
-      startX: event.clientX,
-      startY: event.clientY,
-      startGeometry: panel.geometry,
-    });
+    setDragState(beginGeometryInteraction(mode, panel, event.clientX, event.clientY));
   }
 
   return (
@@ -128,7 +106,9 @@ export function PanelFrame({
         {Component ? (
           <Component
             panel={panel}
+            preferences={preferences}
             updatePanelState={(panelState) => onPanelStateChange(panel.id, panelState)}
+            updatePreferences={onPreferencesChange}
           />
         ) : null}
       </div>

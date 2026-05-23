@@ -6,6 +6,8 @@ export type WorkspacePreferences = {
   scale: number;
   density: "compact" | "comfortable";
   themeMode: "system" | "light" | "dark";
+  fontFamily: "system" | "serif" | "mono";
+  themePreset: "neutral" | "graphite" | "contrast";
 };
 
 export type WorkspaceState = {
@@ -92,7 +94,9 @@ export type PanelNormalizeResult = {
 
 export type PanelBodyProps = {
   panel: PanelInstance;
+  preferences: WorkspacePreferences;
   updatePanelState: (panelState: unknown) => void;
+  updatePreferences: (preferences: Partial<WorkspacePreferences>) => void;
 };
 
 export type PanelDefinition = {
@@ -122,6 +126,13 @@ export type PersistedModuleRecord = {
   registeredPanelTypes: string[];
 };
 
+export type WorkspaceModuleDefinition = {
+  moduleId: string;
+  title: string;
+  version: string;
+  panels: PanelDefinition[];
+};
+
 export type PersistedWorkspaceDocument = {
   kind: "jarri.workspace.layout";
   schemaVersion: number;
@@ -137,4 +148,3 @@ export type LayoutRepairReport = {
   toSchemaVersion: number;
   warnings: string[];
 };
-

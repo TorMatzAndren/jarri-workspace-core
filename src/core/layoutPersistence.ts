@@ -1,9 +1,11 @@
-import { registry } from "../panels/registry";
 import { createId, nowIso } from "./id";
+import { normalizeGeometry, repairFocusOrder } from "./layoutEngine";
+import type { PanelRegistry } from "./panelRegistry";
 import type {
   LayoutRepairReport,
   PanelGeometry,
   PanelInstance,
+  PersistedModuleRecord,
   PersistedWorkspaceDocument,
   WorkspacePreferences,
   WorkspaceState,
@@ -22,16 +24,150 @@ const SAFE_PANEL_GEOMETRY: PanelGeometry = {
   minHeight: 180,
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+export type LayoutStorageProvider = {
+  load: (workspaceId: string) => PersistedWorkspaceDocument | null;
+  save: (workspaceId: string, document: PersistedWorkspaceDocument) => void;
+  remove: (workspaceId: string) => void;
+};
+
+export type LayoutPersistence = {
+  loadWorkspace: () => {
+    state: WorkspaceState;
+    report: LayoutRepairReport;
+  };
+  saveWorkspace: (state: WorkspaceState) => void;
+  resetWorkspaceStorage: () => void;
+};
+
+type LayoutPersistenceDependencies = {
+  registry: PanelRegistry;
+  storageProvider?: LayoutStorageProvider;
+  defaultWorkspaceFactory: () => WorkspaceState;
+  getModuleRecords: () => PersistedModuleRecord[];
+  workspaceId?: string;
+};
+
+export function createLocalStorageProvider(): LayoutStorageProvider {
+  return {
+    load() {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        return null;
+      }
+      return JSON.parse(raw) as PersistedWorkspaceDocument;
+    },
+    save(_workspaceId, document) {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
+    },
+    remove() {
+      window.localStorage.removeItem(STORAGE_KEY);
+    },
+  };
 }
 
-function finiteNumber(value: unknown, fallback: number) {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
+export function createLayoutPersistence({
+  registry,
+  storageProvider = createLocalStorageProvider(),
+  defaultWorkspaceFactory,
+  getModuleRecords,
+  workspaceId = "default",
+}: LayoutPersistenceDependencies): LayoutPersistence {
+  function normalizeWorkspace(input: unknown): {
+    state: WorkspaceState;
+    report: LayoutRepairReport;
+  } {
+    const warnings: string[] = [];
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
+    if (!isRecord(input)) {
+      return {
+        state: defaultWorkspaceFactory(),
+        report: {
+          migrated: false,
+          repaired: true,
+          toSchemaVersion: WORKSPACE_SCHEMA_VERSION,
+          warnings: ["Created default workspace because persisted state was missing."],
+        },
+      };
+    }
+
+    const fromSchemaVersion = finiteNumber(input.schemaVersion, 0);
+    const seenTabIds = new Set<string>();
+    let tabs = Array.isArray(input.tabs)
+      ? input.tabs.map((tab, index) =>
+          normalizeTab(tab, index, seenTabIds, warnings, registry),
+        )
+      : [];
+
+    if (tabs.length === 0) {
+      tabs = defaultWorkspaceFactory().tabs;
+      warnings.push("Repaired empty tab list with default tab.");
+    }
+
+    const activeTabId =
+      typeof input.activeTabId === "string" &&
+      tabs.some((tab) => tab.id === input.activeTabId)
+        ? input.activeTabId
+        : tabs[0].id;
+
+    if (activeTabId !== input.activeTabId) {
+      warnings.push("Repaired invalid active tab id.");
+    }
+
+    return {
+      state: {
+        schemaVersion: WORKSPACE_SCHEMA_VERSION,
+        workspaceId:
+          typeof input.workspaceId === "string" && input.workspaceId.trim()
+            ? input.workspaceId
+            : workspaceId,
+        activeTabId,
+        tabs,
+        preferences: normalizePreferences(input.preferences),
+        registryVersion:
+          typeof input.registryVersion === "string" ? input.registryVersion : "runtime-v1",
+      },
+      report: {
+        migrated: fromSchemaVersion !== WORKSPACE_SCHEMA_VERSION,
+        repaired: warnings.length > 0,
+        fromSchemaVersion,
+        toSchemaVersion: WORKSPACE_SCHEMA_VERSION,
+        warnings,
+      },
+    };
+  }
+
+  return {
+    loadWorkspace() {
+      try {
+        const document = storageProvider.load(workspaceId);
+        if (
+          !document ||
+          !isRecord(document) ||
+          document.kind !== DOCUMENT_KIND ||
+          !isRecord(document.workspace)
+        ) {
+          return normalizeWorkspace(null);
+        }
+        return normalizeWorkspace(document.workspace);
+      } catch {
+        return normalizeWorkspace(null);
+      }
+    },
+    saveWorkspace(state) {
+      const document: PersistedWorkspaceDocument = {
+        kind: DOCUMENT_KIND,
+        schemaVersion: WORKSPACE_SCHEMA_VERSION,
+        savedAt: nowIso(),
+        workspace: state,
+        modules: getModuleRecords(),
+      };
+
+      storageProvider.save(workspaceId, document);
+    },
+    resetWorkspaceStorage() {
+      storageProvider.remove(workspaceId);
+    },
+  };
 }
 
 function normalizePreferences(input: unknown): WorkspacePreferences {
@@ -39,36 +175,45 @@ function normalizePreferences(input: unknown): WorkspacePreferences {
   const density = raw.density === "comfortable" ? "comfortable" : "compact";
   const themeMode =
     raw.themeMode === "light" || raw.themeMode === "dark" ? raw.themeMode : "system";
+  const fontFamily =
+    raw.fontFamily === "serif" || raw.fontFamily === "mono"
+      ? raw.fontFamily
+      : "system";
+  const themePreset =
+    raw.themePreset === "graphite" || raw.themePreset === "contrast"
+      ? raw.themePreset
+      : "neutral";
 
   return {
     scale: clamp(finiteNumber(raw.scale, 1), 0.75, 1.35),
     density,
     themeMode,
+    fontFamily,
+    themePreset,
   };
 }
 
-function normalizeGeometry(
+function normalizePanelGeometry(
   input: unknown,
   fallback: PanelGeometry,
   warnings: string[],
 ): PanelGeometry {
-  const raw = isRecord(input) ? input : {};
-  const minWidth = finiteNumber(raw.minWidth, fallback.minWidth ?? 260);
-  const minHeight = finiteNumber(raw.minHeight, fallback.minHeight ?? 160);
-  const geometry = {
-    x: Math.max(0, Math.round(finiteNumber(raw.x, fallback.x))),
-    y: Math.max(0, Math.round(finiteNumber(raw.y, fallback.y))),
-    width: Math.max(minWidth, Math.round(finiteNumber(raw.width, fallback.width))),
-    height: Math.max(minHeight, Math.round(finiteNumber(raw.height, fallback.height))),
-    minWidth,
-    minHeight,
-  };
-
   if (!isRecord(input)) {
     warnings.push("Repaired missing panel geometry.");
+    return normalizeGeometry(undefined, fallback);
   }
 
-  return geometry;
+  return normalizeGeometry(
+    {
+      x: finiteNumber(input.x, fallback.x),
+      y: finiteNumber(input.y, fallback.y),
+      width: finiteNumber(input.width, fallback.width),
+      height: finiteNumber(input.height, fallback.height),
+      minWidth: finiteNumber(input.minWidth, fallback.minWidth ?? 260),
+      minHeight: finiteNumber(input.minHeight, fallback.minHeight ?? 160),
+    },
+    fallback,
+  );
 }
 
 function missingPanelState(moduleId: string, panelType: string, originalState: unknown) {
@@ -85,6 +230,7 @@ function normalizePanel(
   index: number,
   seenIds: Set<string>,
   warnings: string[],
+  registry: PanelRegistry,
 ): PanelInstance {
   const raw = isRecord(input) ? input : {};
   const moduleId = typeof raw.moduleId === "string" ? raw.moduleId : "core";
@@ -106,11 +252,15 @@ function normalizePanel(
       moduleId: "core",
       panelType: "missing",
       title: typeof raw.title === "string" ? raw.title : "Missing Panel",
-      geometry: normalizeGeometry(raw.geometry, {
-        ...SAFE_PANEL_GEOMETRY,
-        x: SAFE_PANEL_GEOMETRY.x + index * 24,
-        y: SAFE_PANEL_GEOMETRY.y + index * 24,
-      }, warnings),
+      geometry: normalizePanelGeometry(
+        raw.geometry,
+        {
+          ...SAFE_PANEL_GEOMETRY,
+          x: SAFE_PANEL_GEOMETRY.x + index * 24,
+          y: SAFE_PANEL_GEOMETRY.y + index * 24,
+        },
+        warnings,
+      ),
       focusOrder: finiteNumber(raw.focusOrder, index + 1),
       stateVersion: 1,
       panelState: missingPanelState(moduleId, panelType, raw.panelState),
@@ -122,18 +272,20 @@ function normalizePanel(
   const normalizedState = definition.normalizeState(raw.panelState, { now });
   warnings.push(...normalizedState.warnings);
 
-  const fallbackGeometry = {
-    ...definition.defaultGeometry,
-    minWidth: definition.minGeometry.width,
-    minHeight: definition.minGeometry.height,
-  };
-
   return {
     id,
     moduleId: definition.moduleId,
     panelType: definition.panelType,
     title: typeof raw.title === "string" && raw.title.trim() ? raw.title : definition.title,
-    geometry: normalizeGeometry(raw.geometry, fallbackGeometry, warnings),
+    geometry: normalizePanelGeometry(
+      raw.geometry,
+      {
+        ...definition.defaultGeometry,
+        minWidth: definition.minGeometry.width,
+        minHeight: definition.minGeometry.height,
+      },
+      warnings,
+    ),
     focusOrder: finiteNumber(raw.focusOrder, index + 1),
     stateVersion: definition.stateVersion,
     panelState: normalizedState.state,
@@ -148,6 +300,7 @@ function normalizeTab(
   index: number,
   seenTabIds: Set<string>,
   warnings: string[],
+  registry: PanelRegistry,
 ): WorkspaceTab {
   const raw = isRecord(input) ? input : {};
   const now = nowIso();
@@ -162,7 +315,7 @@ function normalizeTab(
   const panelIds = new Set<string>();
   const panels = Array.isArray(raw.panels)
     ? raw.panels.map((panel, panelIndex) =>
-        normalizePanel(panel, panelIndex, panelIds, warnings),
+        normalizePanel(panel, panelIndex, panelIds, warnings, registry),
       )
     : [];
 
@@ -177,163 +330,15 @@ function normalizeTab(
   };
 }
 
-function repairFocusOrder(panels: PanelInstance[]) {
-  return [...panels]
-    .sort((a, b) => a.focusOrder - b.focusOrder)
-    .map((panel, index) => ({ ...panel, focusOrder: index + 1 }));
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function createDefaultWorkspace(): WorkspaceState {
-  const now = nowIso();
-  const definitions = [
-    registry.getPanel("demo", "truth"),
-    registry.getPanel("demo", "timeline"),
-    registry.getPanel("demo", "advisory-log"),
-  ].filter((definition) => definition !== null);
-
-  const panels = definitions.map((definition, index): PanelInstance => ({
-    id: createId("panel"),
-    moduleId: definition.moduleId,
-    panelType: definition.panelType,
-    title: definition.title,
-    geometry: {
-      ...definition.defaultGeometry,
-      minWidth: definition.minGeometry.width,
-      minHeight: definition.minGeometry.height,
-    },
-    focusOrder: index + 1,
-    stateVersion: definition.stateVersion,
-    panelState: definition.createInitialState({ now }),
-    createdAt: now,
-    updatedAt: now,
-  }));
-
-  return {
-    schemaVersion: WORKSPACE_SCHEMA_VERSION,
-    workspaceId: "default",
-    activeTabId: "home",
-    tabs: [
-      {
-        id: "home",
-        title: "Core Demo",
-        panels,
-        createdAt: now,
-        updatedAt: now,
-      },
-    ],
-    preferences: {
-      scale: 1,
-      density: "compact",
-      themeMode: "system",
-    },
-    registryVersion: "demo-v1",
-  };
+function finiteNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-export function normalizeWorkspace(input: unknown): {
-  state: WorkspaceState;
-  report: LayoutRepairReport;
-} {
-  const warnings: string[] = [];
-
-  if (!isRecord(input)) {
-    return {
-      state: createDefaultWorkspace(),
-      report: {
-        migrated: false,
-        repaired: true,
-        toSchemaVersion: WORKSPACE_SCHEMA_VERSION,
-        warnings: ["Created default workspace because persisted state was missing."],
-      },
-    };
-  }
-
-  const fromSchemaVersion = finiteNumber(input.schemaVersion, 0);
-  const seenTabIds = new Set<string>();
-  let tabs = Array.isArray(input.tabs)
-    ? input.tabs.map((tab, index) => normalizeTab(tab, index, seenTabIds, warnings))
-    : [];
-
-  if (tabs.length === 0) {
-    tabs = createDefaultWorkspace().tabs;
-    warnings.push("Repaired empty tab list with default tab.");
-  }
-
-  const activeTabId =
-    typeof input.activeTabId === "string" &&
-    tabs.some((tab) => tab.id === input.activeTabId)
-      ? input.activeTabId
-      : tabs[0].id;
-
-  if (activeTabId !== input.activeTabId) {
-    warnings.push("Repaired invalid active tab id.");
-  }
-
-  return {
-    state: {
-      schemaVersion: WORKSPACE_SCHEMA_VERSION,
-      workspaceId:
-        typeof input.workspaceId === "string" && input.workspaceId.trim()
-          ? input.workspaceId
-          : "default",
-      activeTabId,
-      tabs,
-      preferences: normalizePreferences(input.preferences),
-      registryVersion:
-        typeof input.registryVersion === "string" ? input.registryVersion : "demo-v1",
-    },
-    report: {
-      migrated: fromSchemaVersion !== WORKSPACE_SCHEMA_VERSION,
-      repaired: warnings.length > 0,
-      fromSchemaVersion,
-      toSchemaVersion: WORKSPACE_SCHEMA_VERSION,
-      warnings,
-    },
-  };
-}
-
-export function loadWorkspace(): {
-  state: WorkspaceState;
-  report: LayoutRepairReport;
-} {
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return normalizeWorkspace(null);
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as PersistedWorkspaceDocument;
-    if (!isRecord(parsed) || parsed.kind !== DOCUMENT_KIND || !isRecord(parsed.workspace)) {
-      return normalizeWorkspace(null);
-    }
-    return normalizeWorkspace(parsed.workspace);
-  } catch {
-    return normalizeWorkspace(null);
-  }
-}
-
-export function saveWorkspace(state: WorkspaceState) {
-  const document: PersistedWorkspaceDocument = {
-    kind: DOCUMENT_KIND,
-    schemaVersion: WORKSPACE_SCHEMA_VERSION,
-    savedAt: nowIso(),
-    workspace: state,
-    modules: [
-      {
-        moduleId: "demo",
-        version: "1.0.0",
-        registeredPanelTypes: registry
-          .listPanels()
-          .filter((panel) => panel.moduleId === "demo")
-          .map((panel) => panel.panelType),
-      },
-    ],
-  };
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
-}
-
-export function resetWorkspaceStorage() {
-  window.localStorage.removeItem(STORAGE_KEY);
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
