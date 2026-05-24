@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { OpenResourceRequest, OpenResourceResult } from "./resources";
 
 export const WORKSPACE_SCHEMA_VERSION = 1;
 
@@ -156,6 +157,7 @@ export type PanelBodyProps = {
   modules: Array<Pick<WorkspaceModuleDefinition, "moduleId" | "title">>;
   updatePanelState: (panelState: unknown) => void;
   updatePreferences: (preferences: Partial<WorkspacePreferences>) => void;
+  openResource: (request: OpenResourceRequest) => OpenResourceResult;
 };
 
 export type PanelDefinition = {

@@ -33,6 +33,11 @@ type WorkspaceControllerDependencies = {
   tabTemplateStorage?: TabTemplateStorage;
 };
 
+type CreatePanelOptions = {
+  title?: string;
+  panelState?: unknown;
+};
+
 export type WorkspaceController = {
   workspace: WorkspaceState;
   activeTab: WorkspaceState["tabs"][number];
@@ -47,7 +52,11 @@ export type WorkspaceController = {
   loadTabTemplate: (templateId: string) => void;
   exportTabsJson: () => string;
   importTabsJson: (json: string) => { imported: number; warnings: string[] };
-  createPanel: (moduleId: string, panelType: string) => void;
+  createPanel: (
+    moduleId: string,
+    panelType: string,
+    options?: CreatePanelOptions,
+  ) => string | null;
   closePanel: (panelId: string) => void;
   togglePanelMinimized: (panelId: string) => void;
   focusPanel: (panelId: string) => void;
@@ -99,28 +108,42 @@ export function useWorkspaceController({
     }));
   }
 
-  function createPanel(moduleId: string, panelType: string) {
+  function createPanel(
+    moduleId: string,
+    panelType: string,
+    options: CreatePanelOptions = {},
+  ) {
     const definition = registry.getPanel(moduleId, panelType);
     if (!definition) {
-      return;
+      return null;
     }
 
     const now = nowIso();
-    updateActiveTab((panels) => [
-      ...panels,
-      {
-        id: createId("panel"),
-        moduleId,
-        panelType,
-        title: definition.title,
-        geometry: geometryFromPanelDefinition(definition, panels.length * 24),
-        focusOrder: nextFocusOrder(panels),
-        stateVersion: definition.stateVersion,
-        panelState: definition.createInitialState({ now }),
-        createdAt: now,
-        updatedAt: now,
-      },
-    ]);
+    const panelId = createId("panel");
+    updateActiveTab((panels) => {
+      const normalized =
+        options.panelState === undefined
+          ? definition.createInitialState({ now })
+          : definition.normalizeState(options.panelState, { now }).state;
+
+      return [
+        ...panels,
+        {
+          id: panelId,
+          moduleId,
+          panelType,
+          title: options.title?.trim() || definition.title,
+          geometry: geometryFromPanelDefinition(definition, panels.length * 24),
+          focusOrder: nextFocusOrder(panels),
+          stateVersion: definition.stateVersion,
+          panelState: normalized,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ];
+    });
+
+    return panelId;
   }
 
   function createTab() {
@@ -271,9 +294,29 @@ export function useWorkspaceController({
   function updatePanelGeometry(panelId: string, geometry: PanelGeometry) {
     const now = nowIso();
     updateActiveTab((panels) =>
-      panels.map((panel) =>
-        panel.id === panelId ? { ...panel, geometry, updatedAt: now } : panel,
-      ),
+      panels.map((panel) => {
+        if (panel.id !== panelId) {
+          return panel;
+        }
+
+        if (panel.display?.mode === "minimized") {
+          return {
+            ...panel,
+            geometry,
+            display: {
+              ...panel.display,
+              restoreGeometry: {
+                ...(panel.display.restoreGeometry ?? panel.geometry),
+                x: geometry.x,
+                y: geometry.y,
+              },
+            },
+            updatedAt: now,
+          };
+        }
+
+        return { ...panel, geometry, updatedAt: now };
+      }),
     );
   }
 

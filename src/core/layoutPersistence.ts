@@ -15,6 +15,7 @@ import type {
 import { WORKSPACE_SCHEMA_VERSION } from "./types";
 
 const STORAGE_KEY = "jarri.workspace.core.layout.v1";
+const LEGACY_STORAGE_KEYS: string[] = [];
 const DOCUMENT_KIND = "jarri.workspace.layout";
 const SAFE_PANEL_GEOMETRY: PanelGeometry = {
   x: 32,
@@ -52,10 +53,18 @@ export function createLocalStorageProvider(): LayoutStorageProvider {
   return {
     load() {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        return null;
+      if (raw) {
+        return JSON.parse(raw) as PersistedWorkspaceDocument;
       }
-      return JSON.parse(raw) as PersistedWorkspaceDocument;
+
+      for (const legacyKey of LEGACY_STORAGE_KEYS) {
+        const legacyRaw = window.localStorage.getItem(legacyKey);
+        if (legacyRaw) {
+          return JSON.parse(legacyRaw) as PersistedWorkspaceDocument;
+        }
+      }
+
+      return null;
     },
     save(_workspaceId, document) {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
@@ -150,7 +159,18 @@ export function createLayoutPersistence({
           return normalizeWorkspace(null);
         }
         return normalizeWorkspace(document.workspace);
-      } catch {
+      } catch (error) {
+        try {
+          const raw = window.localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const backupKey = `${STORAGE_KEY}.corrupted.${Date.now()}`;
+            window.localStorage.setItem(backupKey, raw);
+          }
+          console.error("[workspace-persistence] Failed to load persisted workspace.", error);
+        } catch (backupError) {
+          console.error("[workspace-persistence] Failed to preserve corrupted workspace.", backupError);
+        }
+
         return normalizeWorkspace(null);
       }
     },

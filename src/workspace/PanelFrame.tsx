@@ -7,6 +7,7 @@ import {
   type GeometryInteraction,
 } from "../core/layoutEngine";
 import type { PanelRegistry } from "../core/panelRegistry";
+import type { OpenResourceRequest, OpenResourceResult } from "../core/resources";
 import type {
   PanelGeometry,
   PanelInstance,
@@ -25,6 +26,7 @@ type Props = {
   onGeometryChange: (panelId: string, geometry: PanelGeometry) => void;
   onPanelStateChange: (panelId: string, panelState: unknown) => void;
   onPreferencesChange: (preferences: Partial<WorkspacePreferences>) => void;
+  onOpenResource: (request: OpenResourceRequest) => OpenResourceResult;
 };
 
 export function PanelFrame({
@@ -38,6 +40,7 @@ export function PanelFrame({
   onGeometryChange,
   onPanelStateChange,
   onPreferencesChange,
+  onOpenResource,
 }: Props) {
   const [dragState, setDragState] = useState<GeometryInteraction | null>(null);
   const [previewGeometry, setPreviewGeometry] = useState<PanelGeometry | null>(
@@ -180,6 +183,9 @@ export function PanelFrame({
                 modules={modules}
                 updatePanelState={(panelState) => onPanelStateChange(panel.id, panelState)}
                 updatePreferences={onPreferencesChange}
+                openResource={(request) =>
+                  onOpenResource({ ...request, sourcePanelId: request.sourcePanelId ?? panel.id })
+                }
               />
             ) : null}
           </div>

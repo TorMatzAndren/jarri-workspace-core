@@ -8,6 +8,7 @@ import type {
   WorkspacePreferences,
 } from "../core/types";
 import type { PanelRegistry } from "../core/panelRegistry";
+import type { OpenResourceRequest, OpenResourceResult } from "../core/resources";
 import { PanelFrame } from "./PanelFrame";
 
 const CANVAS_GRID_SIZE = 24;
@@ -21,6 +22,14 @@ type CanvasResizeState = {
   startX: number;
   startY: number;
   startBounds: WorkspaceCanvasBounds;
+};
+
+type CanvasPanState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startScrollLeft: number;
+  startScrollTop: number;
 };
 
 type Props = {
@@ -43,6 +52,7 @@ type Props = {
   onGeometryChange: (panelId: string, geometry: PanelGeometry) => void;
   onPanelStateChange: (panelId: string, panelState: unknown) => void;
   onPreferencesChange: (preferences: Partial<WorkspacePreferences>) => void;
+  onOpenResource: (request: OpenResourceRequest) => OpenResourceResult;
 };
 
 function snapToCanvasGrid(value: number) {
@@ -94,10 +104,13 @@ export function WorkspaceCanvas({
   onGeometryChange,
   onPanelStateChange,
   onPreferencesChange,
+  onOpenResource,
 }: Props) {
   const [resizeState, setResizeState] = useState<CanvasResizeState | null>(null);
+  const [panState, setPanState] = useState<CanvasPanState | null>(null);
   const [previewBounds, setPreviewBounds] = useState<WorkspaceCanvasBounds | null>(null);
   const previewBoundsRef = useRef<WorkspaceCanvasBounds | null>(null);
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
   const effectiveBounds = normalizeBounds(
     previewBounds ?? preferences.canvasBounds,
     panels,
@@ -173,6 +186,92 @@ export function WorkspaceCanvas({
     };
   }, [resizeState, panels, preferences.scale, onPreferencesChange]);
 
+  useEffect(() => {
+    if (!panState) {
+      return undefined;
+    }
+
+    const activePan = panState;
+
+    function panFromPointer(event: PointerEvent) {
+      if (event.pointerId !== activePan.pointerId) {
+        return;
+      }
+
+      const surface = surfaceRef.current;
+      if (!surface) {
+        return;
+      }
+
+      surface.scrollLeft = activePan.startScrollLeft - (event.clientX - activePan.startX);
+      surface.scrollTop = activePan.startScrollTop - (event.clientY - activePan.startY);
+    }
+
+    function commitPan(event: PointerEvent) {
+      if (event.pointerId !== activePan.pointerId) {
+        return;
+      }
+
+      setPanState(null);
+    }
+
+    function cancelPan(event: KeyboardEvent) {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      const surface = surfaceRef.current;
+      if (surface) {
+        surface.scrollLeft = activePan.startScrollLeft;
+        surface.scrollTop = activePan.startScrollTop;
+      }
+
+      setPanState(null);
+    }
+
+    window.addEventListener("pointermove", panFromPointer);
+    window.addEventListener("pointerup", commitPan);
+    window.addEventListener("keydown", cancelPan);
+
+    return () => {
+      window.removeEventListener("pointermove", panFromPointer);
+      window.removeEventListener("pointerup", commitPan);
+      window.removeEventListener("keydown", cancelPan);
+    };
+  }, [panState]);
+
+  function beginCanvasPan(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.button !== 1) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (
+      target?.closest(
+        ".panel-frame, .workspace-canvas__resize-handle, button, input, select, textarea, a",
+      )
+    ) {
+      return;
+    }
+
+    const surface = surfaceRef.current;
+    if (!surface) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+
+    setPanState({
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startScrollLeft: surface.scrollLeft,
+      startScrollTop: surface.scrollTop,
+    });
+  }
+
   function beginCanvasResize(event: React.PointerEvent, mode: ResizeMode) {
     event.preventDefault();
     event.stopPropagation();
@@ -238,7 +337,11 @@ export function WorkspaceCanvas({
         </div>
       </div>
 
-      <div className="workspace-canvas__surface">
+      <div
+        className={`workspace-canvas__surface ${panState ? "workspace-canvas__surface--panning" : ""}`}
+        ref={surfaceRef}
+        onPointerDown={beginCanvasPan}
+      >
         <div
           className="workspace-canvas__logical"
           style={{
@@ -259,6 +362,7 @@ export function WorkspaceCanvas({
               onGeometryChange={onGeometryChange}
               onPanelStateChange={onPanelStateChange}
               onPreferencesChange={onPreferencesChange}
+              onOpenResource={onOpenResource}
             />
           ))}
 

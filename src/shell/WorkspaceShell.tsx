@@ -6,6 +6,7 @@ import { workspaceRuntime } from "../bootstrap/workspaceRuntime";
 import { TabBar } from "../tabs/TabBar";
 import { WorkspaceCanvas } from "../workspace/WorkspaceCanvas";
 import type { PanelDefinition, WorkspaceModuleDefinition } from "../core/types";
+import type { OpenResourceRequest, OpenResourceResult } from "../core/resources";
 
 type PanelMenuGroup = {
   module: WorkspaceModuleDefinition;
@@ -106,9 +107,16 @@ export function WorkspaceShell() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "jarri-workspace-panel-setups.json";
+    anchor.download = "workspace-core-panel-setups.json";
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  function openResource(request: OpenResourceRequest): OpenResourceResult {
+    return {
+      ok: false,
+      error: `No resource opener is registered in Workspace Core for ${request.uri}.`,
+    };
   }
 
   function importTabs(file: File | undefined) {
@@ -220,6 +228,7 @@ export function WorkspaceShell() {
         onGeometryChange={controller.updatePanelGeometry}
         onPanelStateChange={controller.updatePanelState}
         onPreferencesChange={controller.updatePreferences}
+        onOpenResource={openResource}
       />
     </main>
   );
