@@ -6,6 +6,7 @@ import {
   useState,
   useSyncExternalStore,
   type CSSProperties,
+  type RefObject,
 } from "react";
 import {
   beginGeometryInteraction,
@@ -50,6 +51,7 @@ const DEFAULT_PANEL_VIEW_PREFERENCES: PanelViewPreferences = {
 type Props = {
   registry: PanelRegistry;
   panel: PanelInstance;
+  canvasSurfaceRef: RefObject<HTMLDivElement | null>;
   preferences: WorkspacePreferences;
   modules: Array<Pick<WorkspaceModuleDefinition, "moduleId" | "title">>;
   onFocus: (panelId: string) => void;
@@ -69,6 +71,7 @@ type Props = {
 export function PanelFrame({
   registry,
   panel,
+  canvasSurfaceRef,
   preferences,
   modules,
   onFocus,
@@ -88,6 +91,12 @@ export function PanelFrame({
     null,
   );
   const previewGeometryRef = useRef<PanelGeometry | null>(null);
+  const dragViewportRef = useRef<{
+    startScrollLeft: number;
+    startScrollTop: number;
+    pointerX: number;
+    pointerY: number;
+  } | null>(null);
   const copyFeedbackTimerRef = useRef<number | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const semanticControllerRef =
@@ -222,21 +231,50 @@ export function PanelFrame({
     }
 
     const activeDrag = dragState;
+    const surface = canvasSurfaceRef.current;
 
-    function handlePointerMove(event: PointerEvent) {
+    function updatePreviewFromCurrentViewport() {
+      const viewport = dragViewportRef.current;
+      if (!viewport) {
+        return;
+      }
+
+      const scrollDeltaX = surface
+        ? surface.scrollLeft - viewport.startScrollLeft
+        : 0;
+      const scrollDeltaY = surface
+        ? surface.scrollTop - viewport.startScrollTop
+        : 0;
+
       const nextPreview = previewGeometryInteraction(
         activeDrag,
-        event.clientX,
-        event.clientY,
+        viewport.pointerX + scrollDeltaX,
+        viewport.pointerY + scrollDeltaY,
       );
+
       previewGeometryRef.current = nextPreview;
       setPreviewGeometry(nextPreview);
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      if (dragViewportRef.current) {
+        dragViewportRef.current.pointerX = event.clientX;
+        dragViewportRef.current.pointerY = event.clientY;
+      }
+
+      updatePreviewFromCurrentViewport();
+    }
+
+    function handleScroll() {
+      updatePreviewFromCurrentViewport();
     }
 
     function handlePointerUp() {
       const committed = commitGeometryInteraction(
         previewGeometryRef.current ?? activeDrag.startGeometry,
       );
+
+      dragViewportRef.current = null;
       previewGeometryRef.current = null;
       setPreviewGeometry(null);
       setDragState(null);
@@ -247,6 +285,8 @@ export function PanelFrame({
       if (event.key !== "Escape") {
         return;
       }
+
+      dragViewportRef.current = null;
       previewGeometryRef.current = null;
       setPreviewGeometry(cancelGeometryInteraction(activeDrag));
       window.setTimeout(() => setPreviewGeometry(null), 0);
@@ -256,13 +296,15 @@ export function PanelFrame({
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("keydown", handleKeyDown);
+    surface?.addEventListener("scroll", handleScroll);
 
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("keydown", handleKeyDown);
+      surface?.removeEventListener("scroll", handleScroll);
     };
-  }, [dragState, onGeometryChange, panel.id]);
+  }, [canvasSurfaceRef, dragState, onGeometryChange, panel.id]);
 
   function beginDrag(event: React.PointerEvent, mode: "move" | "resize") {
     if (isMinimized && mode === "resize") {
@@ -271,6 +313,15 @@ export function PanelFrame({
     event.preventDefault();
     event.stopPropagation();
     onFocus(panel.id);
+
+    const surface = canvasSurfaceRef.current;
+    dragViewportRef.current = {
+      startScrollLeft: surface?.scrollLeft ?? 0,
+      startScrollTop: surface?.scrollTop ?? 0,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+    };
+
     previewGeometryRef.current = baseGeometry;
     setPreviewGeometry(baseGeometry);
     setDragState(

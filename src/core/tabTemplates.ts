@@ -52,6 +52,7 @@ export function createTemplateFromTab(tab: WorkspaceTab): SavedTabTemplate {
     id: createId("template"),
     title: tab.title,
     sourceTitle: tab.title,
+    canvasBounds: { ...tab.canvasBounds },
     panels: tab.panels.map((panel) => ({
       moduleId: panel.moduleId,
       panelType: panel.panelType,
@@ -104,6 +105,7 @@ export function tabFromTemplate(
   return {
     id: createId("tab"),
     title: title.trim() || "Imported Tab",
+    canvasBounds: { ...template.canvasBounds },
     panels: repairFocusOrder(panels),
     createdAt: now,
     updatedAt: now,
@@ -168,14 +170,19 @@ function normalizeTemplate(input: unknown): SavedTabTemplate {
     typeof raw.sourceTitle === "string" && raw.sourceTitle.trim()
       ? raw.sourceTitle.trim()
       : title;
+  const panels = Array.isArray(raw.panels)
+    ? raw.panels.map(normalizePanelTemplate)
+    : [];
 
   return {
     id: typeof raw.id === "string" && raw.id.trim() ? raw.id : createId("template"),
     title,
     sourceTitle,
-    panels: Array.isArray(raw.panels)
-      ? raw.panels.map(normalizePanelTemplate)
-      : [],
+    canvasBounds: templateBoundsContainingPanels(
+      normalizeTemplateCanvasBounds(raw.canvasBounds),
+      panels,
+    ),
+    panels,
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : now,
   };
@@ -198,6 +205,41 @@ function normalizePanelTemplate(input: unknown): SavedPanelTemplate {
       SAFE_PANEL_GEOMETRY,
     ),
   };
+}
+
+function normalizeTemplateCanvasBounds(input: unknown) {
+  const raw = isRecord(input) ? input : {};
+  return {
+    width: clamp(finiteNumber(raw.width, 1800), 900, 12000),
+    height: clamp(finiteNumber(raw.height, 1100), 700, 12000),
+  };
+}
+
+function templateBoundsContainingPanels(
+  bounds: SavedTabTemplate["canvasBounds"],
+  panels: SavedPanelTemplate[],
+): SavedTabTemplate["canvasBounds"] {
+  return panels.reduce(
+    (current, panel) => ({
+      width: Math.max(
+        current.width,
+        Math.ceil(panel.geometry.x + panel.geometry.width + 48),
+      ),
+      height: Math.max(
+        current.height,
+        Math.ceil(panel.geometry.y + panel.geometry.height + 48),
+      ),
+    }),
+    bounds,
+  );
+}
+
+function finiteNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function offsetGeometry(geometry: PanelGeometry, index: number): PanelGeometry {

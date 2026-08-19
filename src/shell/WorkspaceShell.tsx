@@ -402,6 +402,7 @@ export function WorkspaceShell() {
         registry={runtime.registry}
         title={controller.activeTab.title}
         panels={controller.activeTab.panels}
+        canvasBounds={controller.activeTab.canvasBounds}
         preferences={preferences}
         modules={modules}
         onOpenPanelsMenu={() => {
@@ -414,6 +415,7 @@ export function WorkspaceShell() {
         onGeometryChange={controller.updatePanelGeometry}
         onPanelStateChange={controller.updatePanelState}
         onPanelViewPreferencesChange={controller.updatePanelViewPreferences}
+        onCanvasBoundsChange={controller.updateActiveTabCanvasBounds}
         onPreferencesChange={controller.updatePreferences}
         onOpenResource={openResource}
       />

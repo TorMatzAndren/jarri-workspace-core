@@ -9,7 +9,7 @@ import type {
 } from "./projection";
 import type { OpenResourceRequest, OpenResourceResult } from "./resources";
 
-export const WORKSPACE_SCHEMA_VERSION = 1;
+export const WORKSPACE_SCHEMA_VERSION = 2;
 
 export type WorkspaceCanvasBounds = {
   width: number;
@@ -27,7 +27,6 @@ export type WorkspacePreferences = {
   fontSize: number;
   showGrid: boolean;
   clock: WorkspaceClockPreferences;
-  canvasBounds: WorkspaceCanvasBounds;
   density: "compact" | "comfortable";
   themeMode: "system" | "light" | "dark";
   fontFamily: "system" | "humanist" | "serif" | "mono" | "compact";
@@ -80,6 +79,7 @@ export type WorkspaceState = {
 export type WorkspaceTab = {
   id: string;
   title: string;
+  canvasBounds: WorkspaceCanvasBounds;
   panels: PanelInstance[];
   createdAt: string;
   updatedAt: string;
@@ -89,6 +89,7 @@ export type SavedTabTemplate = {
   id: string;
   title: string;
   sourceTitle: string;
+  canvasBounds: WorkspaceCanvasBounds;
   panels: SavedPanelTemplate[];
   createdAt: string;
   updatedAt: string;

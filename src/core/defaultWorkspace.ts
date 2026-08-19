@@ -33,6 +33,10 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
       {
         id: "home",
         title: "Core Demo",
+        canvasBounds: {
+          width: 1800,
+          height: 1100,
+        },
         panels,
         createdAt: now,
         updatedAt: now,
@@ -46,10 +50,6 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
         enabled: true,
         timeFormat: "24h",
         dateFormat: "text",
-      },
-      canvasBounds: {
-        width: 1800,
-        height: 1100,
       },
       density: "compact",
       themeMode: "system",

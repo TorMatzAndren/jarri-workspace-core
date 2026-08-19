@@ -8,6 +8,7 @@ import type {
   PanelInstance,
   PersistedModuleRecord,
   PersistedWorkspaceDocument,
+  WorkspaceCanvasBounds,
   WorkspaceColorTokens,
   WorkspacePanelViewPreferences,
   WorkspacePreferences,
@@ -103,10 +104,19 @@ export function createLayoutPersistence({
     }
 
     const fromSchemaVersion = finiteNumber(input.schemaVersion, 0);
+    const rawPreferences = isRecord(input.preferences) ? input.preferences : {};
+    const legacyCanvasBounds = normalizeCanvasBounds(rawPreferences.canvasBounds);
     const seenTabIds = new Set<string>();
     let tabs = Array.isArray(input.tabs)
       ? input.tabs.map((tab, index) =>
-          normalizeTab(tab, index, seenTabIds, warnings, registry),
+          normalizeTab(
+            tab,
+            index,
+            seenTabIds,
+            warnings,
+            registry,
+            legacyCanvasBounds,
+          ),
         )
       : [];
 
@@ -217,7 +227,6 @@ function normalizePreferences(input: unknown): WorkspacePreferences {
     fontSize: clamp(finiteNumber(raw.fontSize, 14), 12, 18),
     showGrid: typeof raw.showGrid === "boolean" ? raw.showGrid : true,
     clock: normalizeClockPreferences(raw.clock),
-    canvasBounds: normalizeCanvasBounds(raw.canvasBounds),
     density,
     themeMode,
     fontFamily,
@@ -295,12 +304,31 @@ function normalizePanelMenuPreferences(input: unknown): WorkspacePreferences["pa
   };
 }
 
-function normalizeCanvasBounds(input: unknown): WorkspacePreferences["canvasBounds"] {
+function normalizeCanvasBounds(input: unknown): WorkspaceCanvasBounds {
   const raw = isRecord(input) ? input : {};
   return {
     width: clamp(finiteNumber(raw.width, 1800), 900, 12000),
     height: clamp(finiteNumber(raw.height, 1100), 700, 12000),
   };
+}
+
+function canvasBoundsContainingPanels(
+  bounds: WorkspaceCanvasBounds,
+  panels: PanelInstance[],
+): WorkspaceCanvasBounds {
+  return panels.reduce(
+    (current, panel) => ({
+      width: Math.max(
+        current.width,
+        Math.ceil(panel.geometry.x + panel.geometry.width + 48),
+      ),
+      height: Math.max(
+        current.height,
+        Math.ceil(panel.geometry.y + panel.geometry.height + 48),
+      ),
+    }),
+    bounds,
+  );
 }
 
 function normalizeColorOverrides(input: unknown): Partial<WorkspaceColorTokens> {
@@ -464,6 +492,7 @@ function normalizeTab(
   seenTabIds: Set<string>,
   warnings: string[],
   registry: PanelRegistry,
+  fallbackCanvasBounds: WorkspaceCanvasBounds,
 ): WorkspaceTab {
   const raw = isRecord(input) ? input : {};
   const now = nowIso();
@@ -487,6 +516,12 @@ function normalizeTab(
     title: typeof raw.title === "string" && raw.title.trim()
       ? raw.title
       : `Tab ${index + 1}`,
+    canvasBounds: canvasBoundsContainingPanels(
+      isRecord(raw.canvasBounds)
+        ? normalizeCanvasBounds(raw.canvasBounds)
+        : fallbackCanvasBounds,
+      panels,
+    ),
     panels: repairFocusOrder(panels),
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now,
     updatedAt: now,

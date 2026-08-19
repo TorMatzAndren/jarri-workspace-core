@@ -36,7 +36,8 @@ type Props = {
   registry: PanelRegistry;
   title: string;
   panels: PanelInstance[];
-   preferences: WorkspacePreferences;
+  canvasBounds: WorkspaceCanvasBounds;
+  preferences: WorkspacePreferences;
   modules: Array<Pick<WorkspaceModuleDefinition, "moduleId" | "title">>;
   onOpenPanelsMenu: () => void;
   onFocusPanel: (panelId: string) => void;
@@ -49,6 +50,7 @@ type Props = {
     panelType: string,
     preferences: PanelViewPreferences,
   ) => void;
+  onCanvasBoundsChange: (bounds: WorkspaceCanvasBounds) => void;
   onPreferencesChange: (preferences: Partial<WorkspacePreferences>) => void;
   onOpenResource: (request: OpenResourceRequest) => OpenResourceResult;
 };
@@ -86,6 +88,7 @@ export function WorkspaceCanvas({
   registry,
   title,
   panels,
+  canvasBounds,
   preferences,
   modules,
   onOpenPanelsMenu,
@@ -95,6 +98,7 @@ export function WorkspaceCanvas({
   onGeometryChange,
   onPanelStateChange,
   onPanelViewPreferencesChange,
+  onCanvasBoundsChange,
   onPreferencesChange,
   onOpenResource,
 }: Props) {
@@ -104,19 +108,19 @@ export function WorkspaceCanvas({
   const previewBoundsRef = useRef<WorkspaceCanvasBounds | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const effectiveBounds = normalizeBounds(
-    previewBounds ?? preferences.canvasBounds,
+    previewBounds ?? canvasBounds,
     panels,
   );
 
   useEffect(() => {
-    const normalized = normalizeBounds(preferences.canvasBounds, panels);
+    const normalized = normalizeBounds(canvasBounds, panels);
     if (
-      normalized.width !== preferences.canvasBounds.width ||
-      normalized.height !== preferences.canvasBounds.height
+      normalized.width !== canvasBounds.width ||
+      normalized.height !== canvasBounds.height
     ) {
-      onPreferencesChange({ canvasBounds: normalized });
+      onCanvasBoundsChange(normalized);
     }
-  }, [panels, preferences.canvasBounds, onPreferencesChange]);
+  }, [panels, canvasBounds, onCanvasBoundsChange]);
 
   useEffect(() => {
     if (!resizeState) {
@@ -155,7 +159,7 @@ export function WorkspaceCanvas({
       previewBoundsRef.current = null;
       setPreviewBounds(null);
       setResizeState(null);
-      onPreferencesChange({ canvasBounds: committed });
+      onCanvasBoundsChange(committed);
     }
 
     function cancelResize(event: KeyboardEvent) {
@@ -176,7 +180,7 @@ export function WorkspaceCanvas({
       window.removeEventListener("pointerup", commitResize);
       window.removeEventListener("keydown", cancelResize);
     };
-  }, [resizeState, panels, preferences.scale, onPreferencesChange]);
+  }, [resizeState, panels, preferences.scale, onCanvasBoundsChange]);
 
   useEffect(() => {
     if (!panState) {
@@ -264,11 +268,81 @@ export function WorkspaceCanvas({
     });
   }
 
+  function revealPanelInViewport(panel: PanelInstance) {
+    const surface = surfaceRef.current;
+    if (!surface) {
+      return;
+    }
+
+    const scale = preferences.scale;
+    const margin = 24;
+
+    const panelLeft = panel.geometry.x * scale;
+    const panelTop = panel.geometry.y * scale;
+    const panelWidth = panel.geometry.width * scale;
+    const panelHeight = panel.geometry.height * scale;
+    const panelRight = panelLeft + panelWidth;
+    const panelBottom = panelTop + panelHeight;
+
+    const viewportLeft = surface.scrollLeft;
+    const viewportTop = surface.scrollTop;
+    const viewportRight = viewportLeft + surface.clientWidth;
+    const viewportBottom = viewportTop + surface.clientHeight;
+
+    const usableWidth = Math.max(0, surface.clientWidth - margin * 2);
+    const usableHeight = Math.max(0, surface.clientHeight - margin * 2);
+
+    let nextLeft = viewportLeft;
+    let nextTop = viewportTop;
+
+    if (panelWidth > usableWidth) {
+      if (
+        panelLeft < viewportLeft + margin ||
+        panelLeft > viewportRight - margin
+      ) {
+        nextLeft = panelLeft - margin;
+      }
+    } else if (panelLeft < viewportLeft + margin) {
+      nextLeft = panelLeft - margin;
+    } else if (panelRight > viewportRight - margin) {
+      nextLeft = panelRight - surface.clientWidth + margin;
+    }
+
+    if (panelHeight > usableHeight) {
+      if (
+        panelTop < viewportTop + margin ||
+        panelTop > viewportBottom - margin
+      ) {
+        nextTop = panelTop - margin;
+      }
+    } else if (panelTop < viewportTop + margin) {
+      nextTop = panelTop - margin;
+    } else if (panelBottom > viewportBottom - margin) {
+      nextTop = panelBottom - surface.clientHeight + margin;
+    }
+
+    nextLeft = Math.max(0, nextLeft);
+    nextTop = Math.max(0, nextTop);
+
+    if (
+      nextLeft === viewportLeft &&
+      nextTop === viewportTop
+    ) {
+      return;
+    }
+
+    surface.scrollTo({
+      left: nextLeft,
+      top: nextTop,
+      behavior: "auto",
+    });
+  }
+
   function beginCanvasResize(event: React.PointerEvent, mode: ResizeMode) {
     event.preventDefault();
     event.stopPropagation();
 
-    const bounds = normalizeBounds(preferences.canvasBounds, panels);
+    const bounds = normalizeBounds(canvasBounds, panels);
     previewBoundsRef.current = bounds;
     setPreviewBounds(bounds);
     setResizeState({
@@ -317,7 +391,9 @@ export function WorkspaceCanvas({
                   if (minimized) {
                     onTogglePanelMinimized(panel.id);
                   }
+
                   onFocusPanel(panel.id);
+                  revealPanelInViewport(panel);
                 }}
               >
                 {panel.title}
@@ -350,6 +426,7 @@ export function WorkspaceCanvas({
               key={panel.id}
               registry={registry}
               panel={panel}
+              canvasSurfaceRef={surfaceRef}
               preferences={preferences}
               modules={modules}
               onFocus={onFocusPanel}

@@ -21,6 +21,7 @@ import type {
   PanelInstance,
   PanelViewPreferences,
   SavedTabTemplate,
+  WorkspaceCanvasBounds,
   WorkspacePreferences,
   WorkspaceState,
 } from "./types";
@@ -70,6 +71,7 @@ export type WorkspaceController = {
     preferences: PanelViewPreferences,
   ) => void;
   updatePreferences: (preferences: Partial<WorkspacePreferences>) => void;
+  updateActiveTabCanvasBounds: (bounds: WorkspaceCanvasBounds) => void;
   resetWorkspace: () => void;
 };
 
@@ -164,6 +166,10 @@ export function useWorkspaceController({
         {
           id,
           title: `Tab ${current.tabs.length + 1}`,
+          canvasBounds: {
+            width: 1800,
+            height: 1100,
+          },
           panels: [],
           createdAt: now,
           updatedAt: now,
@@ -336,6 +342,18 @@ export function useWorkspaceController({
     );
   }
 
+  function updateActiveTabCanvasBounds(bounds: WorkspaceCanvasBounds) {
+    const now = nowIso();
+    setWorkspace((current) => ({
+      ...current,
+      tabs: current.tabs.map((tab) =>
+        tab.id === current.activeTabId
+          ? { ...tab, canvasBounds: bounds, updatedAt: now }
+          : tab,
+      ),
+    }));
+  }
+
   function updatePreferences(preferences: Partial<WorkspacePreferences>) {
     setWorkspace((current) => ({
       ...current,
@@ -396,6 +414,7 @@ export function useWorkspaceController({
     updatePanelState,
     updatePanelViewPreferences,
     updatePreferences,
+    updateActiveTabCanvasBounds,
     resetWorkspace,
   };
 }
