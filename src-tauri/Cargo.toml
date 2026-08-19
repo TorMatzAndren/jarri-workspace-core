@@ -1,0 +1,19 @@
+[package]
+name = "jarri-workspace-core"
+version = "0.3.0"
+description = "Jarri Workspace Core desktop shell"
+authors = ["Matz"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.6", features = [] }
+
+[dependencies]
+tauri = { version = "2.10.3", features = [] }

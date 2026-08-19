@@ -1,0 +1,32 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Jarri Workspace Core",
+  "version": "0.3.0",
+  "identifier": "systems.jarri.workspace.core",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://127.0.0.1:8792",
+    "beforeDevCommand": "npm run dev -- --host 127.0.0.1 --port 8792 --strictPort",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Jarri Workspace Core",
+        "width": 1440,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  }
+}

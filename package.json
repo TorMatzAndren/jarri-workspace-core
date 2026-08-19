@@ -1,12 +1,13 @@
 {
   "name": "jarri-workspace-core",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "tauri": "WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.0",
@@ -17,7 +18,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
+    "@types/react-dom": "^19.0.0",
+    "@tauri-apps/cli": "^2.11.2"
   }
 }
-
