@@ -41,7 +41,7 @@ const settingsPanelDefinition: PanelDefinition = {
   title: "Settings",
   description: "Framework-level Workspace Core preferences.",
   category: "core",
-  defaultGeometry: { x: 924, y: 408, width: 456, height: 456 },
+  defaultGeometry: { x: 924, y: 408, width: 1020, height: 540 },
   minGeometry: { width: 360, height: 336 },
   stateVersion: 1,
   capabilities: {
@@ -57,6 +57,7 @@ const settingsPanelDefinition: PanelDefinition = {
     "Ready",
     "Workspace-level preferences are available in this panel.",
   ),
+  surfacePresentationMemory: {},
   Component: SettingsPanel,
 };
 

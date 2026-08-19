@@ -22,10 +22,29 @@ export type WorkspaceClockPreferences = {
   dateFormat: "none" | "text" | "numeric";
 };
 
+export type WorkspaceSurfacePosition = {
+  x: number;
+  y: number;
+};
+
+export type WorkspaceSystemSurfacePositions = {
+  settings: WorkspaceSurfacePosition;
+  addPanel: WorkspaceSurfacePosition;
+  frameSettings: WorkspaceSurfacePosition;
+};
+
+export const DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS: WorkspaceSystemSurfacePositions = {
+  settings: { x: 924, y: 408 },
+  addPanel: { x: 16, y: 100 },
+  frameSettings: { x: 16, y: 100 },
+};
+
 export type WorkspacePreferences = {
   scale: number;
   fontSize: number;
   showGrid: boolean;
+  panelSpacing: number;
+  systemSurfacePositions: WorkspaceSystemSurfacePositions;
   clock: WorkspaceClockPreferences;
   density: "compact" | "comfortable";
   themeMode: "system" | "light" | "dark";
@@ -67,12 +86,20 @@ export function panelTypePreferenceKey(moduleId: string, panelType: string): str
   return `${moduleId}:${panelType}`;
 }
 
+export function panelSurfacePresentationKey(
+  moduleId: string,
+  panelType: string,
+): string {
+  return `panel:${moduleId}:${panelType}`;
+}
+
 export type WorkspaceState = {
   schemaVersion: number;
   workspaceId: string;
   activeTabId: string | null;
   tabs: WorkspaceTab[];
   preferences: WorkspacePreferences;
+  surfacePresentationMemory: SurfacePresentationMemory;
   registryVersion?: string;
 };
 
@@ -113,6 +140,24 @@ export type PanelDisplayState = {
   mode: "normal" | "minimized";
   restoreGeometry?: PanelGeometry;
   minimizedAt?: string;
+};
+
+export type PanelSurfacePresentationMemory = {
+  kind: "panel";
+  moduleId: string;
+  panelType: string;
+  geometry?: PanelGeometry;
+  panelState?: unknown;
+  display?: PanelDisplayState;
+  stateVersion?: number;
+  updatedAt: string;
+};
+
+export type SurfacePresentationMemoryEntry =
+  PanelSurfacePresentationMemory;
+
+export type SurfacePresentationMemory = {
+  [surfaceId: string]: SurfacePresentationMemoryEntry;
 };
 
 export type PanelGeometry = {
@@ -218,6 +263,11 @@ export type PanelSemanticStrategy =
       reason: string;
     };
 
+export type PanelSurfacePresentationMemoryPolicy = {
+  rememberPanelState?: boolean;
+  rememberDisplay?: boolean;
+};
+
 export type PanelDefinition = {
   moduleId: string;
   panelType: string;
@@ -237,6 +287,7 @@ export type PanelDefinition = {
     context: PanelNormalizeContext,
   ) => PanelNormalizeResult;
   semanticStrategy: PanelSemanticStrategy;
+  surfacePresentationMemory?: PanelSurfacePresentationMemoryPolicy;
   Component: ComponentType<PanelBodyProps>;
 };
 

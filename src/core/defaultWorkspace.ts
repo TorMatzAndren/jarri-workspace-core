@@ -2,6 +2,7 @@ import { createId, nowIso } from "./id";
 import { geometryFromPanelDefinition } from "./layoutEngine";
 import type { PanelRegistry } from "./panelRegistry";
 import type { PanelInstance, WorkspaceState } from "./types";
+import { DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS } from "./types";
 import { WORKSPACE_SCHEMA_VERSION } from "./types";
 
 export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState {
@@ -42,10 +43,17 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
         updatedAt: now,
       },
     ],
+    surfacePresentationMemory: {},
     preferences: {
       scale: 1,
       fontSize: 14,
       showGrid: true,
+      panelSpacing: 0,
+      systemSurfacePositions: {
+        settings: { ...DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS.settings },
+        addPanel: { ...DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS.addPanel },
+        frameSettings: { ...DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS.frameSettings },
+      },
       clock: {
         enabled: true,
         timeFormat: "24h",

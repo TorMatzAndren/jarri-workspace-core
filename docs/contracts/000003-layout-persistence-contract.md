@@ -43,7 +43,9 @@ Rules:
 - `kind` must match exactly.
 - `schemaVersion` controls Workspace Core migrations.
 - `savedAt` is metadata only.
-- `workspace` contains tabs, panels, preferences, and panel-local projection state.
+- `workspace` contains tabs, panels, preferences, panel-local projection state, and Workspace-owned surface presentation memory.
+- `workspace.surfacePresentationMemory` stores opted-in presentation memory independently of live panel instances.
+- Panel surface presentation memory uses stable panel-type identity derived from `moduleId + panelType`.
 - `workspace.preferences.frameControls` stores frame-control visibility by stable panel-type/control key.
 - `workspace.preferences.panelViews` stores Workspace-owned presentation preferences by stable panel-type key.
 - `modules` records what was known when the layout was saved.
@@ -116,12 +118,13 @@ The load pipeline is:
 4. Run Workspace Core schema migrations.
 5. Ensure module registry is loaded.
 6. Normalize workspace preferences.
-7. Normalize tabs.
-8. Normalize panel instances.
-9. Normalize panel state through registered panel definitions.
-10. Repair active tab and focus order.
-11. Emit repair warnings.
-12. Save repaired document if repair changed persisted state.
+7. Normalize surface presentation memory.
+8. Normalize tabs.
+9. Normalize panel instances.
+10. Normalize panel state through registered panel definitions.
+11. Repair active tab and focus order.
+12. Emit repair warnings.
+13. Save repaired document if repair changed persisted state.
 
 Load must never execute domain mutation.
 
@@ -159,6 +162,10 @@ Required repair behavior:
 - Unknown panel definition -> missing-panel projection.
 - Invalid panel state -> panel definition normalizes or resets it.
 - Invalid dirty snapshot -> clear dirty snapshot unless panel definition can repair it.
+- Missing legacy `surfacePresentationMemory` -> normalize to empty presentation memory.
+- Malformed surface presentation entries -> discard or repair deterministically.
+- Invalid remembered geometry -> normalize through the same geometry rules used for panel geometry.
+- Missing Workspace preference fields such as panel spacing or system-surface positions -> restore deterministic defaults.
 
 Repairs must be recorded as warnings for diagnostics.
 
@@ -184,6 +191,45 @@ Geometry rules:
 - `width` and `height` must be clamped to panel minimums.
 - Layout engine may snap values before persistence.
 - Future dock/split layout must either migrate this shape or add a new layout mode with explicit schema versioning.
+
+## Surface Presentation Memory
+
+Surface presentation memory is Workspace-owned persisted presentation state
+whose lifetime may extend beyond one live panel instance.
+
+For panel surfaces, the stable memory identity is derived from the registered
+`moduleId + panelType`. The memory may contain normalized geometry and, when
+explicitly permitted by the panel definition, narrow panel/display
+presentation state.
+
+Rules:
+
+- Presentation memory is opt-in through the panel definition.
+- Remembered geometry is distinct from geometry on a currently instantiated
+  `PanelInstance`.
+- Closing a live panel may leave its opted-in presentation memory intact.
+- Reopening may restore valid remembered geometry.
+- Legacy layouts without presentation memory normalize to an empty memory map.
+- Malformed or unsupported memory entries are repaired or discarded
+  deterministically.
+- Remembered geometry is normalized before use.
+- Presentation memory must never contain canonical runtime/domain truth,
+  semantic publication documents, runtime frame-control payloads, or mutation
+  authority.
+
+Panel creation geometry precedence is:
+
+1. remembered geometry when valid and applicable;
+2. explicit invocation position when there is no remembered geometry;
+3. deterministic automatic placement otherwise.
+
+This precedence preserves user presentation intent while keeping ordinary
+first-summon placement causal and deterministic.
+
+Workspace preferences also persist generic placement and system-surface
+presentation configuration, including panel spacing and Settings/Add
+Panel/Frame Settings surface positions. Missing legacy fields receive
+deterministic defaults during normalization.
 
 ## Focus Order Contract
 

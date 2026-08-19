@@ -77,6 +77,7 @@ type PanelDefinition = {
   createInitialState: (context: PanelCreateContext) => unknown;
   normalizeState: (input: unknown, context: PanelNormalizeContext) => PanelNormalizeResult;
   semanticStrategy: PanelSemanticStrategy;
+  surfacePresentationMemory?: PanelSurfacePresentationMemoryPolicy;
   lifecycle?: PanelLifecycleHooks;
 };
 
@@ -114,6 +115,10 @@ Definition rules:
 - Definitions must declare provider dependencies by stable provider ID.
 - Definitions must not perform destructive work in creation or normalization hooks.
 - Definitions must declare an explicit semantic strategy.
+- Definitions may opt into Workspace-owned surface presentation memory.
+- Surface presentation memory is keyed by stable panel type identity, not by one live panel instance.
+- Opted-in presentation memory may preserve geometry after the live instance is closed.
+- Presentation memory must contain only presentation state and must never become canonical runtime or domain truth.
 - `static`, `dynamic`, `unavailable`, and `pending` semantic states are distinct.
 - `pending` means semantic migration is incomplete and cannot emit placeholder projection content.
 - `unavailable` is a truthful content state with reason and recovery, not an incomplete migration marker.
@@ -210,7 +215,33 @@ Lifecycle rules:
 - Geometry updates are layout updates only.
 - Panel state updates must be local presentation state.
 - Dirty panels must block close until saved, discarded, or cancelled.
-- Removing a panel deletes the panel instance and its panel-local state, not domain truth.
+- Removing a panel deletes the live panel instance and its instance-local state, not domain truth.
+- Removing an instance does not erase opted-in Workspace-owned surface presentation memory.
+- Recreating an opted-in panel may restore remembered presentation independently of the lifetime of the previous instance.
+
+## Panel Creation And Presentation Memory
+
+Panel creation separates live instance lifetime from remembered Workspace
+presentation.
+
+For panel definitions that opt into surface presentation memory, Workspace Core
+may remember presentation geometry under the stable panel surface identity
+derived from `moduleId + panelType`.
+
+Geometry ownership during creation is deterministic:
+
+1. Valid remembered geometry owns an ordinary reopen.
+2. Without remembered geometry, an explicit invocation position owns the
+   first summon position.
+3. Without either, the normal deterministic placement engine owns placement.
+
+Explicit preferred width or height participates in initial sizing where the
+creation path permits it. Normal automatic placement may also use source-panel
+causality and configured panel spacing.
+
+Remembered geometry remains subject to the normal geometry normalization
+contract. It is presentation preference, not a surviving panel instance and
+not runtime/domain truth.
 
 ## Dirty-State Handling
 

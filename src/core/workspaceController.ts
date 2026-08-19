@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { createId, nowIso } from "./id";
 import {
+  GRID_SIZE,
   geometryFromPanelDefinition,
   nextFocusOrder,
+  normalizeGeometry,
   repairFocusOrder,
 } from "./layoutEngine";
 import type { LayoutPersistence } from "./layoutPersistence";
@@ -25,9 +27,179 @@ import type {
   WorkspacePreferences,
   WorkspaceState,
 } from "./types";
-import { panelTypePreferenceKey } from "./types";
+import { panelSurfacePresentationKey, panelTypePreferenceKey } from "./types";
 
 const FOCUS_ORDER_COMPACT_THRESHOLD = 500;
+
+function panelGeometriesOverlap(
+  a: PanelGeometry,
+  b: PanelGeometry,
+  gap = 0,
+) {
+  return (
+    a.x < b.x + b.width + gap &&
+    a.x + a.width + gap > b.x &&
+    a.y < b.y + b.height + gap &&
+    a.y + a.height + gap > b.y
+  );
+}
+
+export function resolveInitialPanelGeometry({
+  geometry,
+  preferredGeometry,
+  existingPanels,
+  canvasBounds,
+  sourcePanelId,
+  panelSpacing = 0,
+}: {
+  geometry: PanelGeometry;
+  preferredGeometry?: {
+    width?: number;
+    height?: number;
+  };
+  existingPanels: PanelInstance[];
+  canvasBounds: WorkspaceCanvasBounds;
+  sourcePanelId?: string;
+  panelSpacing?: number;
+}): PanelGeometry {
+  const sized = normalizeGeometry(
+    {
+      ...geometry,
+      width: preferredGeometry?.width ?? geometry.width,
+      height: preferredGeometry?.height ?? geometry.height,
+      minWidth: geometry.minWidth,
+      minHeight: geometry.minHeight,
+    },
+    geometry,
+  );
+
+  // The first surface establishes the tab from the canonical origin.
+  if (existingPanels.length === 0) {
+    return normalizeGeometry(
+      {
+        ...sized,
+        x: 0,
+        y: 0,
+      },
+      sized,
+    );
+  }
+
+  // Causal opening wins over ordinary free-space placement.
+  // Align the new surface with its caller and place it directly beside it.
+  // Other panels are deliberately not treated as obstacles here.
+  const sourcePanel = sourcePanelId
+    ? existingPanels.find((panel) => panel.id === sourcePanelId)
+    : undefined;
+
+  if (sourcePanel) {
+    return normalizeGeometry(
+      {
+        ...sized,
+        x:
+          sourcePanel.geometry.x +
+          sourcePanel.geometry.width +
+          panelSpacing,
+        y: sourcePanel.geometry.y,
+      },
+      sized,
+    );
+  }
+
+  // Ordinary creation uses the first grid-aligned free rectangle available
+  // inside the current logical canvas.
+  const maxX = canvasBounds.width - sized.width;
+  const maxY = canvasBounds.height - sized.height;
+
+  if (maxX >= 0 && maxY >= 0) {
+    for (let y = 0; y <= maxY; y += GRID_SIZE) {
+      for (let x = 0; x <= maxX; x += GRID_SIZE) {
+        const candidate = {
+          ...sized,
+          x,
+          y,
+        };
+
+        const occupied = existingPanels.some((panel) =>
+          panelGeometriesOverlap(
+            candidate,
+            panel.geometry,
+            panelSpacing,
+          ),
+        );
+
+        if (!occupied) {
+          return normalizeGeometry(candidate, sized);
+        }
+      }
+    }
+  }
+
+  // If no free rectangle exists, retain a readable deterministic cascade.
+  // WorkspaceCanvas can grow the logical canvas around the new panel.
+  const firstPanel = existingPanels[0];
+  const cascadeStep =
+    GRID_SIZE * 2 * Math.max(1, existingPanels.length);
+
+  return normalizeGeometry(
+    {
+      ...sized,
+      x: firstPanel.geometry.x + cascadeStep,
+      y: firstPanel.geometry.y + cascadeStep,
+    },
+    sized,
+  );
+}
+
+export function resolvePanelCreationGeometry({
+  seededGeometry,
+  hasRememberedGeometry,
+  initialPosition,
+  preferredGeometry,
+  existingPanels,
+  canvasBounds,
+  sourcePanelId,
+  panelSpacing,
+}: {
+  seededGeometry: PanelGeometry;
+  hasRememberedGeometry: boolean;
+  initialPosition?: {
+    x: number;
+    y: number;
+  };
+  preferredGeometry?: {
+    width?: number;
+    height?: number;
+  };
+  existingPanels: PanelInstance[];
+  canvasBounds: WorkspaceCanvasBounds;
+  sourcePanelId?: string;
+  panelSpacing: number;
+}): PanelGeometry {
+  if (hasRememberedGeometry) {
+    return seededGeometry;
+  }
+
+  if (initialPosition) {
+    return normalizeGeometry(
+      {
+        ...seededGeometry,
+        x: initialPosition.x,
+        y: initialPosition.y,
+      },
+      seededGeometry,
+    );
+  }
+
+  return resolveInitialPanelGeometry({
+    geometry: seededGeometry,
+    preferredGeometry,
+    existingPanels,
+    canvasBounds,
+    sourcePanelId,
+    panelSpacing,
+  });
+}
 
 type WorkspaceControllerDependencies = {
   registry: PanelRegistry;
@@ -39,6 +211,15 @@ type WorkspaceControllerDependencies = {
 type CreatePanelOptions = {
   title?: string;
   panelState?: unknown;
+  preferredGeometry?: {
+    width?: number;
+    height?: number;
+  };
+  sourcePanelId?: string;
+  initialPosition?: {
+    x: number;
+    y: number;
+  };
 };
 
 export type WorkspaceController = {
@@ -129,28 +310,85 @@ export function useWorkspaceController({
 
     const now = nowIso();
     const panelId = createId("panel");
-    updateActiveTab((panels) => {
-      const normalized =
-        options.panelState === undefined
-          ? definition.createInitialState({ now })
-          : definition.normalizeState(options.panelState, { now }).state;
 
-      return [
-        ...panels,
-        {
-          id: panelId,
-          moduleId,
-          panelType,
-          title: options.title?.trim() || definition.title,
-          geometry: geometryFromPanelDefinition(definition, panels.length * 24),
-          focusOrder: nextFocusOrder(panels),
-          stateVersion: definition.stateVersion,
-          panelState: normalized,
-          createdAt: now,
+    setWorkspace((current) => ({
+      ...current,
+      tabs: current.tabs.map((tab) => {
+        if (tab.id !== current.activeTabId) {
+          return tab;
+        }
+
+        const normalized =
+          options.panelState === undefined
+            ? definition.createInitialState({ now })
+            : definition.normalizeState(options.panelState, { now }).state;
+
+        const canonicalGeometry = geometryFromPanelDefinition(definition);
+        const surfaceMemory = definition.surfacePresentationMemory
+          ? current.surfacePresentationMemory?.[
+              panelSurfacePresentationKey(moduleId, panelType)
+            ]
+          : undefined;
+        const rememberedGeometry = surfaceMemory?.geometry;
+
+        const seededGeometry = rememberedGeometry
+          ? normalizeGeometry(
+              {
+                ...rememberedGeometry,
+                width:
+                  options.preferredGeometry?.width ??
+                  rememberedGeometry.width,
+                height:
+                  options.preferredGeometry?.height ??
+                  rememberedGeometry.height,
+              },
+              canonicalGeometry,
+            )
+          : normalizeGeometry(
+              {
+                ...canonicalGeometry,
+                width:
+                  options.preferredGeometry?.width ??
+                  canonicalGeometry.width,
+                height:
+                  options.preferredGeometry?.height ??
+                  canonicalGeometry.height,
+              },
+              canonicalGeometry,
+            );
+
+        const geometry = resolvePanelCreationGeometry({
+          seededGeometry,
+          hasRememberedGeometry: rememberedGeometry !== undefined,
+          initialPosition: options.initialPosition,
+          preferredGeometry: options.preferredGeometry,
+          existingPanels: tab.panels,
+          canvasBounds: tab.canvasBounds,
+          sourcePanelId: options.sourcePanelId,
+          panelSpacing: current.preferences.panelSpacing,
+        });
+
+        return {
+          ...tab,
+          panels: [
+            ...tab.panels,
+            {
+              id: panelId,
+              moduleId,
+              panelType,
+              title: options.title?.trim() || definition.title,
+              geometry,
+              focusOrder: nextFocusOrder(tab.panels),
+              stateVersion: definition.stateVersion,
+              panelState: normalized,
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
           updatedAt: now,
-        },
-      ];
-    });
+        };
+      }),
+    }));
 
     return panelId;
   }
@@ -306,31 +544,85 @@ export function useWorkspaceController({
 
   function updatePanelGeometry(panelId: string, geometry: PanelGeometry) {
     const now = nowIso();
-    updateActiveTab((panels) =>
-      panels.map((panel) => {
-        if (panel.id !== panelId) {
-          return panel;
+
+    setWorkspace((current) => {
+      const activeTab = current.tabs.find(
+        (tab) => tab.id === current.activeTabId,
+      );
+      const targetPanel = activeTab?.panels.find(
+        (panel) => panel.id === panelId,
+      );
+
+      if (!targetPanel) {
+        return current;
+      }
+
+      const definition = registry.getPanel(
+        targetPanel.moduleId,
+        targetPanel.panelType,
+      );
+
+      const tabs = current.tabs.map((tab) => {
+        if (tab.id !== current.activeTabId) {
+          return tab;
         }
 
-        if (panel.display?.mode === "minimized") {
-          return {
-            ...panel,
+        return {
+          ...tab,
+          panels: tab.panels.map((panel) => {
+            if (panel.id !== panelId) {
+              return panel;
+            }
+
+            if (panel.display?.mode === "minimized") {
+              return {
+                ...panel,
+                geometry,
+                display: {
+                  ...panel.display,
+                  restoreGeometry: {
+                    ...(panel.display.restoreGeometry ?? panel.geometry),
+                    x: geometry.x,
+                    y: geometry.y,
+                  },
+                },
+                updatedAt: now,
+              };
+            }
+
+            return { ...panel, geometry, updatedAt: now };
+          }),
+          updatedAt: now,
+        };
+      });
+
+      if (!definition?.surfacePresentationMemory) {
+        return {
+          ...current,
+          tabs,
+        };
+      }
+
+      const surfaceId = panelSurfacePresentationKey(
+        targetPanel.moduleId,
+        targetPanel.panelType,
+      );
+
+      return {
+        ...current,
+        tabs,
+        surfacePresentationMemory: {
+          ...current.surfacePresentationMemory,
+          [surfaceId]: {
+            kind: "panel",
+            moduleId: targetPanel.moduleId,
+            panelType: targetPanel.panelType,
             geometry,
-            display: {
-              ...panel.display,
-              restoreGeometry: {
-                ...(panel.display.restoreGeometry ?? panel.geometry),
-                x: geometry.x,
-                y: geometry.y,
-              },
-            },
             updatedAt: now,
-          };
-        }
-
-        return { ...panel, geometry, updatedAt: now };
-      }),
-    );
+          },
+        },
+      };
+    });
   }
 
   function updatePanelState(panelId: string, panelState: unknown) {

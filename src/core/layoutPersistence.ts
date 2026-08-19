@@ -1,3 +1,7 @@
+import {
+  DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS,
+  panelSurfacePresentationKey,
+} from "./types";
 import { createId, nowIso } from "./id";
 import { normalizeFrameControlPreferences } from "./frameControls";
 import { normalizeGeometry, repairFocusOrder } from "./layoutEngine";
@@ -145,6 +149,11 @@ export function createLayoutPersistence({
         activeTabId,
         tabs,
         preferences: normalizePreferences(input.preferences),
+        surfacePresentationMemory: normalizeSurfacePresentationMemory(
+          input.surfacePresentationMemory,
+          warnings,
+          registry,
+        ),
         registryVersion:
           typeof input.registryVersion === "string" ? input.registryVersion : "runtime-v1",
       },
@@ -226,6 +235,14 @@ function normalizePreferences(input: unknown): WorkspacePreferences {
     scale: clamp(finiteNumber(raw.scale, 1), 0.75, 1.35),
     fontSize: clamp(finiteNumber(raw.fontSize, 14), 12, 18),
     showGrid: typeof raw.showGrid === "boolean" ? raw.showGrid : true,
+    panelSpacing: clamp(
+      Math.round(finiteNumber(raw.panelSpacing, 0)),
+      0,
+      240,
+    ),
+    systemSurfacePositions: normalizeSystemSurfacePositions(
+      raw.systemSurfacePositions,
+    ),
     clock: normalizeClockPreferences(raw.clock),
     density,
     themeMode,
@@ -235,6 +252,54 @@ function normalizePreferences(input: unknown): WorkspacePreferences {
     panelMenu: normalizePanelMenuPreferences(raw.panelMenu),
     frameControls: normalizeFrameControlPreferences(raw.frameControls),
     panelViews: normalizeWorkspacePanelViewPreferences(raw.panelViews),
+  };
+}
+
+function normalizeSurfacePosition(
+  input: unknown,
+  fallback: { x: number; y: number },
+) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return { ...fallback };
+  }
+
+  const record = input as Record<string, unknown>;
+
+  const x =
+    typeof record.x === "number" && Number.isFinite(record.x)
+      ? Math.max(0, Math.round(record.x))
+      : fallback.x;
+
+  const y =
+    typeof record.y === "number" && Number.isFinite(record.y)
+      ? Math.max(0, Math.round(record.y))
+      : fallback.y;
+
+  return { x, y };
+}
+
+function normalizeSystemSurfacePositions(
+  input: unknown,
+): WorkspacePreferences["systemSurfacePositions"] {
+  const defaults = DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS;
+
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {
+      settings: { ...defaults.settings },
+      addPanel: { ...defaults.addPanel },
+      frameSettings: { ...defaults.frameSettings },
+    };
+  }
+
+  const record = input as Record<string, unknown>;
+
+  return {
+    settings: normalizeSurfacePosition(record.settings, defaults.settings),
+    addPanel: normalizeSurfacePosition(record.addPanel, defaults.addPanel),
+    frameSettings: normalizeSurfacePosition(
+      record.frameSettings,
+      defaults.frameSettings,
+    ),
   };
 }
 
@@ -484,6 +549,86 @@ function normalizePanel(
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now,
     updatedAt: now,
   };
+}
+
+function normalizeSurfacePresentationMemory(
+  input: unknown,
+  warnings: string[],
+  registry: PanelRegistry,
+): WorkspaceState["surfacePresentationMemory"] {
+  if (!isRecord(input)) {
+    return {};
+  }
+
+  const memory: WorkspaceState["surfacePresentationMemory"] = {};
+
+  for (const [surfaceId, value] of Object.entries(input)) {
+    if (!isRecord(value) || value.kind !== "panel") {
+      warnings.push(
+        `Discarded invalid surface presentation memory: ${surfaceId}.`,
+      );
+      continue;
+    }
+
+    const moduleId =
+      typeof value.moduleId === "string" ? value.moduleId : "";
+    const panelType =
+      typeof value.panelType === "string" ? value.panelType : "";
+    const expectedSurfaceId =
+      panelSurfacePresentationKey(moduleId, panelType);
+
+    if (
+      !moduleId ||
+      !panelType ||
+      surfaceId !== expectedSurfaceId ||
+      !/^[A-Za-z0-9._-]+$/.test(moduleId) ||
+      !/^[A-Za-z0-9._-]+$/.test(panelType)
+    ) {
+      warnings.push(
+        `Discarded invalid panel surface presentation memory: ${surfaceId}.`,
+      );
+      continue;
+    }
+
+    const definition = registry.getPanel(moduleId, panelType);
+
+    const fallback = definition
+      ? {
+          ...definition.defaultGeometry,
+          minWidth: definition.minGeometry.width,
+          minHeight: definition.minGeometry.height,
+        }
+      : {
+          x: 0,
+          y: 0,
+          width: 480,
+          height: 360,
+          minWidth: 240,
+          minHeight: 160,
+        };
+
+    memory[surfaceId] = {
+      kind: "panel",
+      moduleId,
+      panelType,
+      geometry: isRecord(value.geometry)
+        ? normalizeGeometry(value.geometry, fallback)
+        : undefined,
+      panelState: value.panelState,
+      display: normalizePanelDisplay(value.display),
+      stateVersion:
+        typeof value.stateVersion === "number" &&
+        Number.isFinite(value.stateVersion)
+          ? value.stateVersion
+          : definition?.stateVersion,
+      updatedAt:
+        typeof value.updatedAt === "string"
+          ? value.updatedAt
+          : nowIso(),
+    };
+  }
+
+  return memory;
 }
 
 function normalizeTab(

@@ -128,9 +128,12 @@ export function SettingsPanel({
 
   return (
     <div className="panel-body settings-panel">
-      <section className="settings-panel__section">
+      <section className="settings-panel__section settings-panel__section--interface">
         <h3>Interface</h3>
-        <label>
+
+        <div className="settings-panel__group settings-panel__group--display">
+          <h4>Display</h4>
+          <label>
           <span>Font</span>
           <select
             value={preferences.fontFamily}
@@ -202,9 +205,12 @@ export function SettingsPanel({
             </button>
           </div>
           <strong>{Math.round(preferences.scale * 100)}%</strong>
-        </label>
+          </label>
+        </div>
 
-        <label>
+        <div className="settings-panel__group settings-panel__group--layout">
+          <h4>Layout</h4>
+          <label>
           <span>Grid</span>
           <input
             type="checkbox"
@@ -216,12 +222,190 @@ export function SettingsPanel({
             }
           />
         </label>
-      </section>
-
-      <section className="settings-panel__section">
-        <h3>Clock</h3>
 
         <label>
+          <span>Panel spacing</span>
+          <input
+            type="number"
+            min="0"
+            max="240"
+            step="1"
+            value={preferences.panelSpacing}
+            onChange={(event) =>
+              updatePreferences({
+                panelSpacing: Math.max(
+                  0,
+                  Math.min(
+                    240,
+                    Math.round(Number.parseFloat(event.target.value) || 0),
+                  ),
+                ),
+              })
+            }
+          />
+          <strong>{preferences.panelSpacing}px</strong>
+          </label>
+        </div>
+
+        <div className="settings-panel__group settings-panel__group--surfaces">
+          <h4>System Surfaces</h4>
+          <div className="settings-surface-grid">
+            <strong>Surface</strong>
+            <strong>X</strong>
+            <strong>Y</strong>
+
+            <span>Settings</span>
+            <label aria-label="Settings X">
+              <span className="settings-panel__visually-hidden">Settings X</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={preferences.systemSurfacePositions.settings.x}
+            onChange={(event) =>
+              updatePreferences({
+                systemSurfacePositions: {
+                  ...preferences.systemSurfacePositions,
+                  settings: {
+                    ...preferences.systemSurfacePositions.settings,
+                    x: Math.max(
+                      0,
+                      Math.round(Number.parseFloat(event.target.value) || 0),
+                    ),
+                  },
+                },
+              })
+            }
+          />
+            </label>
+
+            <label aria-label="Settings Y">
+              <span className="settings-panel__visually-hidden">Settings Y</span>
+              <input
+            type="number"
+            min="0"
+            step="1"
+            value={preferences.systemSurfacePositions.settings.y}
+            onChange={(event) =>
+              updatePreferences({
+                systemSurfacePositions: {
+                  ...preferences.systemSurfacePositions,
+                  settings: {
+                    ...preferences.systemSurfacePositions.settings,
+                    y: Math.max(
+                      0,
+                      Math.round(Number.parseFloat(event.target.value) || 0),
+                    ),
+                  },
+                },
+              })
+            }
+          />
+            </label>
+
+            <span>Add Panel</span>
+            <label aria-label="Add Panel X">
+              <span className="settings-panel__visually-hidden">Add Panel X</span>
+              <input
+            type="number"
+            min="0"
+            step="1"
+            value={preferences.systemSurfacePositions.addPanel.x}
+            onChange={(event) =>
+              updatePreferences({
+                systemSurfacePositions: {
+                  ...preferences.systemSurfacePositions,
+                  addPanel: {
+                    ...preferences.systemSurfacePositions.addPanel,
+                    x: Math.max(
+                      0,
+                      Math.round(Number.parseFloat(event.target.value) || 0),
+                    ),
+                  },
+                },
+              })
+            }
+          />
+            </label>
+
+            <label aria-label="Add Panel Y">
+              <span className="settings-panel__visually-hidden">Add Panel Y</span>
+              <input
+            type="number"
+            min="0"
+            step="1"
+            value={preferences.systemSurfacePositions.addPanel.y}
+            onChange={(event) =>
+              updatePreferences({
+                systemSurfacePositions: {
+                  ...preferences.systemSurfacePositions,
+                  addPanel: {
+                    ...preferences.systemSurfacePositions.addPanel,
+                    y: Math.max(
+                      0,
+                      Math.round(Number.parseFloat(event.target.value) || 0),
+                    ),
+                  },
+                },
+              })
+            }
+          />
+            </label>
+
+            <span>Frame Settings</span>
+            <label aria-label="Frame Settings X">
+              <span className="settings-panel__visually-hidden">Frame Settings X</span>
+              <input
+            type="number"
+            min="0"
+            step="1"
+            value={preferences.systemSurfacePositions.frameSettings.x}
+            onChange={(event) =>
+              updatePreferences({
+                systemSurfacePositions: {
+                  ...preferences.systemSurfacePositions,
+                  frameSettings: {
+                    ...preferences.systemSurfacePositions.frameSettings,
+                    x: Math.max(
+                      0,
+                      Math.round(Number.parseFloat(event.target.value) || 0),
+                    ),
+                  },
+                },
+              })
+            }
+          />
+            </label>
+
+            <label aria-label="Frame Settings Y">
+              <span className="settings-panel__visually-hidden">Frame Settings Y</span>
+              <input
+            type="number"
+            min="0"
+            step="1"
+            value={preferences.systemSurfacePositions.frameSettings.y}
+            onChange={(event) =>
+              updatePreferences({
+                systemSurfacePositions: {
+                  ...preferences.systemSurfacePositions,
+                  frameSettings: {
+                    ...preferences.systemSurfacePositions.frameSettings,
+                    y: Math.max(
+                      0,
+                      Math.round(Number.parseFloat(event.target.value) || 0),
+                    ),
+                  },
+                },
+              })
+            }
+          />
+            </label>
+          </div>
+        </div>
+
+        <div className="settings-panel__group settings-panel__group--clock">
+          <h4>Clock</h4>
+          <label>
           <span>Enabled</span>
           <input
             type="checkbox"
@@ -246,7 +430,8 @@ export function SettingsPanel({
               updatePreferences({
                 clock: {
                   ...preferences.clock,
-                  timeFormat: event.target.value as WorkspacePreferences["clock"]["timeFormat"],
+                  timeFormat: event.target.value as
+                    WorkspacePreferences["clock"]["timeFormat"],
                 },
               })
             }
@@ -265,7 +450,8 @@ export function SettingsPanel({
               updatePreferences({
                 clock: {
                   ...preferences.clock,
-                  dateFormat: event.target.value as WorkspacePreferences["clock"]["dateFormat"],
+                  dateFormat: event.target.value as
+                    WorkspacePreferences["clock"]["dateFormat"],
                 },
               })
             }
@@ -274,7 +460,8 @@ export function SettingsPanel({
             <option value="text">Text</option>
             <option value="numeric">Numeric (YYYY-MM-DD)</option>
           </select>
-        </label>
+          </label>
+        </div>
       </section>
 
       <section className="settings-panel__section">
@@ -347,7 +534,7 @@ export function SettingsPanel({
         })}
       </section>
 
-      <section className="settings-panel__section">
+      <section className="settings-panel__section settings-panel__section--panel-menu">
         <h3>Panel Menu Arrangement</h3>
         <label>
           <span>Panel sort</span>

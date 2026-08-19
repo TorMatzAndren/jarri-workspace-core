@@ -1,4 +1,10 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { createDefaultWorkspace } from "../core/defaultWorkspace";
 import { createLayoutPersistence } from "../core/layoutPersistence";
 import {
@@ -58,6 +64,14 @@ export function WorkspaceShell() {
     Record<string, boolean>
   >({});
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const systemSurfaceDragRef = useRef<{
+    surface: "addPanel" | "frameSettings";
+    pointerId: number;
+    startPointerX: number;
+    startPointerY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
   const runtime = workspaceRuntime;
 
   const defaultWorkspaceFactory = useMemo(
@@ -82,6 +96,78 @@ export function WorkspaceShell() {
   });
 
   const preferences = controller.workspace.preferences;
+
+  function beginSystemSurfaceDrag(
+    surface: "addPanel" | "frameSettings",
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) {
+    if ((event.target as HTMLElement).closest("button")) {
+      return;
+    }
+
+    const position = preferences.systemSurfacePositions[surface];
+
+    systemSurfaceDragRef.current = {
+      surface,
+      pointerId: event.pointerId,
+      startPointerX: event.clientX,
+      startPointerY: event.clientY,
+      startX: position.x,
+      startY: position.y,
+    };
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function moveSystemSurfaceDrag(
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) {
+    const drag = systemSurfaceDragRef.current;
+
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    controller.updatePreferences({
+      systemSurfacePositions: {
+        ...preferences.systemSurfacePositions,
+        [drag.surface]: {
+          x: Math.max(
+            0,
+            Math.round(
+              drag.startX +
+                (event.clientX - drag.startPointerX),
+            ),
+          ),
+          y: Math.max(
+            0,
+            Math.round(
+              drag.startY +
+                (event.clientY - drag.startPointerY),
+            ),
+          ),
+        },
+      },
+    });
+  }
+
+  function endSystemSurfaceDrag(
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) {
+    const drag = systemSurfaceDragRef.current;
+
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    systemSurfaceDragRef.current = null;
+  }
+
   const modules = runtime.listModules().map((module) => ({
     moduleId: module.moduleId,
     title: module.title,
@@ -219,7 +305,22 @@ export function WorkspaceShell() {
             onClick={() => {
               setPanelMenuOpen(false);
               setFrameControlsMenuOpen(false);
-              controller.createPanel("core", "settings");
+
+              const settingsPanel = controller.activeTab.panels.find(
+                (panel) =>
+                  panel.moduleId === "core" &&
+                  panel.panelType === "settings",
+              );
+
+              if (settingsPanel) {
+                controller.closePanel(settingsPanel.id);
+                return;
+              }
+
+              controller.createPanel("core", "settings", {
+                initialPosition:
+                  preferences.systemSurfacePositions.settings,
+              });
             }}
           >
             Settings
@@ -249,10 +350,37 @@ export function WorkspaceShell() {
         }}
       />
 
-      <div className="workspace-shell__floating-panel-menu">
+      <div
+        className="workspace-shell__floating-panel-menu"
+        style={{
+          left: `${preferences.systemSurfacePositions.addPanel.x}px`,
+          top: `${preferences.systemSurfacePositions.addPanel.y}px`,
+          right: "auto",
+        }}
+      >
         <div className="panel-menu">
           {panelMenuOpen ? (
             <div className="panel-menu__content">
+              <div
+                className="panel-menu__header panel-menu__header--draggable"
+                onPointerDown={(event) =>
+                  beginSystemSurfaceDrag("addPanel", event)
+                }
+                onPointerMove={moveSystemSurfaceDrag}
+                onPointerUp={endSystemSurfaceDrag}
+                onPointerCancel={endSystemSurfaceDrag}
+              >
+                <strong>Add Panel</strong>
+                <button
+                  type="button"
+                  className="panel-menu__close"
+                  onClick={() => setPanelMenuOpen(false)}
+                  aria-label="Close Add Panel menu"
+                >
+                  ×
+                </button>
+              </div>
+
               {panelGroups.map((group) => (
                 <section className="panel-menu__group" key={group.module.moduleId}>
                   <h2>{group.module.title}</h2>
@@ -276,11 +404,25 @@ export function WorkspaceShell() {
         </div>
       </div>
 
-      <div className="workspace-shell__floating-frame-settings">
+      <div
+        className="workspace-shell__floating-panel-menu"
+        style={{
+          left: `${preferences.systemSurfacePositions.frameSettings.x}px`,
+          top: `${preferences.systemSurfacePositions.frameSettings.y}px`,
+        }}
+      >
         <div className="panel-menu">
           {frameControlsMenuOpen ? (
             <div className="panel-menu__content panel-menu__content--frame-settings">
-              <div className="panel-menu__header">
+              <div
+                className="panel-menu__header panel-menu__header--draggable"
+                onPointerDown={(event) =>
+                  beginSystemSurfaceDrag("frameSettings", event)
+                }
+                onPointerMove={moveSystemSurfaceDrag}
+                onPointerUp={endSystemSurfaceDrag}
+                onPointerCancel={endSystemSurfaceDrag}
+              >
                 <strong>Frame Settings</strong>
                 <button
                   type="button"
