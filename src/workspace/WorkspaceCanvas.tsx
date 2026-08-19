@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { Image } from "@tauri-apps/api/image";
+import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
+import { domToBlob } from "modern-screenshot";
 import type {
   PanelGeometry,
   PanelInstance,
@@ -105,8 +108,12 @@ export function WorkspaceCanvas({
   const [resizeState, setResizeState] = useState<CanvasResizeState | null>(null);
   const [panState, setPanState] = useState<CanvasPanState | null>(null);
   const [previewBounds, setPreviewBounds] = useState<WorkspaceCanvasBounds | null>(null);
+  const [screenshotState, setScreenshotState] = useState<
+    "idle" | "copying" | "copied" | "failed"
+  >("idle");
   const previewBoundsRef = useRef<WorkspaceCanvasBounds | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const logicalRef = useRef<HTMLDivElement | null>(null);
   const effectiveBounds = normalizeBounds(
     previewBounds ?? canvasBounds,
     panels,
@@ -353,6 +360,68 @@ export function WorkspaceCanvas({
     });
   }
 
+  async function captureWorkspaceScreenshot() {
+    const logical = logicalRef.current;
+    if (!logical || screenshotState === "copying") {
+      return;
+    }
+
+    const width = effectiveBounds.width;
+    const height = effectiveBounds.height;
+
+    setScreenshotState("copying");
+
+    try {
+      const captured = await domToBlob(logical, {
+        width,
+        height,
+        scale: 1,
+        style: {
+          transform: "none",
+          transformOrigin: "top left",
+        },
+        filter: (node) =>
+          !(node instanceof Element) ||
+          !node.classList.contains("workspace-canvas__resize-handle"),
+        features: {
+          copyScrollbar: true,
+          removeAbnormalAttributes: true,
+          removeControlCharacter: true,
+          fixSvgXmlDecode: true,
+          restoreScrollPosition: false,
+        },
+      });
+
+      if (!captured) {
+        throw new Error("Workspace screenshot produced no image data.");
+      }
+
+      const image = await Image.fromBytes(await captured.arrayBuffer());
+
+      try {
+        await writeImage(image);
+      } finally {
+        await image.close();
+      }
+
+      setScreenshotState("copied");
+      window.setTimeout(() => {
+        setScreenshotState((current) =>
+          current === "copied" ? "idle" : current,
+        );
+      }, 1600);
+    } catch (error) {
+      console.error("Workspace screenshot failed", error);
+      setScreenshotState("failed");
+
+      window.setTimeout(() => {
+        setScreenshotState((current) =>
+          current === "failed" ? "idle" : current,
+        );
+      }, 2400);
+    }
+  }
+
   return (
     <section className="workspace-canvas" aria-label="Workspace canvas">
       <div className="workspace-canvas__toolbar">
@@ -403,6 +472,20 @@ export function WorkspaceCanvas({
         </div>
 
         <div className="workspace-canvas__toolbar-actions">
+          <button
+            type="button"
+            onClick={captureWorkspaceScreenshot}
+            disabled={screenshotState === "copying"}
+            title="Copy the complete logical Workspace tab as an image"
+          >
+            {screenshotState === "copying"
+              ? "Copying…"
+              : screenshotState === "copied"
+                ? "Copied"
+                : screenshotState === "failed"
+                  ? "Copy failed"
+                  : "Screenshot"}
+          </button>
           <button type="button" onClick={onOpenPanelsMenu}>
             + New Panel
           </button>
@@ -416,6 +499,7 @@ export function WorkspaceCanvas({
       >
         <div
           className="workspace-canvas__logical"
+          ref={logicalRef}
           style={{
             "--workspace-canvas-width": `${effectiveBounds.width}px`,
             "--workspace-canvas-height": `${effectiveBounds.height}px`,

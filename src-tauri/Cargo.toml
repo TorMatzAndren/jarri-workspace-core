@@ -16,4 +16,5 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.5.6", features = [] }
 
 [dependencies]
-tauri = { version = "2.10.3", features = [] }
+tauri = { version = "2.10.3", features = ["image-png"] }
+tauri-plugin-clipboard-manager = "2"
