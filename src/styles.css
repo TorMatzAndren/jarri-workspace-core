@@ -493,6 +493,15 @@ button:disabled {
   background: var(--color-shell);
 }
 
+.workspace-shell__logo {
+  display: block;
+  width: auto;
+  height: calc(56px * var(--workspace-scale));
+  max-width: min(360px, 40vw);
+  object-fit: contain;
+}
+
+
 .workspace-shell__header h1 {
   margin: 2px 0 0;
   font-size: 1.25rem;

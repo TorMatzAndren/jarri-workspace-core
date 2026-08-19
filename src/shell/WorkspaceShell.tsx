@@ -7,6 +7,7 @@ import { TabBar } from "../tabs/TabBar";
 import { WorkspaceCanvas } from "../workspace/WorkspaceCanvas";
 import type { PanelDefinition, WorkspaceModuleDefinition } from "../core/types";
 import type { OpenResourceRequest, OpenResourceResult } from "../core/resources";
+import jarriWorkspaceLogo from "../assets/jarri-workspace.png";
 
 type PanelMenuGroup = {
   module: WorkspaceModuleDefinition;
@@ -155,10 +156,11 @@ export function WorkspaceShell() {
       style={colorStyle}
     >
       <header className="workspace-shell__header">
-        <div>
-          <span className="eyebrow">Jarri Workspace Core</span>
-          <h1>Reusable Projection Workspace</h1>
-        </div>
+        <img
+          className="workspace-shell__logo"
+          src={jarriWorkspaceLogo}
+          alt="Jarri Workspace"
+        />
       </header>
 
       <TabBar
