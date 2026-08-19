@@ -1,4 +1,8 @@
 import type { PanelDefinition, WorkspaceModuleDefinition } from "../core/types";
+import {
+  panelSummarySemantic,
+  unavailableSemantic,
+} from "../core/panelSemantics";
 import { MissingPanel } from "./MissingPanel";
 import { SettingsPanel } from "./SettingsPanel";
 
@@ -24,6 +28,10 @@ const missingPanelDefinition: PanelDefinition = {
     repaired: false,
     warnings: [],
   }),
+  semanticStrategy: unavailableSemantic(
+    "The saved layout references a panel definition that is not registered.",
+    "Restore the module or close this placeholder panel.",
+  ),
   Component: MissingPanel,
 };
 
@@ -45,6 +53,10 @@ const settingsPanelDefinition: PanelDefinition = {
   },
   createInitialState: () => ({}),
   normalizeState: () => ({ state: {}, repaired: false, warnings: [] }),
+  semanticStrategy: panelSummarySemantic(
+    "Ready",
+    "Workspace-level preferences are available in this panel.",
+  ),
   Component: SettingsPanel,
 };
 

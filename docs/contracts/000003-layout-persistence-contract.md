@@ -6,6 +6,11 @@ This document defines how Jarri Workspace Core persists, loads, migrates, repair
 
 Layout persistence stores user preference and panel projection state. It does not store canonical runtime truth.
 
+Semantic projection documents, publication leases, frame-control runtime payloads,
+and clipboard text are runtime-only. Layout persistence may store frame-control
+visibility preferences and panel-view presentation preferences such as font
+scale, but not the semantic content those controls consume.
+
 ## Persistence Doctrine
 
 - Persisted layout is user preference.
@@ -39,6 +44,8 @@ Rules:
 - `schemaVersion` controls Workspace Core migrations.
 - `savedAt` is metadata only.
 - `workspace` contains tabs, panels, preferences, and panel-local projection state.
+- `workspace.preferences.frameControls` stores frame-control visibility by stable panel-type/control key.
+- `workspace.preferences.panelViews` stores Workspace-owned presentation preferences by stable panel-type key.
 - `modules` records what was known when the layout was saved.
 
 ## Storage Providers
@@ -77,6 +84,9 @@ Version changes are required when:
 - geometry model changes.
 - dirty-state persistence changes.
 - registry identity rules change.
+
+Adding backward-compatible preference surfaces with deterministic defaults does
+not require changing the public application version.
 
 Version changes are not required when:
 
@@ -288,4 +298,3 @@ Diagnostics are for logs and developer tools. They are advisory metadata, not do
 - Repair should prefer preserving user layout over strict rejection, except where persisted data is unsafe or incoherent.
 - Missing modules are normal during development; layout persistence must degrade visibly and recover when modules return.
 - Preflight confirmation state must be intentionally hard to persist because reload should not bypass risk review.
-

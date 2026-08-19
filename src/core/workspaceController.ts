@@ -19,10 +19,12 @@ import type {
   PanelDefinition,
   PanelGeometry,
   PanelInstance,
+  PanelViewPreferences,
   SavedTabTemplate,
   WorkspacePreferences,
   WorkspaceState,
 } from "./types";
+import { panelTypePreferenceKey } from "./types";
 
 const FOCUS_ORDER_COMPACT_THRESHOLD = 500;
 
@@ -62,6 +64,11 @@ export type WorkspaceController = {
   focusPanel: (panelId: string) => void;
   updatePanelGeometry: (panelId: string, geometry: PanelGeometry) => void;
   updatePanelState: (panelId: string, panelState: unknown) => void;
+  updatePanelViewPreferences: (
+    moduleId: string,
+    panelType: string,
+    preferences: PanelViewPreferences,
+  ) => void;
   updatePreferences: (preferences: Partial<WorkspacePreferences>) => void;
   resetWorkspace: () => void;
 };
@@ -339,6 +346,24 @@ export function useWorkspaceController({
     }));
   }
 
+  function updatePanelViewPreferences(
+    moduleId: string,
+    panelType: string,
+    preferences: PanelViewPreferences,
+  ) {
+    const key = panelTypePreferenceKey(moduleId, panelType);
+    setWorkspace((current) => ({
+      ...current,
+      preferences: {
+        ...current.preferences,
+        panelViews: {
+          ...current.preferences.panelViews,
+          [key]: preferences,
+        },
+      },
+    }));
+  }
+
   function resetWorkspace() {
     persistence.resetWorkspaceStorage();
     setWorkspace(defaultWorkspaceFactory());
@@ -369,6 +394,7 @@ export function useWorkspaceController({
     focusPanel,
     updatePanelGeometry,
     updatePanelState,
+    updatePanelViewPreferences,
     updatePreferences,
     resetWorkspace,
   };

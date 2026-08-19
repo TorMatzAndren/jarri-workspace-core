@@ -1,4 +1,12 @@
 import type { ComponentType } from "react";
+import type {
+  PanelFrameControlPublisher,
+  WorkspaceFrameControlPreferences,
+} from "./frameControls";
+import type {
+  PanelSemanticPublisher,
+  WorkspaceProjectionDocument,
+} from "./projection";
 import type { OpenResourceRequest, OpenResourceResult } from "./resources";
 
 export const WORKSPACE_SCHEMA_VERSION = 1;
@@ -8,10 +16,17 @@ export type WorkspaceCanvasBounds = {
   height: number;
 };
 
+export type WorkspaceClockPreferences = {
+  enabled: boolean;
+  timeFormat: "12h" | "24h";
+  dateFormat: "none" | "text" | "numeric";
+};
+
 export type WorkspacePreferences = {
   scale: number;
   fontSize: number;
   showGrid: boolean;
+  clock: WorkspaceClockPreferences;
   canvasBounds: WorkspaceCanvasBounds;
   density: "compact" | "comfortable";
   themeMode: "system" | "light" | "dark";
@@ -19,6 +34,8 @@ export type WorkspacePreferences = {
   themePreset: "neutral" | "graphite" | "contrast" | "blueprint";
   colorOverrides: Partial<WorkspaceColorTokens>;
   panelMenu: PanelMenuPreferences;
+  frameControls: WorkspaceFrameControlPreferences;
+  panelViews: WorkspacePanelViewPreferences;
 };
 
 export type WorkspaceColorTokens = {
@@ -38,6 +55,18 @@ export type PanelMenuPreferences = {
   hiddenModuleIds: string[];
   panelSort: "registered" | "title";
 };
+
+export type PanelViewPreferences = {
+  fontScale: number;
+};
+
+export type WorkspacePanelViewPreferences = {
+  [panelKey: string]: PanelViewPreferences;
+};
+
+export function panelTypePreferenceKey(moduleId: string, panelType: string): string {
+  return `${moduleId}:${panelType}`;
+}
 
 export type WorkspaceState = {
   schemaVersion: number;
@@ -158,7 +187,35 @@ export type PanelBodyProps = {
   updatePanelState: (panelState: unknown) => void;
   updatePreferences: (preferences: Partial<WorkspacePreferences>) => void;
   openResource: (request: OpenResourceRequest) => OpenResourceResult;
+  semanticPublisher: PanelSemanticPublisher;
+  frameControlPublisher: PanelFrameControlPublisher;
 };
+
+export type PanelSemanticContext = {
+  panel: PanelInstance;
+  moduleTitle?: string;
+  moduleId: string;
+  panelType: string;
+  panelTitle: string;
+};
+
+export type PanelSemanticStrategy =
+  | {
+      kind: "static";
+      buildInitial: (context: PanelSemanticContext) => WorkspaceProjectionDocument;
+    }
+  | {
+      kind: "dynamic";
+      buildInitial: (context: PanelSemanticContext) => WorkspaceProjectionDocument;
+    }
+  | {
+      kind: "unavailable";
+      buildInitial: (context: PanelSemanticContext) => WorkspaceProjectionDocument;
+    }
+  | {
+      kind: "pending";
+      reason: string;
+    };
 
 export type PanelDefinition = {
   moduleId: string;
@@ -178,6 +235,7 @@ export type PanelDefinition = {
     input: unknown,
     context: PanelNormalizeContext,
   ) => PanelNormalizeResult;
+  semanticStrategy: PanelSemanticStrategy;
   Component: ComponentType<PanelBodyProps>;
 };
 

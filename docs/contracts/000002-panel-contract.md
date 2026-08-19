@@ -11,6 +11,10 @@ Panels are projections over domain truth. A panel may cache presentation state, 
 - Panel Definition: registry metadata and lifecycle hooks for one panel type.
 - Panel Instance: one user-created panel in one tab.
 - Panel State: persisted presentation state for a panel instance.
+- Panel Frame: Workspace-owned chrome and isolation boundary around a panel body.
+- Panel Body: module-owned rendered content inside a frame.
+- Semantic Projection: runtime-only document describing the panel's current meaningful content for Workspace capabilities.
+- Frame Capability: Workspace-owned action exposed in frame chrome, such as whole-panel Copy or font scaling.
 - Runtime Truth: canonical state fetched from a domain service.
 - Advisory Output: interpretation or model-generated content that must not be treated as truth.
 - Dirty State: panel-held unsaved local changes requiring save/discard/cancel before close.
@@ -52,6 +56,7 @@ Panel instance rules:
 - `stateVersion` is the definition-specific panel state version.
 - `panelState` must not contain canonical runtime truth.
 - `dirty` must be present or queryable when unsaved local changes exist.
+- Semantic projection documents, publication leases, frame-control payloads, and clipboard text must never be stored on a `PanelInstance`.
 
 ## Panel Definition Contract
 
@@ -71,8 +76,15 @@ type PanelDefinition = {
   capabilities: PanelCapabilities;
   createInitialState: (context: PanelCreateContext) => unknown;
   normalizeState: (input: unknown, context: PanelNormalizeContext) => PanelNormalizeResult;
+  semanticStrategy: PanelSemanticStrategy;
   lifecycle?: PanelLifecycleHooks;
 };
+
+type PanelSemanticStrategy =
+  | { kind: "static"; buildInitial: (context: PanelSemanticContext) => WorkspaceProjectionDocument }
+  | { kind: "dynamic"; buildInitial: (context: PanelSemanticContext) => WorkspaceProjectionDocument }
+  | { kind: "unavailable"; buildInitial: (context: PanelSemanticContext) => WorkspaceProjectionDocument }
+  | { kind: "pending"; reason: string };
 
 type PanelCapabilities = {
   closable: boolean;
@@ -101,6 +113,48 @@ Definition rules:
 - Definitions must declare whether dirty state is possible.
 - Definitions must declare provider dependencies by stable provider ID.
 - Definitions must not perform destructive work in creation or normalization hooks.
+- Definitions must declare an explicit semantic strategy.
+- `static`, `dynamic`, `unavailable`, and `pending` semantic states are distinct.
+- `pending` means semantic migration is incomplete and cannot emit placeholder projection content.
+- `unavailable` is a truthful content state with reason and recovery, not an incomplete migration marker.
+
+## Frame, Body, Projection, And Capability Boundary
+
+Workspace Core renders normal panels through one synchronous `PanelFrame`.
+
+Ownership rules:
+
+- The frame owns title chrome, focus, movement, resize, minimize/restore, close controls, body loading boundary, body failure boundary, whole-panel semantic Copy, clipboard transport, frame-control feedback, and panel font scaling.
+- The panel body owns substantive content, local interaction, panel-local presentation state, domain reads, and semantic projection meaning.
+- Semantic projection is the runtime document consumed by Workspace-owned frame capabilities. It is not the DOM and it is not persisted panel state.
+- Frame capabilities are generic Workspace controls. Panels may publish runtime payloads for a control, but panels do not own the Workspace catalog, labels, visibility preferences, transport, or feedback.
+
+Copy rules:
+
+- Whole-panel Copy consumes the current semantic projection through the frame-owned publication controller.
+- Copy must not scrape DOM text.
+- Copy must not fall back to raw `panelState`, provider JSON, or generic text extraction.
+- The frame formats the common `Workspace Projection` envelope.
+- Panel bodies publish only semantic content.
+
+Dynamic publication rules:
+
+- `PanelFrame` creates one semantic publication controller per panel identity.
+- Dynamic bodies publish through `PanelBodyProps.semanticPublisher`.
+- `publish(exporter)` returns a lease.
+- `lease.release()` clears only the publication owned by that lease.
+- Stale releases cannot clear newer publications.
+- Duplicate panel instances have independent publication controllers.
+- Body render failures publish a safe error projection for that frame only.
+- Released or absent dynamic publications fall back to the definition's initial semantic document.
+
+Frame-control rules:
+
+- Workspace owns the frame-control catalog and stable control IDs.
+- Current generic controls are `semantic-copy`, `font-decrease`, and `font-increase`.
+- Frame-control visibility preferences are keyed by `moduleId:panelType:controlId`.
+- Font scaling is Workspace presentation state keyed by panel type, not document/editor/domain state.
+- Runtime frame-control payloads are per panel instance and are never persisted.
 
 ## Panel Registry Contract
 
@@ -317,4 +371,3 @@ When a persisted panel references an unavailable definition:
 - Dirty state belongs in this contract because close behavior is shell-level, even when save behavior is domain-specific.
 - Panel-local state must remain narrow. A panel that wants to persist domain truth should instead define a domain storage contract.
 - Missing panels should be visible rather than silently removed; silent removal breaks user trust in layout persistence.
-

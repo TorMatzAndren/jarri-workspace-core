@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type {
   PanelGeometry,
   PanelInstance,
-  SavedTabTemplate,
-  WorkspaceCanvasBounds,
+  PanelViewPreferences,
+   WorkspaceCanvasBounds,
   WorkspaceModuleDefinition,
   WorkspacePreferences,
 } from "../core/types";
@@ -36,21 +36,19 @@ type Props = {
   registry: PanelRegistry;
   title: string;
   panels: PanelInstance[];
-  savedTabTemplates: SavedTabTemplate[];
-  preferences: WorkspacePreferences;
+   preferences: WorkspacePreferences;
   modules: Array<Pick<WorkspaceModuleDefinition, "moduleId" | "title">>;
   onOpenPanelsMenu: () => void;
-  onOpenSettings: () => void;
-  onResetLayout: () => void;
-  onSavePanelSetup: () => void;
-  onLoadPanelSetup: (templateId: string) => void;
-  onExportPanelSetups: () => void;
-  onImportPanelSetups: () => void;
   onFocusPanel: (panelId: string) => void;
   onClosePanel: (panelId: string) => void;
   onTogglePanelMinimized: (panelId: string) => void;
   onGeometryChange: (panelId: string, geometry: PanelGeometry) => void;
   onPanelStateChange: (panelId: string, panelState: unknown) => void;
+  onPanelViewPreferencesChange: (
+    moduleId: string,
+    panelType: string,
+    preferences: PanelViewPreferences,
+  ) => void;
   onPreferencesChange: (preferences: Partial<WorkspacePreferences>) => void;
   onOpenResource: (request: OpenResourceRequest) => OpenResourceResult;
 };
@@ -88,21 +86,15 @@ export function WorkspaceCanvas({
   registry,
   title,
   panels,
-  savedTabTemplates,
   preferences,
   modules,
   onOpenPanelsMenu,
-  onOpenSettings,
-  onResetLayout,
-  onSavePanelSetup,
-  onLoadPanelSetup,
-  onExportPanelSetups,
-  onImportPanelSetups,
   onFocusPanel,
   onClosePanel,
   onTogglePanelMinimized,
   onGeometryChange,
   onPanelStateChange,
+  onPanelViewPreferencesChange,
   onPreferencesChange,
   onOpenResource,
 }: Props) {
@@ -297,42 +289,46 @@ export function WorkspaceCanvas({
           </span>
         </div>
 
+        <div
+          className="workspace-canvas__panel-taskbar"
+          aria-label="Active tab panels"
+        >
+          {panels.map((panel) => {
+            const minimized = panel.display?.mode === "minimized";
+            const focused =
+              !minimized &&
+              panel.focusOrder ===
+                Math.max(...panels.map((candidate) => candidate.focusOrder));
+
+            return (
+              <button
+                key={panel.id}
+                type="button"
+                className={[
+                  "workspace-canvas__panel-task",
+                  focused ? "workspace-canvas__panel-task--focused" : "",
+                  minimized ? "workspace-canvas__panel-task--minimized" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                title={`${minimized ? "Restore" : "Focus"} ${panel.title}`}
+                aria-pressed={focused}
+                onClick={() => {
+                  if (minimized) {
+                    onTogglePanelMinimized(panel.id);
+                  }
+                  onFocusPanel(panel.id);
+                }}
+              >
+                {panel.title}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="workspace-canvas__toolbar-actions">
           <button type="button" onClick={onOpenPanelsMenu}>
-            Panels
-          </button>
-          <button type="button" onClick={onOpenSettings}>
-            Settings
-          </button>
-          <button type="button" onClick={onSavePanelSetup}>
-            Save Panel Setup
-          </button>
-          <select
-            aria-label="Saved panel setups"
-            disabled={savedTabTemplates.length === 0}
-            defaultValue=""
-            onChange={(event) => {
-              if (event.target.value) {
-                onLoadPanelSetup(event.target.value);
-                event.target.value = "";
-              }
-            }}
-          >
-            <option value="">Load Panel Setup</option>
-            {savedTabTemplates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.title}
-              </option>
-            ))}
-          </select>
-          <button type="button" onClick={onExportPanelSetups}>
-            Export Setups
-          </button>
-          <button type="button" onClick={onImportPanelSetups}>
-            Import Setups
-          </button>
-          <button type="button" className="reset-button" onClick={onResetLayout}>
-            Reset Layout
+            + New Panel
           </button>
         </div>
       </div>
@@ -361,6 +357,7 @@ export function WorkspaceCanvas({
               onToggleMinimized={onTogglePanelMinimized}
               onGeometryChange={onGeometryChange}
               onPanelStateChange={onPanelStateChange}
+              onPanelViewPreferencesChange={onPanelViewPreferencesChange}
               onPreferencesChange={onPreferencesChange}
               onOpenResource={onOpenResource}
             />

@@ -878,13 +878,36 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 
+.panel-frame__projection-copy,
 .panel-frame__minimize,
 .panel-frame__close {
   width: 30px;
   height: 30px;
   padding: 0;
+}
+
+.panel-frame__projection-copy {
+  width: auto;
+  min-width: 42px;
+  padding: 0 8px;
+  font-size: 0.76rem;
+}
+
+.panel-frame__projection-copy[data-frame-control-status="unavailable"] {
+  opacity: 0.55;
+}
+
+.panel-frame__projection-copy--copied {
+  border-color: #59c28b;
+  color: #b8f6d1;
+}
+
+.panel-frame__projection-copy--error {
+  border-color: #f08f8f;
+  color: #ffd0d0;
 }
 
 .panel-frame--minimized {
@@ -899,6 +922,7 @@ button:disabled {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  font-size: calc(1rem * var(--panel-font-scale, 1));
 }
 
 .panel-frame__resize {
@@ -926,6 +950,23 @@ button:disabled {
   display: grid;
   gap: 14px;
   padding: var(--density-pad, 14px);
+}
+
+.panel-body--loading-boundary,
+.panel-body--failure-boundary {
+  align-content: center;
+  min-height: 100%;
+  color: var(--color-muted);
+}
+
+.panel-body--loading-boundary span,
+.panel-body--failure-boundary span {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+}
+
+.panel-body--failure-boundary strong {
+  color: #ffd0d0;
 }
 
 .truth-grid {
@@ -3118,4 +3159,216 @@ code {
   border: 1px solid var(--color-border);
   padding: 7px;
   background: var(--color-panel);
+}
+
+/* Workspace Core 0.3.0: shell-owned frame settings surface */
+
+.workspace-shell__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.workspace-shell__action {
+  min-height: 32px;
+  padding: 5px 10px;
+  font-weight: 750;
+}
+
+.workspace-shell__floating-frame-settings {
+  position: absolute;
+  top: calc(100px * var(--workspace-scale));
+  right: calc(16px * var(--workspace-scale));
+  z-index: 12000;
+}
+
+.workspace-shell__floating-frame-settings .panel-menu__content {
+  top: 0;
+  right: 0;
+  left: auto;
+}
+
+.panel-menu__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-menu__close {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.panel-menu__group-toggle {
+  width: 100%;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+
+.panel-menu__content--frame-settings {
+  width: min(920px, calc(100vw - 32px));
+  max-height: 90vh;
+}
+
+.panel-menu__frame-settings-empty {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 8px;
+  color: var(--color-muted);
+}
+
+.panel-menu__frame-settings-scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.panel-menu__frame-settings-matrix {
+  min-width: max-content;
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-border);
+}
+
+.panel-menu__frame-settings-header,
+.panel-menu__frame-settings-row {
+  display: grid;
+  grid-template-columns:
+    minmax(240px, 1fr)
+    repeat(
+      var(--frame-control-column-count),
+      minmax(88px, 112px)
+    );
+  align-items: stretch;
+  background: var(--color-panel);
+}
+
+.panel-menu__frame-settings-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-panel-header);
+}
+
+.panel-menu__frame-settings-header > strong,
+.panel-menu__frame-settings-row > * {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-right: 1px solid var(--color-border);
+}
+
+.panel-menu__frame-settings-header > strong:last-child,
+.panel-menu__frame-settings-row > *:last-child {
+  border-right: 0;
+}
+
+.panel-menu__frame-settings-header > strong {
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.panel-menu__frame-settings-header > strong:first-child {
+  justify-content: flex-start;
+}
+
+.panel-menu__frame-settings-panel {
+  color: var(--color-text);
+  font-weight: 750;
+}
+
+.panel-menu__frame-settings-control {
+  justify-content: center;
+  cursor: pointer;
+}
+
+.panel-menu__frame-settings-control input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Workspace Core 0.3.0: active-tab panel taskbar */
+
+.workspace-canvas__panel-taskbar {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.workspace-canvas__panel-task {
+  flex: 0 0 auto;
+  min-height: 28px;
+  max-width: 220px;
+  padding: 4px 10px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-button);
+  color: var(--color-muted);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-canvas__panel-task:hover {
+  background: var(--color-button-hover);
+  color: var(--color-text);
+}
+
+.workspace-canvas__panel-task--focused {
+  border-color: var(--color-border-strong);
+  background: var(--color-button-hover);
+  color: var(--color-text);
+}
+
+.workspace-canvas__panel-task--minimized {
+  opacity: 0.58;
+}
+
+/* Workspace Core 0.3.0: configurable title-bar clock */
+
+.workspace-shell__clock {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: end;
+  min-width: max-content;
+  padding-left: calc(14px * var(--workspace-scale));
+  border-left: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.workspace-shell__clock strong {
+  color: var(--color-text);
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+}
+
+.workspace-shell__clock span {
+  margin-top: 3px;
+  font-size: 0.72rem;
+  font-weight: 700;
 }

@@ -42,6 +42,11 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
       scale: 1,
       fontSize: 14,
       showGrid: true,
+      clock: {
+        enabled: true,
+        timeFormat: "24h",
+        dateFormat: "text",
+      },
       canvasBounds: {
         width: 1800,
         height: 1100,
@@ -56,6 +61,10 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
         hiddenModuleIds: [],
         panelSort: "registered",
       },
+      frameControls: {
+        visibility: {},
+      },
+      panelViews: {},
     },
     registryVersion: "runtime-v1",
   };

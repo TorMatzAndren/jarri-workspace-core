@@ -1,4 +1,9 @@
-import type { PanelDefinition } from "../core/types";
+import { useEffect } from "react";
+import {
+  dynamicSemantic,
+  staticSemantic,
+} from "../core/panelSemantics";
+import type { PanelBodyProps, PanelDefinition } from "../core/types";
 
 type TimelineState = {
   selectedEntryId: string;
@@ -76,14 +81,23 @@ const timelineEntries = [
 export function TimelineDemoPanel({
   panel,
   updatePanelState,
+  semanticPublisher,
 }: {
   panel: { panelState: unknown };
   updatePanelState: (panelState: unknown) => void;
+  semanticPublisher: PanelBodyProps["semanticPublisher"];
 }) {
   const state = normalizeTimelineState(panel.panelState);
   const selected =
     timelineEntries.find((entry) => entry.id === state.selectedEntryId) ??
     timelineEntries[0];
+
+  useEffect(() => {
+    const lease = semanticPublisher.publish(() =>
+      createTimelineProjection(state.selectedEntryId),
+    );
+    return () => lease.release();
+  }, [semanticPublisher, state.selectedEntryId]);
 
   return (
     <div className="panel-body timeline-demo">
@@ -114,11 +128,20 @@ export function TimelineDemoPanel({
 export function AdvisoryLogDemoPanel({
   panel,
   updatePanelState,
+  semanticPublisher,
 }: {
   panel: { panelState: unknown };
   updatePanelState: (panelState: unknown) => void;
+  semanticPublisher: PanelBodyProps["semanticPublisher"];
 }) {
   const state = normalizeAdvisoryLogState(panel.panelState);
+
+  useEffect(() => {
+    const lease = semanticPublisher.publish(() =>
+      createAdvisoryProjection(state),
+    );
+    return () => lease.release();
+  }, [panel.panelState, semanticPublisher]);
 
   function appendEntry() {
     updatePanelState({
@@ -200,6 +223,76 @@ function normalizeAdvisoryLogState(input: unknown): AdvisoryLogState {
   };
 }
 
+function createTruthProjection() {
+  return {
+    sections: [
+      {
+        title: "Truth Demo",
+        items: [
+          { label: "Runtime truth", value: "domain service owned" },
+          { label: "Layout", value: "user preference" },
+          { label: "Schema", value: "versioned and repairable" },
+          { label: "Preflight", value: "required for risky action" },
+        ],
+      },
+    ],
+  };
+}
+
+function createTimelineProjection(selectedEntryId: string) {
+  const selected =
+    timelineEntries.find((entry) => entry.id === selectedEntryId) ??
+    timelineEntries[0];
+
+  return {
+    sections: [
+      {
+        title: "Replay Cursor",
+        items: [
+          { label: "Selected", value: selected.label },
+          { label: "Time", value: selected.time },
+          { label: "Detail", value: selected.detail },
+        ],
+      },
+      {
+        title: "Timeline",
+        items: timelineEntries.map((entry) => ({
+          label: entry.time,
+          value: `${entry.label}${entry.id === selected.id ? " (selected)" : ""}`,
+        })),
+      },
+    ],
+  };
+}
+
+function createAdvisoryProjection(state: AdvisoryLogState) {
+  return {
+    sections: [
+      {
+        title: "Advisory Log",
+        items: [
+          { label: "Entries", value: state.entries.length },
+          {
+            label: "Newest source",
+            value: state.entries[0]?.source ?? "none",
+          },
+          {
+            label: "Newest message",
+            value: state.entries[0]?.message ?? "none",
+          },
+        ],
+      },
+      {
+        title: "Visible Entries",
+        items: state.entries.map((entry) => ({
+          label: `${entry.timestamp} ${entry.source}`,
+          value: entry.message,
+        })),
+      },
+    ],
+  };
+}
+
 export const demoPanelDefinitions: PanelDefinition[] = [
   {
     moduleId: "demo",
@@ -220,6 +313,7 @@ export const demoPanelDefinitions: PanelDefinition[] = [
     },
     createInitialState: () => ({}),
     normalizeState: () => ({ state: {}, repaired: false, warnings: [] }),
+    semanticStrategy: staticSemantic(createTruthProjection),
     Component: TruthDemoPanel,
   },
   {
@@ -245,6 +339,11 @@ export const demoPanelDefinitions: PanelDefinition[] = [
       repaired: false,
       warnings: [],
     }),
+    semanticStrategy: dynamicSemantic(({ panel }) =>
+      createTimelineProjection(
+        normalizeTimelineState(panel.panelState).selectedEntryId,
+      ),
+    ),
     Component: TimelineDemoPanel,
   },
   {
@@ -270,6 +369,9 @@ export const demoPanelDefinitions: PanelDefinition[] = [
       repaired: false,
       warnings: [],
     }),
+    semanticStrategy: dynamicSemantic(({ panel }) =>
+      createAdvisoryProjection(normalizeAdvisoryLogState(panel.panelState)),
+    ),
     Component: AdvisoryLogDemoPanel,
   },
 ];

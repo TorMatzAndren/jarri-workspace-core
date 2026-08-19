@@ -219,6 +219,65 @@ export function SettingsPanel({
       </section>
 
       <section className="settings-panel__section">
+        <h3>Clock</h3>
+
+        <label>
+          <span>Enabled</span>
+          <input
+            type="checkbox"
+            checked={preferences.clock.enabled}
+            onChange={(event) =>
+              updatePreferences({
+                clock: {
+                  ...preferences.clock,
+                  enabled: event.target.checked,
+                },
+              })
+            }
+          />
+        </label>
+
+        <label>
+          <span>Time format</span>
+          <select
+            value={preferences.clock.timeFormat}
+            disabled={!preferences.clock.enabled}
+            onChange={(event) =>
+              updatePreferences({
+                clock: {
+                  ...preferences.clock,
+                  timeFormat: event.target.value as WorkspacePreferences["clock"]["timeFormat"],
+                },
+              })
+            }
+          >
+            <option value="24h">24-hour</option>
+            <option value="12h">12-hour</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Date format</span>
+          <select
+            value={preferences.clock.dateFormat}
+            disabled={!preferences.clock.enabled}
+            onChange={(event) =>
+              updatePreferences({
+                clock: {
+                  ...preferences.clock,
+                  dateFormat: event.target.value as WorkspacePreferences["clock"]["dateFormat"],
+                },
+              })
+            }
+          >
+            <option value="none">None</option>
+            <option value="text">Text</option>
+            <option value="numeric">Numeric (YYYY-MM-DD)</option>
+          </select>
+        </label>
+      </section>
+
+      <section className="settings-panel__section">
         <h3>Theme</h3>
         <label>
           <span>Mode</span>

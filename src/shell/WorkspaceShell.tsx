@@ -1,6 +1,11 @@
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { createDefaultWorkspace } from "../core/defaultWorkspace";
 import { createLayoutPersistence } from "../core/layoutPersistence";
+import {
+  isPanelFrameControlEnabled,
+  panelFrameControlKey,
+  WORKSPACE_FRAME_CONTROL_CATALOG,
+} from "../core/frameControls";
 import { useWorkspaceController } from "../core/workspaceController";
 import { workspaceRuntime } from "../bootstrap/workspaceRuntime";
 import { TabBar } from "../tabs/TabBar";
@@ -8,6 +13,7 @@ import { WorkspaceCanvas } from "../workspace/WorkspaceCanvas";
 import type { PanelDefinition, WorkspaceModuleDefinition } from "../core/types";
 import type { OpenResourceRequest, OpenResourceResult } from "../core/resources";
 import jarriWorkspaceLogo from "../assets/jarri-workspace.png";
+import { WorkspaceClock } from "./WorkspaceClock";
 
 type PanelMenuGroup = {
   module: WorkspaceModuleDefinition;
@@ -47,6 +53,10 @@ function arrangePanelGroups(
 
 export function WorkspaceShell() {
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
+  const [frameControlsMenuOpen, setFrameControlsMenuOpen] = useState(false);
+  const [collapsedFrameControlGroups, setCollapsedFrameControlGroups] = useState<
+    Record<string, boolean>
+  >({});
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const runtime = workspaceRuntime;
 
@@ -86,6 +96,35 @@ export function WorkspaceShell() {
       ),
     [controller.availablePanels, preferences, runtime],
   );
+
+  const frameControlColumns = WORKSPACE_FRAME_CONTROL_CATALOG;
+  const frameControlGroups = panelGroups;
+
+  function toggleFrameControlGroup(moduleId: string) {
+    setCollapsedFrameControlGroups((current) => ({
+      ...current,
+      [moduleId]: !current[moduleId],
+    }));
+  }
+
+  function setFrameControlVisibility(
+    moduleId: string,
+    panelType: string,
+    controlId: string,
+    enabled: boolean,
+  ) {
+    const key = panelFrameControlKey(moduleId, panelType, controlId);
+
+    controller.updatePreferences({
+      frameControls: {
+        ...preferences.frameControls,
+        visibility: {
+          ...preferences.frameControls.visibility,
+          [key]: enabled,
+        },
+      },
+    });
+  }
 
   const colorStyle = {
     "--workspace-scale": preferences.scale,
@@ -161,6 +200,33 @@ export function WorkspaceShell() {
           src={jarriWorkspaceLogo}
           alt="Jarri Workspace"
         />
+
+        <div className="workspace-shell__actions">
+          <button
+            type="button"
+            className="workspace-shell__action"
+            onClick={() => {
+              setPanelMenuOpen(false);
+              setFrameControlsMenuOpen((open) => !open);
+            }}
+          >
+            Frame Controls
+          </button>
+
+          <button
+            type="button"
+            className="workspace-shell__action"
+            onClick={() => {
+              setPanelMenuOpen(false);
+              setFrameControlsMenuOpen(false);
+              controller.createPanel("core", "settings");
+            }}
+          >
+            Settings
+          </button>
+
+          <WorkspaceClock preferences={preferences.clock} />
+        </div>
       </header>
 
       <TabBar
@@ -210,25 +276,144 @@ export function WorkspaceShell() {
         </div>
       </div>
 
+      <div className="workspace-shell__floating-frame-settings">
+        <div className="panel-menu">
+          {frameControlsMenuOpen ? (
+            <div className="panel-menu__content panel-menu__content--frame-settings">
+              <div className="panel-menu__header">
+                <strong>Frame Settings</strong>
+                <button
+                  type="button"
+                  className="panel-menu__close"
+                  onClick={() => setFrameControlsMenuOpen(false)}
+                  aria-label="Close Frame Settings"
+                >
+                  ×
+                </button>
+              </div>
+
+              {frameControlColumns.length === 0 ? (
+                <p className="panel-menu__frame-settings-empty">
+                  No frame controls are currently registered.
+                </p>
+              ) : null}
+
+              {frameControlGroups.map((group) => {
+                const collapsed =
+                  collapsedFrameControlGroups[group.module.moduleId] ?? false;
+
+                return (
+                  <section
+                    className="panel-menu__group"
+                    key={group.module.moduleId}
+                  >
+                    <button
+                      type="button"
+                      className="panel-menu__group-toggle"
+                      onClick={() =>
+                        toggleFrameControlGroup(group.module.moduleId)
+                      }
+                      aria-expanded={!collapsed}
+                    >
+                      <strong>{group.module.title}</strong>
+                      <span>{collapsed ? "Expand" : "Collapse"}</span>
+                    </button>
+
+                    {!collapsed ? (
+                      <div className="panel-menu__frame-settings-scroll">
+                        <div
+                          className="panel-menu__frame-settings-matrix"
+                          style={
+                            {
+                              "--frame-control-column-count":
+                                frameControlColumns.length,
+                            } as CSSProperties
+                          }
+                        >
+                          <div className="panel-menu__frame-settings-header">
+                            <strong>Panel</strong>
+                            {frameControlColumns.map((control) => (
+                              <strong key={control.controlId}>
+                                {control.label}
+                              </strong>
+                            ))}
+                          </div>
+
+                          {group.panels.map((panel) => (
+                            <div
+                              key={`${panel.moduleId}:${panel.panelType}`}
+                              className="panel-menu__frame-settings-row"
+                            >
+                              <span
+                                className="panel-menu__frame-settings-panel"
+                                title={panel.description}
+                              >
+                                {panel.title}
+                              </span>
+
+                              {frameControlColumns.map((control) => {
+                                const key = panelFrameControlKey(
+                                  panel.moduleId,
+                                  panel.panelType,
+                                  control.controlId,
+                                );
+                                const enabled = isPanelFrameControlEnabled({
+                                  control,
+                                  key,
+                                  preferences: preferences.frameControls,
+                                });
+
+                                return (
+                                  <label
+                                    key={control.controlId}
+                                    className="panel-menu__frame-settings-control"
+                                    title={`${control.label} for ${panel.title}`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={enabled}
+                                      aria-label={`${control.label} for ${panel.title}`}
+                                      onChange={(event) =>
+                                        setFrameControlVisibility(
+                                          panel.moduleId,
+                                          panel.panelType,
+                                          control.controlId,
+                                          event.target.checked,
+                                        )
+                                      }
+                                    />
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </section>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
       <WorkspaceCanvas
         registry={runtime.registry}
         title={controller.activeTab.title}
         panels={controller.activeTab.panels}
-        savedTabTemplates={controller.savedTabTemplates}
         preferences={preferences}
         modules={modules}
-        onOpenPanelsMenu={() => setPanelMenuOpen((open) => !open)}
-        onOpenSettings={() => controller.createPanel("core", "settings")}
-        onResetLayout={controller.resetWorkspace}
-        onSavePanelSetup={controller.saveActiveTabTemplate}
-        onLoadPanelSetup={controller.loadTabTemplate}
-        onExportPanelSetups={exportTabs}
-        onImportPanelSetups={() => importInputRef.current?.click()}
+        onOpenPanelsMenu={() => {
+          setFrameControlsMenuOpen(false);
+          setPanelMenuOpen((open) => !open);
+        }}
         onFocusPanel={controller.focusPanel}
         onClosePanel={controller.closePanel}
         onTogglePanelMinimized={controller.togglePanelMinimized}
         onGeometryChange={controller.updatePanelGeometry}
         onPanelStateChange={controller.updatePanelState}
+        onPanelViewPreferencesChange={controller.updatePanelViewPreferences}
         onPreferencesChange={controller.updatePreferences}
         onOpenResource={openResource}
       />

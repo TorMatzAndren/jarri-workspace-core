@@ -1,4 +1,5 @@
 import { createId, nowIso } from "./id";
+import { normalizeFrameControlPreferences } from "./frameControls";
 import { normalizeGeometry, repairFocusOrder } from "./layoutEngine";
 import type { PanelRegistry } from "./panelRegistry";
 import type {
@@ -8,6 +9,7 @@ import type {
   PersistedModuleRecord,
   PersistedWorkspaceDocument,
   WorkspaceColorTokens,
+  WorkspacePanelViewPreferences,
   WorkspacePreferences,
   WorkspaceState,
   WorkspaceTab,
@@ -214,6 +216,7 @@ function normalizePreferences(input: unknown): WorkspacePreferences {
     scale: clamp(finiteNumber(raw.scale, 1), 0.75, 1.35),
     fontSize: clamp(finiteNumber(raw.fontSize, 14), 12, 18),
     showGrid: typeof raw.showGrid === "boolean" ? raw.showGrid : true,
+    clock: normalizeClockPreferences(raw.clock),
     canvasBounds: normalizeCanvasBounds(raw.canvasBounds),
     density,
     themeMode,
@@ -221,7 +224,59 @@ function normalizePreferences(input: unknown): WorkspacePreferences {
     themePreset,
     colorOverrides: normalizeColorOverrides(raw.colorOverrides),
     panelMenu: normalizePanelMenuPreferences(raw.panelMenu),
+    frameControls: normalizeFrameControlPreferences(raw.frameControls),
+    panelViews: normalizeWorkspacePanelViewPreferences(raw.panelViews),
   };
+}
+
+function normalizeClockPreferences(
+  input: unknown,
+): WorkspacePreferences["clock"] {
+  const raw = isRecord(input) ? input : {};
+
+  const dateFormat =
+    raw.dateFormat === "none" || raw.dateFormat === "numeric"
+      ? raw.dateFormat
+      : raw.dateFormat === "text"
+        ? "text"
+        : raw.showDate === false
+          ? "none"
+          : "text";
+
+  return {
+    enabled: typeof raw.enabled === "boolean" ? raw.enabled : true,
+    timeFormat: raw.timeFormat === "12h" ? "12h" : "24h",
+    dateFormat,
+  };
+}
+
+function normalizeWorkspacePanelViewPreferences(
+  input: unknown,
+): WorkspacePanelViewPreferences {
+  if (!isRecord(input)) {
+    return {};
+  }
+
+  const result: WorkspacePanelViewPreferences = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (!isValidPanelTypePreferenceKey(key) || !isRecord(value)) {
+      continue;
+    }
+
+    result[key] = {
+      fontScale: clamp(finiteNumber(value.fontScale, 1), 0.75, 2),
+    };
+  }
+
+  return result;
+}
+
+function isValidPanelTypePreferenceKey(key: string): boolean {
+  const parts = key.split(":");
+  return (
+    parts.length === 2 &&
+    parts.every((part) => part.length > 0 && /^[A-Za-z0-9._-]+$/.test(part))
+  );
 }
 
 function normalizePanelMenuPreferences(input: unknown): WorkspacePreferences["panelMenu"] {
