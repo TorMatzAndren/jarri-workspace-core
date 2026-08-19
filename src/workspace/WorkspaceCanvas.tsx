@@ -37,6 +37,7 @@ type CanvasPanState = {
 
 type Props = {
   registry: PanelRegistry;
+  tabId: string;
   title: string;
   panels: PanelInstance[];
   canvasBounds: WorkspaceCanvasBounds;
@@ -89,6 +90,7 @@ function normalizeBounds(
 
 export function WorkspaceCanvas({
   registry,
+  tabId,
   title,
   panels,
   canvasBounds,
@@ -114,10 +116,45 @@ export function WorkspaceCanvas({
   const previewBoundsRef = useRef<WorkspaceCanvasBounds | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const logicalRef = useRef<HTMLDivElement | null>(null);
+  const viewportByTabRef = useRef(
+    new Map<string, { scrollLeft: number; scrollTop: number }>(),
+  );
+
   const effectiveBounds = normalizeBounds(
     previewBounds ?? canvasBounds,
     panels,
   );
+
+  useEffect(() => {
+    const surface = surfaceRef.current;
+    if (!surface) {
+      return undefined;
+    }
+
+    const savedViewport = viewportByTabRef.current.get(tabId) ?? {
+      scrollLeft: 0,
+      scrollTop: 0,
+    };
+
+    const frameId = window.requestAnimationFrame(() => {
+      surface.scrollLeft = savedViewport.scrollLeft;
+      surface.scrollTop = savedViewport.scrollTop;
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [tabId]);
+
+  function rememberViewport() {
+    const surface = surfaceRef.current;
+    if (!surface) {
+      return;
+    }
+
+    viewportByTabRef.current.set(tabId, {
+      scrollLeft: surface.scrollLeft,
+      scrollTop: surface.scrollTop,
+    });
+  }
 
   useEffect(() => {
     const normalized = normalizeBounds(canvasBounds, panels);
@@ -495,6 +532,7 @@ export function WorkspaceCanvas({
       <div
         className={`workspace-canvas__surface ${panState ? "workspace-canvas__surface--panning" : ""}`}
         ref={surfaceRef}
+        onScroll={rememberViewport}
         onPointerDown={beginCanvasPan}
       >
         <div

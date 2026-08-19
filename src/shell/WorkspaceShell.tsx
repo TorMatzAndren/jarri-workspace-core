@@ -542,6 +542,7 @@ export function WorkspaceShell() {
 
       <WorkspaceCanvas
         registry={runtime.registry}
+        tabId={controller.activeTab.id}
         title={controller.activeTab.title}
         panels={controller.activeTab.panels}
         canvasBounds={controller.activeTab.canvasBounds}
