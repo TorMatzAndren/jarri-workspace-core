@@ -2,7 +2,10 @@ import { createId, nowIso } from "./id";
 import { geometryFromPanelDefinition } from "./layoutEngine";
 import type { PanelRegistry } from "./panelRegistry";
 import type { PanelInstance, WorkspaceState } from "./types";
-import { DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS } from "./types";
+import {
+  DEFAULT_WORKSPACE_CANVAS_BOUNDS,
+  DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS,
+} from "./types";
 import { WORKSPACE_SCHEMA_VERSION } from "./types";
 
 export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState {
@@ -34,10 +37,8 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
       {
         id: "home",
         title: "Core Demo",
-        canvasBounds: {
-          width: 1800,
-          height: 1100,
-        },
+        canvasBounds: { ...DEFAULT_WORKSPACE_CANVAS_BOUNDS },
+        canvasScale: 1,
         panels,
         createdAt: now,
         updatedAt: now,
@@ -48,7 +49,11 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
       scale: 1,
       fontSize: 14,
       showGrid: true,
+      gridSize: 12,
       panelSpacing: 0,
+      workspaceZoomIncrement: 10,
+      workspaceZoomAnchorMode: "active-panel-center",
+      panelNavigationAlignment: "panel-center",
       systemSurfacePositions: {
         settings: { ...DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS.settings },
         addPanel: { ...DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS.addPanel },

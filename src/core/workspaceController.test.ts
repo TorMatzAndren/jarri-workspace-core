@@ -22,6 +22,8 @@ function assertGeometry(
 }
 
 const canvasBounds = {
+  x: 0,
+  y: 0,
   width: 1800,
   height: 1100,
 };

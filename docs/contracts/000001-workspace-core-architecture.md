@@ -88,7 +88,17 @@ type WorkspacePreferences = {
   scale: number;
   fontSize: number;
   showGrid: boolean;
+  gridSize: number;
   panelSpacing: number;
+  workspaceZoomIncrement: number;
+  workspaceZoomAnchorMode:
+    | "viewport-center"
+    | "active-panel-center"
+    | "active-panel-top-left"
+    | "pointer";
+  panelNavigationAlignment:
+    | "panel-center"
+    | "panel-top-left";
   systemSurfacePositions: WorkspaceSystemSurfacePositions;
   clock: WorkspaceClockPreferences;
   density: "compact" | "comfortable";
@@ -122,9 +132,18 @@ type WorkspaceColorTokens = {
 type WorkspaceTab = {
   id: string;
   title: string;
+  canvasBounds: WorkspaceCanvasBounds;
+  canvasScale: number;
   panels: PanelInstance[];
   createdAt: string;
   updatedAt: string;
+};
+
+type WorkspaceCanvasBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };
 
 type PanelInstance = {
@@ -158,10 +177,27 @@ Field rules:
 - `activeTabId` must either reference an existing tab or be repaired to the first tab.
 - `tabs` must never be persisted as an empty array after repair.
 - `preferences` are user preferences, not runtime truth.
+- `preferences.scale` is the global Workspace presentation scale currently
+  consumed by shell/canvas rendering.
+- `preferences.gridSize`, `preferences.workspaceZoomIncrement`,
+  `preferences.workspaceZoomAnchorMode`, and
+  `preferences.panelNavigationAlignment` are persisted camera/navigation
+  preferences. They are schema-owned but not yet consumed by runtime behavior.
+- `WorkspaceTab.canvasBounds` is the tab-local logical canvas extent. It is
+  origin-aware and uses `{ x, y, width, height }`.
+- `WorkspaceTab.canvasScale` is tab-local camera scale and defaults to `1`.
 - `moduleId` and `panelType` resolve a panel through the registry.
 - `panelState` is panel-local presentation state only.
 - `focusOrder` controls z-order/focus ordering without relying on array order.
 - `dirty` is a snapshot used by the shell to coordinate close/save/discard prompts.
+
+Canvas-bound rules:
+
+- Negative `WorkspaceCanvasBounds.x` and `WorkspaceCanvasBounds.y` are valid
+  logical canvas origins.
+- Panel geometry remains nonnegative in the current freeform panel model.
+- Runtime ctrl-wheel zoom, panning, navigation alignment, and Settings exposure
+  for the new camera preferences are deferred to later phases.
 
 ## Panel Registry
 
@@ -326,4 +362,3 @@ No component should own both long-lived domain truth and layout persistence.
 - `panelState: unknown` is intentional at the core level; typed panel state belongs to panel definitions and module packages.
 - A generic "missing panel" repair path is mandatory because modules may be unavailable when loading old layouts.
 - Preflight must not be reduced to a confirm dialog. It is a domain truth review boundary.
-

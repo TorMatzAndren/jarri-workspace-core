@@ -6,10 +6,11 @@ import type {
   PanelInstance,
   SavedPanelTemplate,
   SavedTabTemplate,
+  WorkspaceCanvasBounds,
   WorkspaceTab,
   WorkspaceTabTemplateDocument,
 } from "./types";
-import { WORKSPACE_SCHEMA_VERSION } from "./types";
+import { DEFAULT_WORKSPACE_CANVAS_BOUNDS } from "./types";
 
 export const TAB_TEMPLATE_SCHEMA_VERSION = 1;
 export const TAB_TEMPLATE_KIND = "jarri.workspace.tabs";
@@ -86,7 +87,7 @@ export function normalizeTemplateDocument(input: unknown): WorkspaceTabTemplateD
 
   return {
     kind: TAB_TEMPLATE_KIND,
-    schemaVersion: WORKSPACE_SCHEMA_VERSION,
+    schemaVersion: TAB_TEMPLATE_SCHEMA_VERSION,
     exportedAt: typeof input.exportedAt === "string" ? input.exportedAt : nowIso(),
     templates,
   };
@@ -106,6 +107,7 @@ export function tabFromTemplate(
     id: createId("tab"),
     title: title.trim() || "Imported Tab",
     canvasBounds: { ...template.canvasBounds },
+    canvasScale: 1,
     panels: repairFocusOrder(panels),
     createdAt: now,
     updatedAt: now,
@@ -178,10 +180,7 @@ function normalizeTemplate(input: unknown): SavedTabTemplate {
     id: typeof raw.id === "string" && raw.id.trim() ? raw.id : createId("template"),
     title,
     sourceTitle,
-    canvasBounds: templateBoundsContainingPanels(
-      normalizeTemplateCanvasBounds(raw.canvasBounds),
-      panels,
-    ),
+    canvasBounds: normalizeTemplateCanvasBounds(raw.canvasBounds, panels),
     panels,
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : now,
@@ -207,39 +206,61 @@ function normalizePanelTemplate(input: unknown): SavedPanelTemplate {
   };
 }
 
-function normalizeTemplateCanvasBounds(input: unknown) {
-  const raw = isRecord(input) ? input : {};
-  return {
-    width: clamp(finiteNumber(raw.width, 1800), 900, 12000),
-    height: clamp(finiteNumber(raw.height, 1100), 700, 12000),
-  };
-}
-
-function templateBoundsContainingPanels(
-  bounds: SavedTabTemplate["canvasBounds"],
+function normalizeTemplateCanvasBounds(
+  input: unknown,
   panels: SavedPanelTemplate[],
-): SavedTabTemplate["canvasBounds"] {
-  return panels.reduce(
+): WorkspaceCanvasBounds {
+  const raw = isRecord(input) ? input : {};
+
+  const x = finiteNumber(raw.x, DEFAULT_WORKSPACE_CANVAS_BOUNDS.x);
+  const y = finiteNumber(raw.y, DEFAULT_WORKSPACE_CANVAS_BOUNDS.y);
+  const width = Math.max(
+    DEFAULT_WORKSPACE_CANVAS_BOUNDS.width,
+    finiteNumber(raw.width, DEFAULT_WORKSPACE_CANVAS_BOUNDS.width),
+  );
+  const height = Math.max(
+    DEFAULT_WORKSPACE_CANVAS_BOUNDS.height,
+    finiteNumber(raw.height, DEFAULT_WORKSPACE_CANVAS_BOUNDS.height),
+  );
+  const requestedRight = x + width;
+  const requestedBottom = y + height;
+
+  const extents = panels.reduce(
     (current, panel) => ({
-      width: Math.max(
-        current.width,
-        Math.ceil(panel.geometry.x + panel.geometry.width + 48),
+      left: Math.min(current.left, panel.geometry.x),
+      top: Math.min(current.top, panel.geometry.y),
+      right: Math.max(
+        current.right,
+        panel.geometry.x + panel.geometry.width + 48,
       ),
-      height: Math.max(
-        current.height,
-        Math.ceil(panel.geometry.y + panel.geometry.height + 48),
+      bottom: Math.max(
+        current.bottom,
+        panel.geometry.y + panel.geometry.height + 48,
       ),
     }),
-    bounds,
+    {
+      left: x,
+      top: y,
+      right: requestedRight,
+      bottom: requestedBottom,
+    },
   );
+
+  const normalizedX = Math.min(x, extents.left);
+  const normalizedY = Math.min(y, extents.top);
+  const right = Math.max(requestedRight, extents.right);
+  const bottom = Math.max(requestedBottom, extents.bottom);
+
+  return {
+    x: normalizedX,
+    y: normalizedY,
+    width: right - normalizedX,
+    height: bottom - normalizedY,
+  };
 }
 
 function finiteNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
 }
 
 function offsetGeometry(geometry: PanelGeometry, index: number): PanelGeometry {

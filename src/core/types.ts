@@ -12,8 +12,17 @@ import type { OpenResourceRequest, OpenResourceResult } from "./resources";
 export const WORKSPACE_SCHEMA_VERSION = 2;
 
 export type WorkspaceCanvasBounds = {
+  x: number;
+  y: number;
   width: number;
   height: number;
+};
+
+export const DEFAULT_WORKSPACE_CANVAS_BOUNDS: WorkspaceCanvasBounds = {
+  x: 0,
+  y: 0,
+  width: 1800,
+  height: 1100,
 };
 
 export type WorkspaceClockPreferences = {
@@ -43,7 +52,17 @@ export type WorkspacePreferences = {
   scale: number;
   fontSize: number;
   showGrid: boolean;
+  gridSize: number;
   panelSpacing: number;
+  workspaceZoomIncrement: number;
+  workspaceZoomAnchorMode:
+    | "viewport-center"
+    | "active-panel-center"
+    | "active-panel-top-left"
+    | "pointer";
+  panelNavigationAlignment:
+    | "panel-center"
+    | "panel-top-left";
   systemSurfacePositions: WorkspaceSystemSurfacePositions;
   clock: WorkspaceClockPreferences;
   density: "compact" | "comfortable";
@@ -108,6 +127,7 @@ export type WorkspaceTab = {
   id: string;
   title: string;
   canvasBounds: WorkspaceCanvasBounds;
+  canvasScale: number;
   panels: PanelInstance[];
   createdAt: string;
   updatedAt: string;

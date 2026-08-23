@@ -44,6 +44,9 @@ Rules:
 - `schemaVersion` controls Workspace Core migrations.
 - `savedAt` is metadata only.
 - `workspace` contains tabs, panels, preferences, panel-local projection state, and Workspace-owned surface presentation memory.
+- `workspace.tabs[].canvasBounds` is persisted as `{ x, y, width, height }`.
+- `workspace.tabs[].canvasScale` is persisted separately from global
+  `workspace.preferences.scale`.
 - `workspace.surfacePresentationMemory` stores opted-in presentation memory independently of live panel instances.
 - Panel surface presentation memory uses stable panel-type identity derived from `moduleId + panelType`.
 - `workspace.preferences.frameControls` stores frame-control visibility by stable panel-type/control key.
@@ -73,6 +76,7 @@ Provider rules:
 - Provider failure must not corrupt current in-memory state.
 - Save should be debounced by the implementation, but the contract only requires eventual persistence after state changes.
 - Backup is recommended before major migrations or destructive repair.
+- The browser storage namespace remains `jarri.workspace.core.layout.v1`.
 
 ## Workspace Schema Versioning
 
@@ -90,12 +94,19 @@ Version changes are required when:
 Adding backward-compatible preference surfaces with deterministic defaults does
 not require changing the public application version.
 
+Additive repair inside the current Workspace schema is allowed when old
+documents omit newly optional fields that have deterministic defaults. Current
+schema-2 Core layouts without tab-local camera fields or camera preferences
+normalize additively to include them without a schema bump.
+
 Version changes are not required when:
 
 - visual styling changes.
 - new panel definitions are added.
 - domain service response shapes change outside persisted panel state.
 - non-persisted runtime behavior changes.
+- additive fields are normalized with deterministic defaults inside the current
+  schema.
 
 ## Panel State Versioning
 
@@ -152,6 +163,9 @@ Required repair behavior:
 - Empty `tabs` -> default tab.
 - Invalid `activeTabId` -> first tab ID.
 - Missing tab title -> generated title.
+- Missing tab `canvasScale` -> `1`.
+- Missing tab `canvasBounds.x`/`canvasBounds.y` -> origin-aware defaults.
+- Legacy width/height-only tab canvas bounds -> origin-aware canvas bounds.
 - Duplicate tab IDs -> stable regenerated IDs for duplicates.
 - Missing panel ID -> generated panel ID.
 - Duplicate panel IDs -> stable regenerated IDs for duplicates.
@@ -166,6 +180,9 @@ Required repair behavior:
 - Malformed surface presentation entries -> discard or repair deterministically.
 - Invalid remembered geometry -> normalize through the same geometry rules used for panel geometry.
 - Missing Workspace preference fields such as panel spacing or system-surface positions -> restore deterministic defaults.
+- Missing camera preference fields such as `gridSize`,
+  `workspaceZoomIncrement`, `workspaceZoomAnchorMode`, and
+  `panelNavigationAlignment` -> restore deterministic defaults.
 
 Repairs must be recorded as warnings for diagnostics.
 
@@ -191,6 +208,68 @@ Geometry rules:
 - `width` and `height` must be clamped to panel minimums.
 - Layout engine may snap values before persistence.
 - Future dock/split layout must either migrate this shape or add a new layout mode with explicit schema versioning.
+
+## Canvas Bounds Contract
+
+Persisted canvas bounds are tab-local logical canvas extents.
+
+```ts
+type WorkspaceCanvasBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+```
+
+Canvas-bound rules:
+
+- Values are numbers in workspace canvas coordinates.
+- `x` and `y` may be negative. Negative canvas origins are valid.
+- `width` and `height` must be repaired to safe minimum extents.
+- Bounds must expand to contain current panel geometry plus the Workspace
+  canvas margin.
+- Legacy width/height-only bounds normalize by adding origin fields rather than
+  by changing the storage namespace.
+- Panel geometry remains nonnegative in the current freeform panel model even
+  when the owning canvas has a negative origin.
+
+## Camera Preferences
+
+Workspace Core persists camera preference fields before runtime consumption:
+
+- `gridSize`
+- `workspaceZoomIncrement`
+- `workspaceZoomAnchorMode`
+- `panelNavigationAlignment`
+
+These fields are distinct from `preferences.scale`. `preferences.scale` remains
+the global presentation scale currently consumed by Workspace rendering.
+
+Runtime ctrl-wheel zoom, canvas panning behavior, navigation alignment behavior,
+and Settings UI exposure for the camera preferences are explicitly deferred.
+
+## Tab Templates
+
+Tab templates are stored under `jarri.workspace.core.tabTemplates.v1` and use:
+
+```ts
+type WorkspaceTabTemplateDocument = {
+  kind: "jarri.workspace.tabs";
+  schemaVersion: number;
+  exportedAt: string;
+  templates: SavedTabTemplate[];
+};
+```
+
+Template schema remains version `1`.
+
+The richer `SavedTabTemplate.canvasBounds` shape is additive inside that schema:
+old width/height-only bounds normalize to `{ x, y, width, height }`.
+
+Restored template tabs start with `canvasScale: 1` regardless of the source
+tab's current scale. Template bounds and panel geometry are layout preference,
+not runtime truth.
 
 ## Surface Presentation Memory
 

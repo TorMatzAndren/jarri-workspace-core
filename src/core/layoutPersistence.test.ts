@@ -34,9 +34,12 @@ function createDefaultWorkspace(): WorkspaceState {
         id: "home",
         title: "Core Demo",
         canvasBounds: {
+          x: 0,
+          y: 0,
           width: 1800,
           height: 1100,
         },
+        canvasScale: 1,
         panels: [],
         createdAt: "2026-08-19T00:00:00.000Z",
         updatedAt: "2026-08-19T00:00:00.000Z",
@@ -46,7 +49,11 @@ function createDefaultWorkspace(): WorkspaceState {
       scale: 1,
       fontSize: 14,
       showGrid: true,
+      gridSize: 12,
       panelSpacing: 0,
+      workspaceZoomIncrement: 10,
+      workspaceZoomAnchorMode: "active-panel-center",
+      panelNavigationAlignment: "panel-center",
       systemSurfacePositions: {
         settings: { x: 924, y: 408 },
         addPanel: { x: 16, y: 100 },
@@ -284,11 +291,173 @@ function testUnknownThemePresetRepairsToNeutral() {
   );
 }
 
+function testSchemaTwoCoreLayoutReceivesGenericCameraDefaults() {
+  const persisted = basePersistedWorkspace();
+  const tab = (persisted.tabs as Array<Record<string, unknown>>)[0];
+  const preferences = persisted.preferences as Record<string, unknown>;
+
+  tab.canvasBounds = {
+    width: 1800,
+    height: 1100,
+  };
+  delete tab.canvasScale;
+  delete preferences.gridSize;
+  delete preferences.workspaceZoomIncrement;
+  delete preferences.workspaceZoomAnchorMode;
+  delete preferences.panelNavigationAlignment;
+
+  const result = load(persisted);
+  const normalizedTab = result.state.tabs[0];
+
+  assertEqual(
+    result.state.schemaVersion,
+    WORKSPACE_SCHEMA_VERSION,
+    "schema-2 additive camera repair keeps current schema",
+  );
+  assertEqual(normalizedTab.canvasBounds.x, 0, "missing canvas x defaults to 0");
+  assertEqual(normalizedTab.canvasBounds.y, 0, "missing canvas y defaults to 0");
+  assertEqual(normalizedTab.canvasScale, 1, "missing canvasScale defaults to 1");
+  assertEqual(result.state.preferences.gridSize, 12, "missing grid size default");
+  assertEqual(
+    result.state.preferences.workspaceZoomIncrement,
+    10,
+    "missing zoom increment default",
+  );
+  assertEqual(
+    result.state.preferences.workspaceZoomAnchorMode,
+    "active-panel-center",
+    "missing zoom anchor default",
+  );
+  assertEqual(
+    result.state.preferences.panelNavigationAlignment,
+    "panel-center",
+    "missing navigation alignment default",
+  );
+}
+
+function testInvalidGenericCameraValuesRepairDeterministically() {
+  const persisted = basePersistedWorkspace();
+  const tab = (persisted.tabs as Array<Record<string, unknown>>)[0];
+  const preferences = persisted.preferences as Record<string, unknown>;
+
+  tab.canvasBounds = {
+    x: Number.NaN,
+    y: Number.POSITIVE_INFINITY,
+    width: 120,
+    height: "large",
+  };
+  tab.canvasScale = Number.NEGATIVE_INFINITY;
+  preferences.gridSize = Number.NaN;
+  preferences.workspaceZoomIncrement = "large";
+  preferences.workspaceZoomAnchorMode = "future-anchor";
+  preferences.panelNavigationAlignment = "future-alignment";
+  preferences.panelViews = {
+    "demo:truth": {
+      fontScale: 1.5,
+    },
+    "bad key": {
+      fontScale: 1.75,
+    },
+  };
+
+  const result = load(persisted);
+  const normalizedTab = result.state.tabs[0];
+
+  assertEqual(normalizedTab.canvasBounds.x, 0, "invalid canvas x repairs to 0");
+  assertEqual(normalizedTab.canvasBounds.y, 0, "invalid canvas y repairs to 0");
+  assertEqual(
+    normalizedTab.canvasBounds.width,
+    900,
+    "invalid/small canvas width repairs to minimum",
+  );
+  assertEqual(
+    normalizedTab.canvasBounds.height,
+    1100,
+    "invalid canvas height repairs to fallback",
+  );
+  assertEqual(normalizedTab.canvasScale, 1, "invalid canvasScale repairs to 1");
+  assertEqual(result.state.preferences.gridSize, 12, "invalid grid size repairs");
+  assertEqual(
+    result.state.preferences.workspaceZoomIncrement,
+    10,
+    "invalid zoom increment repairs",
+  );
+  assertEqual(
+    result.state.preferences.workspaceZoomAnchorMode,
+    "active-panel-center",
+    "unknown zoom anchor repairs",
+  );
+  assertEqual(
+    result.state.preferences.panelNavigationAlignment,
+    "panel-center",
+    "unknown navigation alignment repairs",
+  );
+  assertEqual(
+    result.state.preferences.panelViews["demo:truth"]?.fontScale,
+    1.5,
+    "valid panelViews entry survives camera repairs",
+  );
+  assert(
+    result.state.preferences.panelViews["bad key"] === undefined,
+    "invalid panelViews key remains discarded",
+  );
+}
+
+function testCanvasBoundsPreserveNegativeOriginAndExpandAroundPanels() {
+  const persisted = basePersistedWorkspace();
+  const tab = (persisted.tabs as Array<Record<string, unknown>>)[0];
+
+  tab.canvasBounds = {
+    x: -240,
+    y: -120,
+    width: 1800,
+    height: 1100,
+  };
+  tab.panels = [
+    {
+      id: "far-positive-panel",
+      moduleId: "missing",
+      panelType: "missing",
+      title: "Far Positive Panel",
+      geometry: {
+        x: 1900,
+        y: 1200,
+        width: 300,
+        height: 200,
+      },
+      focusOrder: 1,
+      stateVersion: 1,
+      panelState: {},
+      createdAt: "2026-08-19T00:00:00.000Z",
+      updatedAt: "2026-08-19T00:00:00.000Z",
+    },
+  ];
+
+  const result = load(persisted);
+  const normalizedTab = result.state.tabs[0];
+
+  assertEqual(normalizedTab.canvasBounds.x, -240, "canvas preserves negative x origin");
+  assertEqual(normalizedTab.canvasBounds.y, -120, "canvas preserves negative y origin");
+  assertEqual(
+    normalizedTab.canvasBounds.width,
+    2484,
+    "canvas width expands from negative origin around right panel extent",
+  );
+  assertEqual(
+    normalizedTab.canvasBounds.height,
+    1572,
+    "canvas height expands from negative origin around bottom panel extent",
+  );
+}
+
 function main() {
   testLegacyWorkspaceGetsEmptyPresentationMemory();
   testValidPresentationMemorySurvivesNormalization();
   testPinkSparkleThemePresetSurvivesNormalization();
   testUnknownThemePresetRepairsToNeutral();
+  testSchemaTwoCoreLayoutReceivesGenericCameraDefaults();
+  testInvalidGenericCameraValuesRepairDeterministically();
+  testCanvasBoundsPreserveNegativeOriginAndExpandAroundPanels();
   console.log("layout persistence tests passed");
 }
 

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_WORKSPACE_CANVAS_BOUNDS,
   DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS,
   panelSurfacePresentationKey,
 } from "./types";
@@ -236,11 +237,29 @@ function normalizePreferences(input: unknown): WorkspacePreferences {
     scale: clamp(finiteNumber(raw.scale, 1), 0.75, 1.35),
     fontSize: clamp(finiteNumber(raw.fontSize, 14), 12, 18),
     showGrid: typeof raw.showGrid === "boolean" ? raw.showGrid : true,
+    gridSize: normalizeGridSize(raw.gridSize),
     panelSpacing: clamp(
       Math.round(finiteNumber(raw.panelSpacing, 0)),
       0,
       240,
     ),
+    workspaceZoomIncrement: clamp(
+      finiteNumber(raw.workspaceZoomIncrement, 10),
+      0.1,
+      100,
+    ),
+    workspaceZoomAnchorMode:
+      raw.workspaceZoomAnchorMode === "viewport-center" ||
+      raw.workspaceZoomAnchorMode === "active-panel-center" ||
+      raw.workspaceZoomAnchorMode === "active-panel-top-left" ||
+      raw.workspaceZoomAnchorMode === "pointer"
+        ? raw.workspaceZoomAnchorMode
+        : "active-panel-center",
+    panelNavigationAlignment:
+      raw.panelNavigationAlignment === "panel-center" ||
+      raw.panelNavigationAlignment === "panel-top-left"
+        ? raw.panelNavigationAlignment
+        : "panel-center",
     systemSurfacePositions: normalizeSystemSurfacePositions(
       raw.systemSurfacePositions,
     ),
@@ -354,6 +373,14 @@ function isValidPanelTypePreferenceKey(key: string): boolean {
   );
 }
 
+function normalizeGridSize(input: unknown): number {
+  if (typeof input !== "number" || !Number.isFinite(input)) {
+    return 12;
+  }
+
+  return Math.max(1, Math.round(input));
+}
+
 function normalizePanelMenuPreferences(input: unknown): WorkspacePreferences["panelMenu"] {
   const raw = isRecord(input) ? input : {};
   const moduleOrder = Array.isArray(raw.moduleOrder)
@@ -370,31 +397,58 @@ function normalizePanelMenuPreferences(input: unknown): WorkspacePreferences["pa
   };
 }
 
-function normalizeCanvasBounds(input: unknown): WorkspaceCanvasBounds {
-  const raw = isRecord(input) ? input : {};
-  return {
-    width: clamp(finiteNumber(raw.width, 1800), 900, 12000),
-    height: clamp(finiteNumber(raw.height, 1100), 700, 12000),
-  };
-}
-
-function canvasBoundsContainingPanels(
-  bounds: WorkspaceCanvasBounds,
-  panels: PanelInstance[],
+function normalizeCanvasBounds(
+  input: unknown,
+  panels: PanelInstance[] = [],
+  fallback: WorkspaceCanvasBounds = DEFAULT_WORKSPACE_CANVAS_BOUNDS,
 ): WorkspaceCanvasBounds {
-  return panels.reduce(
+  const raw = isRecord(input) ? input : {};
+
+  const requestedX = finiteNumber(raw.x, fallback.x);
+  const requestedY = finiteNumber(raw.y, fallback.y);
+  const requestedWidth = Math.max(
+    900,
+    finiteNumber(raw.width, fallback.width),
+  );
+  const requestedHeight = Math.max(
+    700,
+    finiteNumber(raw.height, fallback.height),
+  );
+  const requestedRight = requestedX + requestedWidth;
+  const requestedBottom = requestedY + requestedHeight;
+
+  const extents = panels.reduce(
     (current, panel) => ({
-      width: Math.max(
-        current.width,
-        Math.ceil(panel.geometry.x + panel.geometry.width + 48),
+      left: Math.min(current.left, panel.geometry.x),
+      top: Math.min(current.top, panel.geometry.y),
+      right: Math.max(
+        current.right,
+        panel.geometry.x + panel.geometry.width + 48,
       ),
-      height: Math.max(
-        current.height,
-        Math.ceil(panel.geometry.y + panel.geometry.height + 48),
+      bottom: Math.max(
+        current.bottom,
+        panel.geometry.y + panel.geometry.height + 48,
       ),
     }),
-    bounds,
+    {
+      left: requestedX,
+      top: requestedY,
+      right: requestedRight,
+      bottom: requestedBottom,
+    },
   );
+
+  const x = Math.min(requestedX, extents.left);
+  const y = Math.min(requestedY, extents.top);
+  const right = Math.max(requestedRight, extents.right);
+  const bottom = Math.max(requestedBottom, extents.bottom);
+
+  return {
+    x,
+    y,
+    width: right - x,
+    height: bottom - y,
+  };
 }
 
 function normalizeColorOverrides(input: unknown): Partial<WorkspaceColorTokens> {
@@ -663,11 +717,15 @@ function normalizeTab(
     title: typeof raw.title === "string" && raw.title.trim()
       ? raw.title
       : `Tab ${index + 1}`,
-    canvasBounds: canvasBoundsContainingPanels(
-      isRecord(raw.canvasBounds)
-        ? normalizeCanvasBounds(raw.canvasBounds)
-        : fallbackCanvasBounds,
+    canvasBounds: normalizeCanvasBounds(
+      raw.canvasBounds,
       panels,
+      isRecord(raw.canvasBounds) ? DEFAULT_WORKSPACE_CANVAS_BOUNDS : fallbackCanvasBounds,
+    ),
+    canvasScale: clamp(
+      finiteNumber(raw.canvasScale, 1),
+      0.25,
+      2,
     ),
     panels: repairFocusOrder(panels),
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now,

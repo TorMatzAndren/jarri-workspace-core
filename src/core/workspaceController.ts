@@ -27,7 +27,11 @@ import type {
   WorkspacePreferences,
   WorkspaceState,
 } from "./types";
-import { panelSurfacePresentationKey, panelTypePreferenceKey } from "./types";
+import {
+  DEFAULT_WORKSPACE_CANVAS_BOUNDS,
+  panelSurfacePresentationKey,
+  panelTypePreferenceKey,
+} from "./types";
 
 const FOCUS_ORDER_COMPACT_THRESHOLD = 500;
 
@@ -253,6 +257,7 @@ export type WorkspaceController = {
   ) => void;
   updatePreferences: (preferences: Partial<WorkspacePreferences>) => void;
   updateActiveTabCanvasBounds: (bounds: WorkspaceCanvasBounds) => void;
+  updateActiveTabCanvasScale: (canvasScale: number) => void;
   resetWorkspace: () => void;
 };
 
@@ -404,10 +409,8 @@ export function useWorkspaceController({
         {
           id,
           title: `Tab ${current.tabs.length + 1}`,
-          canvasBounds: {
-            width: 1800,
-            height: 1100,
-          },
+          canvasBounds: { ...DEFAULT_WORKSPACE_CANVAS_BOUNDS },
+          canvasScale: 1,
           panels: [],
           createdAt: now,
           updatedAt: now,
@@ -646,6 +649,23 @@ export function useWorkspaceController({
     }));
   }
 
+  function updateActiveTabCanvasScale(canvasScale: number) {
+    const now = nowIso();
+    const nextScale = Math.min(
+      2,
+      Math.max(0.25, Number.isFinite(canvasScale) ? canvasScale : 1),
+    );
+
+    setWorkspace((current) => ({
+      ...current,
+      tabs: current.tabs.map((tab) =>
+        tab.id === current.activeTabId
+          ? { ...tab, canvasScale: nextScale, updatedAt: now }
+          : tab,
+      ),
+    }));
+  }
+
   function updatePreferences(preferences: Partial<WorkspacePreferences>) {
     setWorkspace((current) => ({
       ...current,
@@ -707,6 +727,7 @@ export function useWorkspaceController({
     updatePanelViewPreferences,
     updatePreferences,
     updateActiveTabCanvasBounds,
+    updateActiveTabCanvasScale,
     resetWorkspace,
   };
 }

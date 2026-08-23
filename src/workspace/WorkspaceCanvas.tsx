@@ -6,7 +6,7 @@ import type {
   PanelGeometry,
   PanelInstance,
   PanelViewPreferences,
-   WorkspaceCanvasBounds,
+  WorkspaceCanvasBounds,
   WorkspaceModuleDefinition,
   WorkspacePreferences,
 } from "../core/types";
@@ -75,10 +75,18 @@ function requiredBoundsForPanels(panels: PanelInstance | PanelInstance[]): Works
   const list = Array.isArray(panels) ? panels : [panels];
   return list.reduce(
     (bounds, panel) => ({
-      width: Math.max(bounds.width, panel.geometry.x + panel.geometry.width + CANVAS_GRID_SIZE * 2),
-      height: Math.max(bounds.height, panel.geometry.y + panel.geometry.height + CANVAS_GRID_SIZE * 2),
+      x: Math.min(bounds.x, panel.geometry.x),
+      y: Math.min(bounds.y, panel.geometry.y),
+      width: Math.max(
+        bounds.x + bounds.width,
+        panel.geometry.x + panel.geometry.width + CANVAS_GRID_SIZE * 2,
+      ) - Math.min(bounds.x, panel.geometry.x),
+      height: Math.max(
+        bounds.y + bounds.height,
+        panel.geometry.y + panel.geometry.height + CANVAS_GRID_SIZE * 2,
+      ) - Math.min(bounds.y, panel.geometry.y),
     }),
-    { width: MIN_CANVAS_WIDTH, height: MIN_CANVAS_HEIGHT },
+    { x: 0, y: 0, width: MIN_CANVAS_WIDTH, height: MIN_CANVAS_HEIGHT },
   );
 }
 
@@ -87,10 +95,24 @@ function normalizeBounds(
   panels: PanelInstance[],
 ): WorkspaceCanvasBounds {
   const required = requiredBoundsForPanels(panels);
+  const x = Math.min(bounds.x, required.x);
+  const y = Math.min(bounds.y, required.y);
+  const right = Math.max(
+    bounds.x + bounds.width,
+    required.x + required.width,
+    x + MIN_CANVAS_WIDTH,
+  );
+  const bottom = Math.max(
+    bounds.y + bounds.height,
+    required.y + required.height,
+    y + MIN_CANVAS_HEIGHT,
+  );
 
   return {
-    width: snapToCanvasGrid(Math.max(MIN_CANVAS_WIDTH, required.width, bounds.width)),
-    height: snapToCanvasGrid(Math.max(MIN_CANVAS_HEIGHT, required.height, bounds.height)),
+    x,
+    y,
+    width: snapToCanvasGrid(right - x),
+    height: snapToCanvasGrid(bottom - y),
   };
 }
 
@@ -166,6 +188,8 @@ export function WorkspaceCanvas({
   useEffect(() => {
     const normalized = normalizeBounds(canvasBounds, panels);
     if (
+      normalized.x !== canvasBounds.x ||
+      normalized.y !== canvasBounds.y ||
       normalized.width !== canvasBounds.width ||
       normalized.height !== canvasBounds.height
     ) {
@@ -186,6 +210,8 @@ export function WorkspaceCanvas({
 
       const nextBounds = normalizeBounds(
         {
+          x: activeResize.startBounds.x,
+          y: activeResize.startBounds.y,
           width:
             activeResize.mode === "width" || activeResize.mode === "both"
               ? activeResize.startBounds.width + deltaX
