@@ -223,6 +223,7 @@ export function WorkspaceShell() {
     ...(preferences.colorOverrides.muted ? { "--override-muted": preferences.colorOverrides.muted } : {}),
     ...(preferences.colorOverrides.border ? { "--override-border": preferences.colorOverrides.border } : {}),
     ...(preferences.colorOverrides.button ? { "--override-button": preferences.colorOverrides.button } : {}),
+    ...(preferences.colorOverrides.control ? { "--override-control": preferences.colorOverrides.control } : {}),
     ...(preferences.colorOverrides.menu ? { "--override-menu": preferences.colorOverrides.menu } : {}),
   } as CSSProperties;
 
@@ -277,6 +278,7 @@ export function WorkspaceShell() {
       data-has-custom-muted={Boolean(preferences.colorOverrides.muted)}
       data-has-custom-border={Boolean(preferences.colorOverrides.border)}
       data-has-custom-button={Boolean(preferences.colorOverrides.button)}
+      data-has-custom-control={Boolean(preferences.colorOverrides.control)}
       data-has-custom-menu={Boolean(preferences.colorOverrides.menu)}
       style={colorStyle}
     >
@@ -560,6 +562,12 @@ export function WorkspaceShell() {
         onPanelViewPreferencesChange={controller.updatePanelViewPreferences}
         onCanvasBoundsChange={controller.updateActiveTabCanvasBounds}
         onPreferencesChange={controller.updatePreferences}
+        onOpenPanel={(moduleId, panelType, sourcePanelId, panelState) =>
+          controller.createPanel(moduleId, panelType, {
+            sourcePanelId,
+            panelState,
+          })
+        }
         onOpenResource={openResource}
       />
     </main>

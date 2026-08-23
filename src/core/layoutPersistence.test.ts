@@ -254,10 +254,42 @@ function testValidPresentationMemorySurvivesNormalization() {
   );
 }
 
+function testPinkSparkleThemePresetSurvivesNormalization() {
+  const persisted = basePersistedWorkspace();
+  const preferences = persisted.preferences as Record<string, unknown>;
+
+  preferences.themePreset = "pink-sparkle";
+
+  const result = load(persisted);
+
+  assertEqual(
+    result.state.preferences.themePreset,
+    "pink-sparkle",
+    "pink-sparkle theme preset survives normalization",
+  );
+}
+
+function testUnknownThemePresetRepairsToNeutral() {
+  const persisted = basePersistedWorkspace();
+  const preferences = persisted.preferences as Record<string, unknown>;
+
+  preferences.themePreset = "future-theme-that-does-not-exist";
+
+  const result = load(persisted);
+
+  assertEqual(
+    result.state.preferences.themePreset,
+    "neutral",
+    "unknown theme preset repairs to neutral",
+  );
+}
+
 function main() {
   testLegacyWorkspaceGetsEmptyPresentationMemory();
   testValidPresentationMemorySurvivesNormalization();
-  console.log("layout persistence presentation-memory tests passed");
+  testPinkSparkleThemePresetSurvivesNormalization();
+  testUnknownThemePresetRepairsToNeutral();
+  console.log("layout persistence tests passed");
 }
 
 main();

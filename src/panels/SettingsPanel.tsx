@@ -1,13 +1,15 @@
+import {
+  WorkspaceSelect,
+  type WorkspaceSelectOption,
+} from "../core/WorkspaceSelect";
 import type {
   PanelBodyProps,
-  WorkspaceColorTokens,
   WorkspacePreferences,
 } from "../core/types";
 
-const fontOptions: Array<{
-  value: WorkspacePreferences["fontFamily"];
-  label: string;
-}> = [
+const fontOptions: Array<WorkspaceSelectOption<
+  WorkspacePreferences["fontFamily"]
+>> = [
   { value: "system", label: "System UI" },
   { value: "humanist", label: "Humanist" },
   { value: "compact", label: "Compact Sans" },
@@ -15,73 +17,20 @@ const fontOptions: Array<{
   { value: "mono", label: "Monospace" },
 ];
 
-const densityOptions: Array<{
-  value: WorkspacePreferences["density"];
-  label: string;
-}> = [
+const densityOptions: Array<WorkspaceSelectOption<
+  WorkspacePreferences["density"]
+>> = [
   { value: "compact", label: "Compact" },
   { value: "comfortable", label: "Comfortable" },
-];
-
-const themeModeOptions: Array<{
-  value: WorkspacePreferences["themeMode"];
-  label: string;
-}> = [
-  { value: "system", label: "System" },
-  { value: "dark", label: "Dark" },
-  { value: "light", label: "Light" },
-];
-
-const themePresetOptions: Array<{
-  value: WorkspacePreferences["themePreset"];
-  label: string;
-}> = [
-  { value: "neutral", label: "Neutral" },
-  { value: "graphite", label: "Graphite" },
-  { value: "contrast", label: "Contrast" },
-  { value: "blueprint", label: "Blueprint" },
-];
-
-const colorFields: Array<{
-  key: keyof WorkspaceColorTokens;
-  label: string;
-}> = [
-  { key: "page", label: "Page" },
-  { key: "canvas", label: "Canvas" },
-  { key: "panel", label: "Panel" },
-  { key: "panelHeader", label: "Panel header" },
-  { key: "text", label: "Text" },
-  { key: "muted", label: "Muted text" },
-  { key: "border", label: "Borders" },
-  { key: "button", label: "Buttons" },
-  { key: "menu", label: "Menu" },
 ];
 
 export function SettingsPanel({
   preferences,
   modules,
   updatePreferences,
+  openPanel,
 }: PanelBodyProps) {
   const arrangedModules = arrangeModules(modules, preferences.panelMenu.moduleOrder);
-
-  function updateColor(key: keyof WorkspaceColorTokens, value: string) {
-    updatePreferences({
-      colorOverrides: {
-        ...preferences.colorOverrides,
-        [key]: value,
-      },
-    });
-  }
-
-  function clearColor(key: keyof WorkspaceColorTokens) {
-    const next = { ...preferences.colorOverrides };
-    delete next[key];
-    updatePreferences({ colorOverrides: next });
-  }
-
-  function clearAllColors() {
-    updatePreferences({ colorOverrides: {} });
-  }
 
   function updateScale(delta: number) {
     const nextScale = Math.max(
@@ -135,20 +84,14 @@ export function SettingsPanel({
           <h4>Display</h4>
           <label>
           <span>Font</span>
-          <select
+          <WorkspaceSelect
             value={preferences.fontFamily}
-            onChange={(event) =>
-              updatePreferences({
-                fontFamily: event.target.value as WorkspacePreferences["fontFamily"],
-              })
+            options={fontOptions}
+            ariaLabel="Font"
+            onChange={(fontFamily) =>
+              updatePreferences({ fontFamily })
             }
-          >
-            {fontOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          />
         </label>
 
         <label>
@@ -170,20 +113,14 @@ export function SettingsPanel({
 
         <label>
           <span>Density</span>
-          <select
+          <WorkspaceSelect
             value={preferences.density}
-            onChange={(event) =>
-              updatePreferences({
-                density: event.target.value as WorkspacePreferences["density"],
-              })
+            options={densityOptions}
+            ariaLabel="Density"
+            onChange={(density) =>
+              updatePreferences({ density })
             }
-          >
-            {densityOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          />
         </label>
 
         <label>
@@ -423,132 +360,74 @@ export function SettingsPanel({
 
         <label>
           <span>Time format</span>
-          <select
+          <WorkspaceSelect
             value={preferences.clock.timeFormat}
             disabled={!preferences.clock.enabled}
-            onChange={(event) =>
+            ariaLabel="Time format"
+            options={[
+              { value: "24h", label: "24-hour" },
+              { value: "12h", label: "12-hour" },
+            ]}
+            onChange={(timeFormat) =>
               updatePreferences({
                 clock: {
                   ...preferences.clock,
-                  timeFormat: event.target.value as
-                    WorkspacePreferences["clock"]["timeFormat"],
+                  timeFormat,
                 },
               })
             }
-          >
-            <option value="24h">24-hour</option>
-            <option value="12h">12-hour</option>
-          </select>
+          />
         </label>
 
         <label>
           <span>Date format</span>
-          <select
+          <WorkspaceSelect
             value={preferences.clock.dateFormat}
             disabled={!preferences.clock.enabled}
-            onChange={(event) =>
+            ariaLabel="Date format"
+            options={[
+              { value: "none", label: "None" },
+              { value: "text", label: "Text" },
+              { value: "numeric", label: "Numeric (YYYY-MM-DD)" },
+            ]}
+            onChange={(dateFormat) =>
               updatePreferences({
                 clock: {
                   ...preferences.clock,
-                  dateFormat: event.target.value as
-                    WorkspacePreferences["clock"]["dateFormat"],
+                  dateFormat,
                 },
               })
             }
-          >
-            <option value="none">None</option>
-            <option value="text">Text</option>
-            <option value="numeric">Numeric (YYYY-MM-DD)</option>
-          </select>
+          />
           </label>
         </div>
       </section>
 
-      <section className="settings-panel__section">
-        <h3>Theme</h3>
-        <label>
-          <span>Mode</span>
-          <select
-            value={preferences.themeMode}
-            onChange={(event) =>
-              updatePreferences({
-                themeMode: event.target.value as WorkspacePreferences["themeMode"],
-              })
-            }
-          >
-            {themeModeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          <span>Preset</span>
-          <select
-            value={preferences.themePreset}
-            onChange={(event) =>
-              updatePreferences({
-                themePreset: event.target.value as WorkspacePreferences["themePreset"],
-              })
-            }
-          >
-            {themePresetOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </section>
-
-      <section className="settings-panel__section settings-panel__section--colors">
-        <div className="settings-panel__section-header">
-          <h3>Advanced Colors</h3>
-          <button type="button" onClick={clearAllColors}>
-            Clear all
-          </button>
-        </div>
-        {colorFields.map((field) => {
-          const value = preferences.colorOverrides[field.key] ?? "#000000";
-          const hasOverride = Boolean(preferences.colorOverrides[field.key]);
-
-          return (
-            <label className="settings-color-row" key={field.key}>
-              <span>{field.label}</span>
-              <input
-                type="color"
-                value={value}
-                onChange={(event) => updateColor(field.key, event.target.value)}
-              />
-              <button
-                type="button"
-                disabled={!hasOverride}
-                onClick={() => clearColor(field.key)}
-              >
-                Clear
-              </button>
-            </label>
-          );
-        })}
+      <section className="settings-panel__section settings-panel__section--appearance">
+        <h3>Appearance</h3>
+        <button
+          type="button"
+          onClick={() => openPanel("core", "theme-colors")}
+        >
+          Themes / Colours…
+        </button>
       </section>
 
       <section className="settings-panel__section settings-panel__section--panel-menu">
         <h3>Panel Menu Arrangement</h3>
         <label>
           <span>Panel sort</span>
-          <select
+          <WorkspaceSelect
             value={preferences.panelMenu.panelSort}
-            onChange={(event) =>
-              updatePanelMenu({
-                panelSort: event.target.value as WorkspacePreferences["panelMenu"]["panelSort"],
-              })
+            ariaLabel="Panel sort"
+            options={[
+              { value: "registered", label: "Registered order" },
+              { value: "title", label: "Title" },
+            ]}
+            onChange={(panelSort) =>
+              updatePanelMenu({ panelSort })
             }
-          >
-            <option value="registered">Registered order</option>
-            <option value="title">Title</option>
-          </select>
+          />
         </label>
 
         <div className="settings-module-list">

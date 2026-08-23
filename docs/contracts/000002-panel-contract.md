@@ -142,6 +142,20 @@ Copy rules:
 - The frame formats the common `Workspace Projection` envelope.
 - Panel bodies publish only semantic content.
 
+Panel-body interaction rules:
+
+- `PanelBodyProps.updatePanelState` updates only the current panel's normalized
+  panel-local state.
+- `PanelBodyProps.updatePreferences` updates Workspace-owned preferences.
+- `PanelBodyProps.openPanel(moduleId, panelType, panelState?)` requests another
+  registered Workspace panel through controller-owned creation.
+- The projection host supplies the calling panel as `sourcePanelId`; panel
+  bodies do not own or fabricate causal source identity.
+- Initial state supplied to `openPanel` is normalized by the target panel
+  definition before becoming live panel state.
+- Panel bodies must not receive or retain the Workspace controller merely to
+  open another panel.
+
 Dynamic publication rules:
 
 - `PanelFrame` creates one semantic publication controller per panel identity.

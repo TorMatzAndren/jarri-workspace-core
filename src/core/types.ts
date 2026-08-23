@@ -49,7 +49,7 @@ export type WorkspacePreferences = {
   density: "compact" | "comfortable";
   themeMode: "system" | "light" | "dark";
   fontFamily: "system" | "humanist" | "serif" | "mono" | "compact";
-  themePreset: "neutral" | "graphite" | "contrast" | "blueprint";
+  themePreset: "neutral" | "graphite" | "contrast" | "blueprint" | "pink-sparkle";
   colorOverrides: Partial<WorkspaceColorTokens>;
   panelMenu: PanelMenuPreferences;
   frameControls: WorkspaceFrameControlPreferences;
@@ -65,6 +65,7 @@ export type WorkspaceColorTokens = {
   muted: string;
   border: string;
   button: string;
+  control: string;
   menu: string;
 };
 
@@ -232,6 +233,11 @@ export type PanelBodyProps = {
   modules: Array<Pick<WorkspaceModuleDefinition, "moduleId" | "title">>;
   updatePanelState: (panelState: unknown) => void;
   updatePreferences: (preferences: Partial<WorkspacePreferences>) => void;
+  openPanel: (
+    moduleId: string,
+    panelType: string,
+    panelState?: unknown,
+  ) => string | null;
   openResource: (request: OpenResourceRequest) => OpenResourceResult;
   semanticPublisher: PanelSemanticPublisher;
   frameControlPublisher: PanelFrameControlPublisher;

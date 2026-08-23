@@ -56,6 +56,12 @@ type Props = {
   ) => void;
   onCanvasBoundsChange: (bounds: WorkspaceCanvasBounds) => void;
   onPreferencesChange: (preferences: Partial<WorkspacePreferences>) => void;
+  onOpenPanel: (
+    moduleId: string,
+    panelType: string,
+    sourcePanelId?: string,
+    panelState?: unknown,
+  ) => string | null;
   onOpenResource: (request: OpenResourceRequest) => OpenResourceResult;
 };
 
@@ -105,6 +111,7 @@ export function WorkspaceCanvas({
   onPanelViewPreferencesChange,
   onCanvasBoundsChange,
   onPreferencesChange,
+  onOpenPanel,
   onOpenResource,
 }: Props) {
   const [resizeState, setResizeState] = useState<CanvasResizeState | null>(null);
@@ -558,6 +565,7 @@ export function WorkspaceCanvas({
               onPanelStateChange={onPanelStateChange}
               onPanelViewPreferencesChange={onPanelViewPreferencesChange}
               onPreferencesChange={onPreferencesChange}
+              onOpenPanel={onOpenPanel}
               onOpenResource={onOpenResource}
             />
           ))}

@@ -90,6 +90,12 @@ type Props = {
   frameControlPublisher: PanelFrameControlPublisher;
   onPanelStateChange: (panelId: string, panelState: unknown) => void;
   onPreferencesChange: (preferences: Partial<WorkspacePreferences>) => void;
+  onOpenPanel: (
+    moduleId: string,
+    panelType: string,
+    sourcePanelId?: string,
+    panelState?: unknown,
+  ) => string | null;
   onOpenResource: (request: OpenResourceRequest) => OpenResourceResult;
 };
 
@@ -103,6 +109,7 @@ export function PanelProjectionHost({
   frameControlPublisher,
   onPanelStateChange,
   onPreferencesChange,
+  onOpenPanel,
   onOpenResource,
 }: Props) {
   const failedBodyLeaseRef = useRef<
@@ -154,6 +161,8 @@ export function PanelProjectionHost({
       updatePanelState: (panelState) =>
         onPanelStateChange(panel.id, panelState),
       updatePreferences: onPreferencesChange,
+      openPanel: (moduleId, panelType, panelState) =>
+        onOpenPanel(moduleId, panelType, panel.id, panelState),
       openResource: (request) =>
         onOpenResource({
           ...request,
@@ -165,6 +174,7 @@ export function PanelProjectionHost({
     [
       frameControlPublisher,
       modules,
+      onOpenPanel,
       onOpenResource,
       onPanelStateChange,
       onPreferencesChange,

@@ -5,6 +5,11 @@ import {
 } from "../core/panelSemantics";
 import { MissingPanel } from "./MissingPanel";
 import { SettingsPanel } from "./SettingsPanel";
+import { ThemeColorsPanel } from "./ThemeColorsPanel";
+import {
+  ColorPickerPanel,
+  normalizeColorPickerState,
+} from "./ColorPickerPanel";
 
 const missingPanelDefinition: PanelDefinition = {
   moduleId: "core",
@@ -61,9 +66,82 @@ const settingsPanelDefinition: PanelDefinition = {
   Component: SettingsPanel,
 };
 
+const themeColorsPanelDefinition: PanelDefinition = {
+  moduleId: "core",
+  panelType: "theme-colors",
+  title: "Themes / Colours",
+  description: "Workspace appearance themes and semantic color overrides.",
+  category: "core",
+  defaultGeometry: { x: 960, y: 460, width: 760, height: 430 },
+  minGeometry: { width: 440, height: 300 },
+  stateVersion: 1,
+  capabilities: {
+    closable: true,
+    resizable: true,
+    movable: true,
+    renameable: false,
+    canBeDirty: false,
+  },
+  createInitialState: () => ({}),
+  normalizeState: () => ({
+    state: {},
+    repaired: false,
+    warnings: [],
+  }),
+  semanticStrategy: panelSummarySemantic(
+    "Ready",
+    "Workspace themes and color overrides are available in this panel.",
+  ),
+  surfacePresentationMemory: {},
+  Component: ThemeColorsPanel,
+};
+
+const colorPickerPanelDefinition: PanelDefinition = {
+  moduleId: "core",
+  panelType: "color-picker",
+  title: "Colour Picker",
+  description: "Workspace-native semantic colour selection.",
+  category: "core",
+  defaultGeometry: { x: 1040, y: 520, width: 430, height: 390 },
+  minGeometry: { width: 340, height: 300 },
+  stateVersion: 1,
+  capabilities: {
+    closable: true,
+    resizable: true,
+    movable: true,
+    renameable: false,
+    canBeDirty: false,
+  },
+  createInitialState: () => ({ colorToken: "page" }),
+  normalizeState: (input) => {
+    const state = normalizeColorPickerState(input);
+
+    return {
+      state,
+      repaired:
+        !input ||
+        typeof input !== "object" ||
+        !("colorToken" in input) ||
+        (input as { colorToken?: unknown }).colorToken !== state.colorToken,
+      warnings: [],
+    };
+  },
+  semanticStrategy: panelSummarySemantic(
+    "Ready",
+    "Workspace-native semantic colour selection is available.",
+  ),
+  surfacePresentationMemory: {},
+  Component: ColorPickerPanel,
+};
+
 export const coreModule: WorkspaceModuleDefinition = {
   moduleId: "core",
   title: "Workspace Core",
   version: "1.0.0",
-  panels: [missingPanelDefinition, settingsPanelDefinition],
+  panels: [
+    missingPanelDefinition,
+    settingsPanelDefinition,
+    themeColorsPanelDefinition,
+    colorPickerPanelDefinition,
+  ],
 };

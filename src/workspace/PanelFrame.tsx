@@ -65,6 +65,12 @@ type Props = {
     preferences: PanelViewPreferences,
   ) => void;
   onPreferencesChange: (preferences: Partial<WorkspacePreferences>) => void;
+  onOpenPanel: (
+    moduleId: string,
+    panelType: string,
+    sourcePanelId?: string,
+    panelState?: unknown,
+  ) => string | null;
   onOpenResource: (request: OpenResourceRequest) => OpenResourceResult;
 };
 
@@ -81,6 +87,7 @@ export function PanelFrame({
   onPanelStateChange,
   onPanelViewPreferencesChange,
   onPreferencesChange,
+  onOpenPanel,
   onOpenResource,
 }: Props) {
   const [dragState, setDragState] = useState<GeometryInteraction | null>(null);
@@ -468,6 +475,7 @@ export function PanelFrame({
             frameControlPublisher={frameControlCenter}
             onPanelStateChange={onPanelStateChange}
             onPreferencesChange={onPreferencesChange}
+            onOpenPanel={onOpenPanel}
             onOpenResource={onOpenResource}
           />
           <span

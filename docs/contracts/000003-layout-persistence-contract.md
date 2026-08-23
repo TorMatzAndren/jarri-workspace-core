@@ -226,9 +226,17 @@ Panel creation geometry precedence is:
 This precedence preserves user presentation intent while keeping ordinary
 first-summon placement causal and deterministic.
 
-Workspace preferences also persist generic placement and system-surface
-presentation configuration, including panel spacing and Settings/Add
-Panel/Frame Settings surface positions. Missing legacy fields receive
+Workspace preferences also persist generic presentation configuration,
+including appearance and placement preferences.
+
+Persistent appearance preferences include theme mode, theme preset, semantic
+colour overrides, font presentation, density, and related Workspace-level
+display choices.
+
+Persistent placement preferences include panel spacing and Settings/Add
+Panel/Frame Settings surface positions.
+
+Missing, malformed, or unsupported legacy preference fields receive
 deterministic defaults during normalization.
 
 ## Focus Order Contract

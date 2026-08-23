@@ -86,8 +86,37 @@ type WorkspaceState = {
 
 type WorkspacePreferences = {
   scale: number;
+  fontSize: number;
+  showGrid: boolean;
+  panelSpacing: number;
+  systemSurfacePositions: WorkspaceSystemSurfacePositions;
+  clock: WorkspaceClockPreferences;
   density: "compact" | "comfortable";
   themeMode: "system" | "light" | "dark";
+  fontFamily: "system" | "humanist" | "serif" | "mono" | "compact";
+  themePreset:
+    | "neutral"
+    | "graphite"
+    | "contrast"
+    | "blueprint"
+    | "pink-sparkle";
+  colorOverrides: Partial<WorkspaceColorTokens>;
+  panelMenu: PanelMenuPreferences;
+  frameControls: WorkspaceFrameControlPreferences;
+  panelViews: WorkspacePanelViewPreferences;
+};
+
+type WorkspaceColorTokens = {
+  page: string;
+  canvas: string;
+  panel: string;
+  panelHeader: string;
+  text: string;
+  muted: string;
+  border: string;
+  button: string;
+  control: string;
+  menu: string;
 };
 
 type WorkspaceTab = {

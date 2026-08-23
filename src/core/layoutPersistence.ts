@@ -227,7 +227,8 @@ function normalizePreferences(input: unknown): WorkspacePreferences {
   const themePreset =
     raw.themePreset === "graphite" ||
     raw.themePreset === "contrast" ||
-    raw.themePreset === "blueprint"
+    raw.themePreset === "blueprint" ||
+    raw.themePreset === "pink-sparkle"
       ? raw.themePreset
       : "neutral";
 
@@ -410,6 +411,7 @@ function normalizeColorOverrides(input: unknown): Partial<WorkspaceColorTokens> 
     "muted",
     "border",
     "button",
+    "control",
     "menu",
   ];
   const result: Partial<WorkspaceColorTokens> = {};
