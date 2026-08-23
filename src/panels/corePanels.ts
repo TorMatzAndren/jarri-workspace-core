@@ -10,6 +10,10 @@ import {
   ColorPickerPanel,
   normalizeColorPickerState,
 } from "./ColorPickerPanel";
+import {
+  ImageViewerPanel,
+  normalizeImageViewerState,
+} from "./ImageViewerPanel";
 
 const missingPanelDefinition: PanelDefinition = {
   moduleId: "core",
@@ -134,6 +138,41 @@ const colorPickerPanelDefinition: PanelDefinition = {
   Component: ColorPickerPanel,
 };
 
+const imageViewerPanelDefinition: PanelDefinition = {
+  moduleId: "core",
+  panelType: "image-viewer",
+  title: "Image Viewer",
+  description: "Read-only image resource viewer.",
+  category: "core",
+  defaultGeometry: { x: 232, y: 232, width: 900, height: 640 },
+  minGeometry: { width: 420, height: 300 },
+  stateVersion: 1,
+  capabilities: {
+    closable: true,
+    resizable: true,
+    movable: true,
+    renameable: false,
+    canBeDirty: false,
+  },
+  interactionCapabilities: {
+    localWheel: true,
+  },
+  createInitialState: () => ({ resourceUri: "" }),
+  normalizeState: (input) => ({
+    state: normalizeImageViewerState(input),
+    repaired: false,
+    warnings: [],
+  }),
+  semanticStrategy: panelSummarySemantic(
+    "Ready",
+    "Image resources open in this Workspace Core panel.",
+  ),
+  surfacePresentationMemory: {
+    rememberPanelState: false,
+  },
+  Component: ImageViewerPanel,
+};
+
 export const coreModule: WorkspaceModuleDefinition = {
   moduleId: "core",
   title: "Workspace Core",
@@ -143,5 +182,6 @@ export const coreModule: WorkspaceModuleDefinition = {
     settingsPanelDefinition,
     themeColorsPanelDefinition,
     colorPickerPanelDefinition,
+    imageViewerPanelDefinition,
   ],
 };

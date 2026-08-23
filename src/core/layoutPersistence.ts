@@ -229,7 +229,8 @@ function normalizePreferences(input: unknown): WorkspacePreferences {
     raw.themePreset === "graphite" ||
     raw.themePreset === "contrast" ||
     raw.themePreset === "blueprint" ||
-    raw.themePreset === "pink-sparkle"
+    raw.themePreset === "pink-sparkle" ||
+    raw.themePreset === "chronogit"
       ? raw.themePreset
       : "neutral";
 
@@ -711,25 +712,39 @@ function normalizeTab(
         normalizePanel(panel, panelIndex, panelIds, warnings, registry),
       )
     : [];
+  const canvasBounds = normalizeCanvasBounds(
+    raw.canvasBounds,
+    panels,
+    isRecord(raw.canvasBounds) ? DEFAULT_WORKSPACE_CANVAS_BOUNDS : fallbackCanvasBounds,
+  );
 
   return {
     id,
     title: typeof raw.title === "string" && raw.title.trim()
       ? raw.title
       : `Tab ${index + 1}`,
-    canvasBounds: normalizeCanvasBounds(
-      raw.canvasBounds,
-      panels,
-      isRecord(raw.canvasBounds) ? DEFAULT_WORKSPACE_CANVAS_BOUNDS : fallbackCanvasBounds,
-    ),
+    canvasBounds,
     canvasScale: clamp(
       finiteNumber(raw.canvasScale, 1),
       0.25,
       2,
     ),
+    canvasCamera: normalizeCanvasCamera(raw.canvasCamera, canvasBounds),
     panels: repairFocusOrder(panels),
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now,
     updatedAt: now,
+  };
+}
+
+function normalizeCanvasCamera(
+  input: unknown,
+  fallbackCanvasBounds: WorkspaceCanvasBounds,
+) {
+  const raw = isRecord(input) ? input : {};
+
+  return {
+    x: finiteNumber(raw.x, fallbackCanvasBounds.x),
+    y: finiteNumber(raw.y, fallbackCanvasBounds.y),
   };
 }
 

@@ -40,6 +40,10 @@ function createDefaultWorkspace(): WorkspaceState {
           height: 1100,
         },
         canvasScale: 1,
+        canvasCamera: {
+          x: 0,
+          y: 0,
+        },
         panels: [],
         createdAt: "2026-08-19T00:00:00.000Z",
         updatedAt: "2026-08-19T00:00:00.000Z",
@@ -274,6 +278,13 @@ function testPinkSparkleThemePresetSurvivesNormalization() {
     "pink-sparkle",
     "pink-sparkle theme preset survives normalization",
   );
+
+  preferences.themePreset = "chronogit";
+  assertEqual(
+    load(persisted).state.preferences.themePreset,
+    "chronogit",
+    "chronogit theme preset survives normalization",
+  );
 }
 
 function testUnknownThemePresetRepairsToNeutral() {
@@ -317,6 +328,8 @@ function testSchemaTwoCoreLayoutReceivesGenericCameraDefaults() {
   assertEqual(normalizedTab.canvasBounds.x, 0, "missing canvas x defaults to 0");
   assertEqual(normalizedTab.canvasBounds.y, 0, "missing canvas y defaults to 0");
   assertEqual(normalizedTab.canvasScale, 1, "missing canvasScale defaults to 1");
+  assertEqual(normalizedTab.canvasCamera.x, 0, "missing camera x defaults to canvas x");
+  assertEqual(normalizedTab.canvasCamera.y, 0, "missing camera y defaults to canvas y");
   assertEqual(result.state.preferences.gridSize, 12, "missing grid size default");
   assertEqual(
     result.state.preferences.workspaceZoomIncrement,
@@ -347,6 +360,10 @@ function testInvalidGenericCameraValuesRepairDeterministically() {
     height: "large",
   };
   tab.canvasScale = Number.NEGATIVE_INFINITY;
+  tab.canvasCamera = {
+    x: Number.NaN,
+    y: "far down",
+  };
   preferences.gridSize = Number.NaN;
   preferences.workspaceZoomIncrement = "large";
   preferences.workspaceZoomAnchorMode = "future-anchor";
@@ -376,6 +393,8 @@ function testInvalidGenericCameraValuesRepairDeterministically() {
     "invalid canvas height repairs to fallback",
   );
   assertEqual(normalizedTab.canvasScale, 1, "invalid canvasScale repairs to 1");
+  assertEqual(normalizedTab.canvasCamera.x, 0, "invalid camera x repairs to canvas x");
+  assertEqual(normalizedTab.canvasCamera.y, 0, "invalid camera y repairs to canvas y");
   assertEqual(result.state.preferences.gridSize, 12, "invalid grid size repairs");
   assertEqual(
     result.state.preferences.workspaceZoomIncrement,
@@ -413,6 +432,7 @@ function testCanvasBoundsPreserveNegativeOriginAndExpandAroundPanels() {
     width: 1800,
     height: 1100,
   };
+  delete tab.canvasCamera;
   tab.panels = [
     {
       id: "far-positive-panel",
@@ -439,6 +459,16 @@ function testCanvasBoundsPreserveNegativeOriginAndExpandAroundPanels() {
   assertEqual(normalizedTab.canvasBounds.x, -240, "canvas preserves negative x origin");
   assertEqual(normalizedTab.canvasBounds.y, -120, "canvas preserves negative y origin");
   assertEqual(
+    normalizedTab.canvasCamera.x,
+    -240,
+    "missing camera x defaults to negative canvas origin",
+  );
+  assertEqual(
+    normalizedTab.canvasCamera.y,
+    -120,
+    "missing camera y defaults to negative canvas origin",
+  );
+  assertEqual(
     normalizedTab.canvasBounds.width,
     2484,
     "canvas width expands from negative origin around right panel extent",
@@ -450,6 +480,45 @@ function testCanvasBoundsPreserveNegativeOriginAndExpandAroundPanels() {
   );
 }
 
+function testCanvasCameraSurvivesNormalizationPerTab() {
+  const persisted = basePersistedWorkspace();
+  const baseTab = (persisted.tabs as Array<Record<string, unknown>>)[0];
+
+  persisted.tabs = [
+    {
+      ...baseTab,
+      id: "tab-a",
+      canvasCamera: {
+        x: -144,
+        y: 288,
+      },
+    },
+    {
+      ...baseTab,
+      id: "tab-b",
+      canvasCamera: {
+        x: 960,
+        y: -72,
+      },
+      canvasScale: 1.5,
+    },
+  ];
+
+  const result = load(persisted);
+  const [tabA, tabB] = result.state.tabs;
+
+  assertEqual(tabA.canvasCamera.x, -144, "tab A camera x survives");
+  assertEqual(tabA.canvasCamera.y, 288, "tab A camera y survives");
+  assertEqual(tabB.canvasCamera.x, 960, "tab B camera x survives");
+  assertEqual(tabB.canvasCamera.y, -72, "tab B camera y survives");
+  assertEqual(tabB.canvasScale, 1.5, "tab B zoom remains tab-local");
+  assertEqual(
+    result.state.preferences.scale,
+    1,
+    "global presentation scale remains independent",
+  );
+}
+
 function main() {
   testLegacyWorkspaceGetsEmptyPresentationMemory();
   testValidPresentationMemorySurvivesNormalization();
@@ -458,6 +527,7 @@ function main() {
   testSchemaTwoCoreLayoutReceivesGenericCameraDefaults();
   testInvalidGenericCameraValuesRepairDeterministically();
   testCanvasBoundsPreserveNegativeOriginAndExpandAroundPanels();
+  testCanvasCameraSurvivesNormalizationPerTab();
   console.log("layout persistence tests passed");
 }
 

@@ -108,6 +108,10 @@ export function tabFromTemplate(
     title: title.trim() || "Imported Tab",
     canvasBounds: { ...template.canvasBounds },
     canvasScale: 1,
+    canvasCamera: {
+      x: template.canvasBounds.x,
+      y: template.canvasBounds.y,
+    },
     panels: repairFocusOrder(panels),
     createdAt: now,
     updatedAt: now,

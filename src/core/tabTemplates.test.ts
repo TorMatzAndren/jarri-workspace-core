@@ -25,6 +25,10 @@ function testTemplateCapturesAndRestoresOriginAwareCanvasBounds() {
       height: 3792,
     },
     canvasScale: 1.4,
+    canvasCamera: {
+      x: 640,
+      y: 320,
+    },
     panels: [],
     createdAt: "2026-08-16T00:00:00.000Z",
     updatedAt: "2026-08-16T00:00:00.000Z",
@@ -60,6 +64,16 @@ function testTemplateCapturesAndRestoresOriginAwareCanvasBounds() {
     "Tab restored from template preserves canvas height",
   );
   assertEqual(restored.canvasScale, 1, "Tab restored from template starts at scale 1");
+  assertEqual(
+    restored.canvasCamera.x,
+    -240,
+    "Tab restored from template starts at canvas x",
+  );
+  assertEqual(
+    restored.canvasCamera.y,
+    -120,
+    "Tab restored from template starts at canvas y",
+  );
 }
 
 function testTemplateBoundsPreserveNegativeOriginAndExpandAroundPanels() {

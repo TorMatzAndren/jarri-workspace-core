@@ -40,3 +40,23 @@ export function resourceUriToFilePath(uri: ResourceUri | string): string | null 
     return path;
   }
 }
+
+const IMAGE_FILE_EXTENSION_PATTERN =
+  /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
+
+export function isImageFilePath(path: string): boolean {
+  return IMAGE_FILE_EXTENSION_PATTERN.test(path.trim());
+}
+
+export function resourceUriToImageFilePath(
+  uri: ResourceUri | string,
+): string | null {
+  const path = resourceUriToFilePath(uri);
+  return path && isImageFilePath(path) ? path : null;
+}
+
+export function filePathBasename(path: string): string {
+  const trimmed = path.trim();
+  const lastSlash = trimmed.lastIndexOf("/");
+  return lastSlash >= 0 ? trimmed.slice(lastSlash + 1) : trimmed;
+}

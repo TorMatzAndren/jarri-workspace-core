@@ -362,3 +362,130 @@ No component should own both long-lived domain truth and layout persistence.
 - `panelState: unknown` is intentional at the core level; typed panel state belongs to panel definitions and module packages.
 - A generic "missing panel" repair path is mandatory because modules may be unavailable when loading old layouts.
 - Preflight must not be reduced to a confirm dialog. It is a domain truth review boundary.
+
+## Workspace Camera And Spatial Navigation
+
+Workspace distinguishes global interface presentation from tab-local
+spatial camera state.
+
+The relevant state is:
+
+- `preferences.scale`: global Workspace/interface presentation scale;
+- `WorkspaceTab.canvasScale`: tab-local Workspace camera zoom;
+- `WorkspaceTab.canvasCamera`: tab-local logical camera origin;
+- `WorkspaceTab.canvasBounds`: logical Workspace coordinate bounds.
+
+`canvasCamera.x` and `canvasCamera.y` identify the logical Workspace
+coordinate located at the viewport top-left.
+
+Raw browser `scrollLeft` and `scrollTop` are rendering machinery rather
+than canonical camera truth.
+
+Camera restoration derives physical scroll from logical camera position,
+canvas bounds, measured viewport dimensions, and `canvasScale`.
+Programmatic restoration suppresses camera-memory writes so temporary
+startup clamping cannot overwrite persisted logical camera state.
+Restoration is recomputed when viewport or canvas geometry settles.
+
+`WorkspaceCanvasBounds` is origin-aware:
+
+    { x, y, width, height }
+
+Negative canvas origins are valid. Current panel geometry remains
+non-negative, but Workspace camera and canvas architecture must not assume
+that logical Workspace coordinates begin at zero.
+
+Spatial interaction rules:
+
+- middle-button dragging pans the Workspace camera;
+- Ctrl+wheel changes tab-local `canvasScale`;
+- ordinary wheel remains available to normal content/local interaction;
+- zoom may anchor to viewport center, active-panel center, active-panel
+  top-left, or the pointer;
+- zoom preserves the selected logical anchor through scroll compensation;
+- explicit panel navigation may align the panel center or panel top-left.
+
+Focus, navigation, and zoom anchoring are distinct operations.
+Focusing/interacting with a panel does not inherently move the camera.
+Explicit navigation may move the camera according to
+`panelNavigationAlignment`.
+
+Generic camera/navigation preferences are:
+
+- `gridSize`;
+- `panelSpacing`;
+- `workspaceZoomIncrement`;
+- `workspaceZoomAnchorMode`;
+- `panelNavigationAlignment`.
+
+The current Settings presentation order is Grid, Grid size, Panel spacing,
+Zoom step, Zoom anchor, and Navigate to.
+
+## Workspace-Owned Generic Input Controls
+
+Workspace owns generic single-choice and ordinary numeric-input
+presentation instead of exposing browser/operating-system widget chrome.
+
+`WorkspaceSelect` is the canonical ordinary single-choice primitive.
+Its opened popup uses the trigger width as a minimum, may grow
+intrinsically for longer choices, keeps ordinary options on one line, and
+is positioned within the visible viewport.
+
+`WorkspaceNumberInput` is the canonical ordinary numeric-entry primitive.
+It provides Workspace-owned numeric text entry, increment/decrement
+controls, keyboard stepping, focus/disabled presentation, and generic
+min/max/step handling.
+
+Feature owners retain ownership of values, domain meaning, units,
+domain-specific limits, and persistence.
+
+Source invariants:
+
+- native `<select>` / `<option>` markup is prohibited under
+  `src/**/*.tsx`;
+- native `input[type="number"]` controls are prohibited under
+  `src/**/*.tsx`.
+
+Dedicated source guards machine-enforce both invariants.
+Ranges, checkboxes, text inputs, colour inputs, and specialized controls
+are not prohibited by these rules.
+
+## Core Image Viewer
+
+`core:image-viewer` is generic Workspace Core functionality.
+
+Image file resources are recognized through the existing Workspace
+`OpenResourceRequest` path and opened as `core/image-viewer` panels.
+Canonical panel state records only the resource identity:
+
+    { resourceUri }
+
+Image pan and zoom are transient local presentation state rather than
+canonical resource truth.
+
+Ordinary wheel interaction on the Image Viewer local surface is owned by
+the viewer and changes local image zoom. Ctrl+wheel is deliberately not
+consumed locally and remains Workspace global camera input.
+
+Pointer dragging inside the viewer pans image presentation without taking
+ownership of Workspace frame movement.
+
+Core renders local image resources through its Tauri/browser file-resource
+presentation path and does not depend on Workspace Lab's Jarri provider or
+base64 image endpoint.
+
+## ChronoGit Theme Preset
+
+`chronogit` is a stock Workspace Core appearance preset.
+
+The preset is a visual identity only; it does not imply ownership of
+ChronoGit panels, Git providers, GTI, repository logic, or other
+ChronoGit runtime functionality.
+
+The current ChronoGit preset is intentionally dark-oriented and applies
+through the normal semantic Workspace colour architecture.
+Generic Workspace shell, canvas, panel, header, button, control, menu,
+scrollbar, and related presentation may receive ChronoGit styling.
+
+Semantic custom colour overrides continue to supersede preset token values
+where the generic override architecture defines that behavior.

@@ -17,7 +17,12 @@ import { workspaceRuntime } from "../bootstrap/workspaceRuntime";
 import { TabBar } from "../tabs/TabBar";
 import { WorkspaceCanvas } from "../workspace/WorkspaceCanvas";
 import type { PanelDefinition, WorkspaceModuleDefinition } from "../core/types";
-import type { OpenResourceRequest, OpenResourceResult } from "../core/resources";
+import {
+  filePathBasename,
+  resourceUriToImageFilePath,
+  type OpenResourceRequest,
+  type OpenResourceResult,
+} from "../core/resources";
 import jarriWorkspaceLogo from "../assets/jarri-workspace.png";
 import { WorkspaceClock } from "./WorkspaceClock";
 
@@ -240,6 +245,52 @@ export function WorkspaceShell() {
   }
 
   function openResource(request: OpenResourceRequest): OpenResourceResult {
+    const imagePath = resourceUriToImageFilePath(request.uri);
+
+    if (imagePath) {
+      const moduleId = request.preferredModuleId ?? "core";
+      const panelType = request.preferredPanelType ?? "image-viewer";
+
+      if (moduleId !== "core" || panelType !== "image-viewer") {
+        return {
+          ok: false,
+          error: `No image opener is registered for ${moduleId}/${panelType}.`,
+        };
+      }
+
+      const sameImagePanel = controller.activeTab.panels.find(
+        (panel) =>
+          panel.moduleId === moduleId &&
+          panel.panelType === panelType &&
+          typeof panel.panelState === "object" &&
+          panel.panelState !== null &&
+          !Array.isArray(panel.panelState) &&
+          (panel.panelState as { resourceUri?: unknown }).resourceUri ===
+            request.uri,
+      );
+
+      if (sameImagePanel && request.disposition !== "new-panel") {
+        controller.focusPanel(sameImagePanel.id);
+        return { ok: true, panelId: sameImagePanel.id };
+      }
+
+      const panelId = controller.createPanel(moduleId, panelType, {
+        title: request.label?.trim() || filePathBasename(imagePath),
+        panelState: { resourceUri: request.uri },
+        sourcePanelId: request.sourcePanelId,
+      });
+
+      if (panelId) {
+        controller.focusPanel(panelId);
+        return { ok: true, panelId };
+      }
+
+      return {
+        ok: false,
+        error: `Unable to create ${moduleId}/${panelType}.`,
+      };
+    }
+
     return {
       ok: false,
       error: `No resource opener is registered in Workspace Core for ${request.uri}.`,
@@ -548,6 +599,8 @@ export function WorkspaceShell() {
         title={controller.activeTab.title}
         panels={controller.activeTab.panels}
         canvasBounds={controller.activeTab.canvasBounds}
+        canvasScale={controller.activeTab.canvasScale}
+        canvasCamera={controller.activeTab.canvasCamera}
         preferences={preferences}
         modules={modules}
         onOpenPanelsMenu={() => {
@@ -561,6 +614,8 @@ export function WorkspaceShell() {
         onPanelStateChange={controller.updatePanelState}
         onPanelViewPreferencesChange={controller.updatePanelViewPreferences}
         onCanvasBoundsChange={controller.updateActiveTabCanvasBounds}
+        onCanvasScaleChange={controller.updateActiveTabCanvasScale}
+        onCanvasCameraChange={controller.updateActiveTabCanvasCamera}
         onPreferencesChange={controller.updatePreferences}
         onOpenPanel={(moduleId, panelType, sourcePanelId, panelState) =>
           controller.createPanel(moduleId, panelType, {

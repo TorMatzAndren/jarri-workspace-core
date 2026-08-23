@@ -52,9 +52,13 @@ type Props = {
   registry: PanelRegistry;
   panel: PanelInstance;
   canvasSurfaceRef: RefObject<HTMLDivElement | null>;
+  canvasScale: number;
   preferences: WorkspacePreferences;
   modules: Array<Pick<WorkspaceModuleDefinition, "moduleId" | "title">>;
-  onFocus: (panelId: string) => void;
+  onFocus: (
+    panelId: string,
+    navigation?: "none",
+  ) => void;
   onClose: (panelId: string) => void;
   onToggleMinimized: (panelId: string) => void;
   onGeometryChange: (panelId: string, geometry: PanelGeometry) => void;
@@ -78,6 +82,7 @@ export function PanelFrame({
   registry,
   panel,
   canvasSurfaceRef,
+  canvasScale,
   preferences,
   modules,
   onFocus,
@@ -279,6 +284,7 @@ export function PanelFrame({
     function handlePointerUp() {
       const committed = commitGeometryInteraction(
         previewGeometryRef.current ?? activeDrag.startGeometry,
+        activeDrag.gridSize,
       );
 
       dragViewportRef.current = null;
@@ -314,12 +320,16 @@ export function PanelFrame({
   }, [canvasSurfaceRef, dragState, onGeometryChange, panel.id]);
 
   function beginDrag(event: React.PointerEvent, mode: "move" | "resize") {
+    if (event.button !== 0) {
+      return;
+    }
+
     if (isMinimized && mode === "resize") {
       return;
     }
     event.preventDefault();
     event.stopPropagation();
-    onFocus(panel.id);
+    onFocus(panel.id, "none");
 
     const surface = canvasSurfaceRef.current;
     dragViewportRef.current = {
@@ -340,7 +350,8 @@ export function PanelFrame({
         },
         event.clientX,
         event.clientY,
-        preferences.scale,
+        canvasScale,
+        preferences.gridSize,
       ),
     );
   }
@@ -392,6 +403,9 @@ export function PanelFrame({
     <article
       className={`panel-frame ${isMinimized ? "panel-frame--minimized" : ""}`}
       ref={panelRef}
+      data-workspace-local-wheel={
+        definition?.interactionCapabilities?.localWheel ? "true" : undefined
+      }
       style={{
         left: effectiveGeometry.x,
         top: effectiveGeometry.y,
@@ -400,7 +414,7 @@ export function PanelFrame({
         zIndex: panel.focusOrder,
         "--panel-font-scale": panelViewPreferences.fontScale,
       } as CSSProperties}
-      onPointerDown={() => onFocus(panel.id)}
+      onPointerDown={() => onFocus(panel.id, "none")}
     >
       <header className="panel-frame__header" onPointerDown={(event) => beginDrag(event, "move")}>
         <div className="panel-frame__title">

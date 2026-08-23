@@ -24,7 +24,7 @@ type WorkspaceSelectProps<T extends string> = {
 type PopupGeometry = {
   left: number;
   top: number;
-  width: number;
+  minWidth: number;
 };
 
 export function WorkspaceSelect<T extends string>({
@@ -61,10 +61,18 @@ export function WorkspaceSelect<T extends string>({
 
     const rect = trigger.getBoundingClientRect();
 
+    const popup = document.getElementById(listboxId);
+    const popupWidth = popup?.getBoundingClientRect().width ?? rect.width;
+    const viewportPadding = 8;
+    const maxLeft = Math.max(
+      viewportPadding,
+      window.innerWidth - popupWidth - viewportPadding,
+    );
+
     setPopupGeometry({
-      left: rect.left,
+      left: Math.min(Math.max(viewportPadding, rect.left), maxLeft),
       top: rect.bottom + 4,
-      width: rect.width,
+      minWidth: rect.width,
     });
   }
 
@@ -222,7 +230,7 @@ export function WorkspaceSelect<T extends string>({
             style={{
               left: `${popupGeometry.left}px`,
               top: `${popupGeometry.top}px`,
-              width: `${popupGeometry.width}px`,
+              minWidth: `${popupGeometry.minWidth}px`,
             }}
           >
             {options.map((option, index) => {

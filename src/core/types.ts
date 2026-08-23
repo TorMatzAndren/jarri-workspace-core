@@ -8,6 +8,7 @@ import type {
   WorkspaceProjectionDocument,
 } from "./projection";
 import type { OpenResourceRequest, OpenResourceResult } from "./resources";
+import type { PanelInteractionCapabilities } from "./panelInteractions";
 
 export const WORKSPACE_SCHEMA_VERSION = 2;
 
@@ -16,6 +17,11 @@ export type WorkspaceCanvasBounds = {
   y: number;
   width: number;
   height: number;
+};
+
+export type WorkspaceCanvasCamera = {
+  x: number;
+  y: number;
 };
 
 export const DEFAULT_WORKSPACE_CANVAS_BOUNDS: WorkspaceCanvasBounds = {
@@ -68,7 +74,13 @@ export type WorkspacePreferences = {
   density: "compact" | "comfortable";
   themeMode: "system" | "light" | "dark";
   fontFamily: "system" | "humanist" | "serif" | "mono" | "compact";
-  themePreset: "neutral" | "graphite" | "contrast" | "blueprint" | "pink-sparkle";
+  themePreset:
+    | "neutral"
+    | "graphite"
+    | "contrast"
+    | "blueprint"
+    | "pink-sparkle"
+    | "chronogit";
   colorOverrides: Partial<WorkspaceColorTokens>;
   panelMenu: PanelMenuPreferences;
   frameControls: WorkspaceFrameControlPreferences;
@@ -128,6 +140,7 @@ export type WorkspaceTab = {
   title: string;
   canvasBounds: WorkspaceCanvasBounds;
   canvasScale: number;
+  canvasCamera: WorkspaceCanvasCamera;
   panels: PanelInstance[];
   createdAt: string;
   updatedAt: string;
@@ -313,6 +326,7 @@ export type PanelDefinition = {
     context: PanelNormalizeContext,
   ) => PanelNormalizeResult;
   semanticStrategy: PanelSemanticStrategy;
+  interactionCapabilities?: PanelInteractionCapabilities;
   surfacePresentationMemory?: PanelSurfacePresentationMemoryPolicy;
   Component: ComponentType<PanelBodyProps>;
 };

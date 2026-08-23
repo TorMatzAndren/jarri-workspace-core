@@ -10,6 +10,7 @@ export type GeometryInteraction = {
   startPointerY: number;
   startGeometry: PanelGeometry;
   scale: number;
+  gridSize: number;
 };
 
 export function snapToGrid(value: number, gridSize = GRID_SIZE) {
@@ -53,14 +54,17 @@ export function geometryFromPanelDefinition(
   );
 }
 
-export function enforceMinSize(geometry: PanelGeometry): PanelGeometry {
-  const minWidth = snapUpToGrid(geometry.minWidth ?? 260);
-  const minHeight = snapUpToGrid(geometry.minHeight ?? 160);
+export function enforceMinSize(
+  geometry: PanelGeometry,
+  gridSize = GRID_SIZE,
+): PanelGeometry {
+  const minWidth = snapUpToGrid(geometry.minWidth ?? 260, gridSize);
+  const minHeight = snapUpToGrid(geometry.minHeight ?? 160, gridSize);
 
   return {
     ...geometry,
-    width: snapToGrid(Math.max(minWidth, geometry.width)),
-    height: snapToGrid(Math.max(minHeight, geometry.height)),
+    width: snapToGrid(Math.max(minWidth, geometry.width), gridSize),
+    height: snapToGrid(Math.max(minHeight, geometry.height), gridSize),
     minWidth,
     minHeight,
   };
@@ -82,6 +86,7 @@ export function beginGeometryInteraction(
   pointerX: number,
   pointerY: number,
   scale: number,
+  gridSize = GRID_SIZE,
 ): GeometryInteraction {
   return {
     mode,
@@ -90,6 +95,7 @@ export function beginGeometryInteraction(
     startPointerY: pointerY,
     startGeometry: panel.geometry,
     scale: normalizeScale(scale),
+    gridSize: Math.max(1, Math.round(gridSize)),
   };
 }
 
@@ -104,26 +110,47 @@ export function previewGeometryInteraction(
   if (interaction.mode === "move") {
     return {
       ...interaction.startGeometry,
-      x: Math.max(0, snapToGrid(interaction.startGeometry.x + deltaX)),
-      y: Math.max(0, snapToGrid(interaction.startGeometry.y + deltaY)),
+      x: Math.max(
+        0,
+        snapToGrid(
+          interaction.startGeometry.x + deltaX,
+          interaction.gridSize,
+        ),
+      ),
+      y: Math.max(
+        0,
+        snapToGrid(
+          interaction.startGeometry.y + deltaY,
+          interaction.gridSize,
+        ),
+      ),
     };
   }
 
-  return enforceMinSize({
-    ...interaction.startGeometry,
-    width: snapToGrid(interaction.startGeometry.width + deltaX),
-    height: snapToGrid(interaction.startGeometry.height + deltaY),
-  });
+  return enforceMinSize(
+    {
+      ...interaction.startGeometry,
+      width: interaction.startGeometry.width + deltaX,
+      height: interaction.startGeometry.height + deltaY,
+    },
+    interaction.gridSize,
+  );
 }
 
-export function commitGeometryInteraction(geometry: PanelGeometry): PanelGeometry {
-  return enforceMinSize({
-    ...geometry,
-    x: Math.max(0, snapToGrid(geometry.x)),
-    y: Math.max(0, snapToGrid(geometry.y)),
-    width: snapToGrid(geometry.width),
-    height: snapToGrid(geometry.height),
-  });
+export function commitGeometryInteraction(
+  geometry: PanelGeometry,
+  gridSize = GRID_SIZE,
+): PanelGeometry {
+  return enforceMinSize(
+    {
+      ...geometry,
+      x: Math.max(0, snapToGrid(geometry.x, gridSize)),
+      y: Math.max(0, snapToGrid(geometry.y, gridSize)),
+      width: snapToGrid(geometry.width, gridSize),
+      height: snapToGrid(geometry.height, gridSize),
+    },
+    gridSize,
+  );
 }
 
 export function cancelGeometryInteraction(

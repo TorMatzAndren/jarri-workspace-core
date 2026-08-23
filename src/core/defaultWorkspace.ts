@@ -39,6 +39,10 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
         title: "Core Demo",
         canvasBounds: { ...DEFAULT_WORKSPACE_CANVAS_BOUNDS },
         canvasScale: 1,
+        canvasCamera: {
+          x: DEFAULT_WORKSPACE_CANVAS_BOUNDS.x,
+          y: DEFAULT_WORKSPACE_CANVAS_BOUNDS.y,
+        },
         panels,
         createdAt: now,
         updatedAt: now,

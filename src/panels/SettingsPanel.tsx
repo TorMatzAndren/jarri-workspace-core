@@ -2,6 +2,7 @@ import {
   WorkspaceSelect,
   type WorkspaceSelectOption,
 } from "../core/WorkspaceSelect";
+import { WorkspaceNumberInput } from "../core/WorkspaceNumberInput";
 import type {
   PanelBodyProps,
   WorkspacePreferences,
@@ -22,6 +23,22 @@ const densityOptions: Array<WorkspaceSelectOption<
 >> = [
   { value: "compact", label: "Compact" },
   { value: "comfortable", label: "Comfortable" },
+];
+
+const zoomAnchorOptions: Array<WorkspaceSelectOption<
+  WorkspacePreferences["workspaceZoomAnchorMode"]
+>> = [
+  { value: "viewport-center", label: "Viewport center" },
+  { value: "active-panel-center", label: "Active panel center" },
+  { value: "active-panel-top-left", label: "Active panel top-left" },
+  { value: "pointer", label: "Pointer" },
+];
+
+const panelNavigationAlignmentOptions: Array<WorkspaceSelectOption<
+  WorkspacePreferences["panelNavigationAlignment"]
+>> = [
+  { value: "panel-center", label: "Panel center" },
+  { value: "panel-top-left", label: "Panel top-left" },
 ];
 
 export function SettingsPanel({
@@ -161,26 +178,83 @@ export function SettingsPanel({
         </label>
 
         <label>
-          <span>Panel spacing</span>
-          <input
-            type="number"
-            min="0"
-            max="240"
-            step="1"
-            value={preferences.panelSpacing}
-            onChange={(event) =>
+          <span>Grid size</span>
+          <WorkspaceNumberInput
+            min={1}
+            step={1}
+            ariaLabel="Grid size"
+            value={preferences.gridSize}
+            onChange={(value) =>
               updatePreferences({
-                panelSpacing: Math.max(
-                  0,
-                  Math.min(
-                    240,
-                    Math.round(Number.parseFloat(event.target.value) || 0),
-                  ),
-                ),
+                gridSize: Math.max(1, Math.round(value)),
               })
             }
           />
-          <strong>{preferences.panelSpacing}px</strong>
+          <strong>{preferences.gridSize}px</strong>
+          </label>
+
+          <label>
+            <span>Panel spacing</span>
+            <WorkspaceNumberInput
+              min={0}
+              max={240}
+              step={1}
+              ariaLabel="Panel spacing"
+              value={preferences.panelSpacing}
+              onChange={(value) =>
+                updatePreferences({
+                  panelSpacing: Math.max(
+                    0,
+                    Math.min(
+                      240,
+                      Math.round(value),
+                    ),
+                  ),
+                })
+              }
+            />
+            <strong>{preferences.panelSpacing}px</strong>
+          </label>
+
+          <label>
+            <span>Zoom step</span>
+            <WorkspaceNumberInput
+              min={0.1}
+              max={100}
+              step={0.1}
+              ariaLabel="Workspace zoom step"
+              value={preferences.workspaceZoomIncrement}
+              onChange={(value) =>
+                updatePreferences({
+                  workspaceZoomIncrement: Math.max(0.1, Math.min(100, value)),
+                })
+              }
+            />
+            <strong>{preferences.workspaceZoomIncrement}%</strong>
+          </label>
+
+          <label>
+            <span>Zoom anchor</span>
+            <WorkspaceSelect
+              value={preferences.workspaceZoomAnchorMode}
+              options={zoomAnchorOptions}
+              ariaLabel="Workspace zoom anchor"
+              onChange={(workspaceZoomAnchorMode) =>
+                updatePreferences({ workspaceZoomAnchorMode })
+              }
+            />
+          </label>
+
+          <label>
+            <span>Navigate to</span>
+            <WorkspaceSelect
+              value={preferences.panelNavigationAlignment}
+              options={panelNavigationAlignmentOptions}
+              ariaLabel="Panel navigation alignment"
+              onChange={(panelNavigationAlignment) =>
+                updatePreferences({ panelNavigationAlignment })
+              }
+            />
           </label>
         </div>
 
@@ -194,12 +268,12 @@ export function SettingsPanel({
             <span>Settings</span>
             <label aria-label="Settings X">
               <span className="settings-panel__visually-hidden">Settings X</span>
-          <input
-            type="number"
-            min="0"
-            step="1"
+          <WorkspaceNumberInput
+            min={0}
+            step={1}
+            ariaLabel="Settings X"
             value={preferences.systemSurfacePositions.settings.x}
-            onChange={(event) =>
+            onChange={(value) =>
               updatePreferences({
                 systemSurfacePositions: {
                   ...preferences.systemSurfacePositions,
@@ -207,7 +281,7 @@ export function SettingsPanel({
                     ...preferences.systemSurfacePositions.settings,
                     x: Math.max(
                       0,
-                      Math.round(Number.parseFloat(event.target.value) || 0),
+                      Math.round(value),
                     ),
                   },
                 },
@@ -218,12 +292,12 @@ export function SettingsPanel({
 
             <label aria-label="Settings Y">
               <span className="settings-panel__visually-hidden">Settings Y</span>
-              <input
-            type="number"
-            min="0"
-            step="1"
+              <WorkspaceNumberInput
+            min={0}
+            step={1}
+            ariaLabel="Settings Y"
             value={preferences.systemSurfacePositions.settings.y}
-            onChange={(event) =>
+            onChange={(value) =>
               updatePreferences({
                 systemSurfacePositions: {
                   ...preferences.systemSurfacePositions,
@@ -231,7 +305,7 @@ export function SettingsPanel({
                     ...preferences.systemSurfacePositions.settings,
                     y: Math.max(
                       0,
-                      Math.round(Number.parseFloat(event.target.value) || 0),
+                      Math.round(value),
                     ),
                   },
                 },
@@ -243,12 +317,12 @@ export function SettingsPanel({
             <span>Add Panel</span>
             <label aria-label="Add Panel X">
               <span className="settings-panel__visually-hidden">Add Panel X</span>
-              <input
-            type="number"
-            min="0"
-            step="1"
+              <WorkspaceNumberInput
+            min={0}
+            step={1}
+            ariaLabel="Add Panel X"
             value={preferences.systemSurfacePositions.addPanel.x}
-            onChange={(event) =>
+            onChange={(value) =>
               updatePreferences({
                 systemSurfacePositions: {
                   ...preferences.systemSurfacePositions,
@@ -256,7 +330,7 @@ export function SettingsPanel({
                     ...preferences.systemSurfacePositions.addPanel,
                     x: Math.max(
                       0,
-                      Math.round(Number.parseFloat(event.target.value) || 0),
+                      Math.round(value),
                     ),
                   },
                 },
@@ -267,12 +341,12 @@ export function SettingsPanel({
 
             <label aria-label="Add Panel Y">
               <span className="settings-panel__visually-hidden">Add Panel Y</span>
-              <input
-            type="number"
-            min="0"
-            step="1"
+              <WorkspaceNumberInput
+            min={0}
+            step={1}
+            ariaLabel="Add Panel Y"
             value={preferences.systemSurfacePositions.addPanel.y}
-            onChange={(event) =>
+            onChange={(value) =>
               updatePreferences({
                 systemSurfacePositions: {
                   ...preferences.systemSurfacePositions,
@@ -280,7 +354,7 @@ export function SettingsPanel({
                     ...preferences.systemSurfacePositions.addPanel,
                     y: Math.max(
                       0,
-                      Math.round(Number.parseFloat(event.target.value) || 0),
+                      Math.round(value),
                     ),
                   },
                 },
@@ -292,12 +366,12 @@ export function SettingsPanel({
             <span>Frame Settings</span>
             <label aria-label="Frame Settings X">
               <span className="settings-panel__visually-hidden">Frame Settings X</span>
-              <input
-            type="number"
-            min="0"
-            step="1"
+              <WorkspaceNumberInput
+            min={0}
+            step={1}
+            ariaLabel="Frame Settings X"
             value={preferences.systemSurfacePositions.frameSettings.x}
-            onChange={(event) =>
+            onChange={(value) =>
               updatePreferences({
                 systemSurfacePositions: {
                   ...preferences.systemSurfacePositions,
@@ -305,7 +379,7 @@ export function SettingsPanel({
                     ...preferences.systemSurfacePositions.frameSettings,
                     x: Math.max(
                       0,
-                      Math.round(Number.parseFloat(event.target.value) || 0),
+                      Math.round(value),
                     ),
                   },
                 },
@@ -316,12 +390,12 @@ export function SettingsPanel({
 
             <label aria-label="Frame Settings Y">
               <span className="settings-panel__visually-hidden">Frame Settings Y</span>
-              <input
-            type="number"
-            min="0"
-            step="1"
+              <WorkspaceNumberInput
+            min={0}
+            step={1}
+            ariaLabel="Frame Settings Y"
             value={preferences.systemSurfacePositions.frameSettings.y}
-            onChange={(event) =>
+            onChange={(value) =>
               updatePreferences({
                 systemSurfacePositions: {
                   ...preferences.systemSurfacePositions,
@@ -329,7 +403,7 @@ export function SettingsPanel({
                     ...preferences.systemSurfacePositions.frameSettings,
                     y: Math.max(
                       0,
-                      Math.round(Number.parseFloat(event.target.value) || 0),
+                      Math.round(value),
                     ),
                   },
                 },

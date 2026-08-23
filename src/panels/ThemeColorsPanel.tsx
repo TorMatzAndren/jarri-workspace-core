@@ -25,6 +25,7 @@ const themePresetOptions: Array<WorkspaceSelectOption<
   { value: "contrast", label: "Contrast" },
   { value: "blueprint", label: "Blueprint" },
   { value: "pink-sparkle", label: "Pink Sparkle" },
+  { value: "chronogit", label: "ChronoGit" },
 ];
 
 export function ThemeColorsPanel({

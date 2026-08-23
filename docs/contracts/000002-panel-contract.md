@@ -416,3 +416,34 @@ When a persisted panel references an unavailable definition:
 - Dirty state belongs in this contract because close behavior is shell-level, even when save behavior is domain-specific.
 - Panel-local state must remain narrow. A panel that wants to persist domain truth should instead define a domain storage contract.
 - Missing panels should be visible rather than silently removed; silent removal breaks user trust in layout persistence.
+
+## Local Wheel Interaction Contract
+
+A panel may declare generic local-wheel capability when a body surface
+needs ordinary wheel interaction.
+
+Rules:
+
+- ordinary wheel may be reserved by the declared local interaction surface;
+- Ctrl+wheel remains Workspace global camera input;
+- local consumers must yield Ctrl+wheel rather than suppressing it;
+- declaring local wheel capability does not transfer frame movement,
+  camera ownership, or other Workspace interaction authority to the panel;
+- local interaction state remains panel presentation unless a panel's
+  explicit semantic contract states otherwise.
+
+Image Viewer is a current consumer of this generic contract, but the
+contract is not Image-Viewer-specific.
+
+## Generic Numeric Control Contract
+
+Ordinary numeric-entry presentation uses `WorkspaceNumberInput`.
+
+Panels/features own the numeric value, meaning, units, persistence, and
+domain-specific bounds. Workspace owns the generic editable numeric
+surface, increment/decrement affordances, keyboard stepping, and generic
+focus/disabled presentation.
+
+Native `input[type="number"]` markup is not permitted in Workspace TSX.
+This prevents browser/operating-system spinner presentation from escaping
+Workspace semantic theming and interaction ownership.

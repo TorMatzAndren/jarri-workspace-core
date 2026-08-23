@@ -431,3 +431,44 @@ Diagnostics are for logs and developer tools. They are advisory metadata, not do
 - Repair should prefer preserving user layout over strict rejection, except where persisted data is unsafe or incoherent.
 - Missing modules are normal during development; layout persistence must degrade visibly and recover when modules return.
 - Preflight confirmation state must be intentionally hard to persist because reload should not bypass risk review.
+
+## Logical Camera Persistence
+
+Workspace camera position is persisted per tab as logical coordinates:
+
+    canvasCamera: { x, y }
+
+`x/y` identify the logical Workspace coordinate at the viewport top-left.
+Raw browser scroll offsets are not persisted as canonical camera truth.
+
+Legacy/additive normalization rules:
+
+- missing `canvasCamera` defaults to the normalized tab canvas origin;
+- invalid/non-finite camera coordinates repair to the canvas origin;
+- negative canvas origins are valid fallbacks;
+- missing `canvasScale` defaults deterministically;
+- missing camera/navigation preferences receive deterministic defaults;
+- existing schema-2 layouts remain readable without an artificial schema
+  break.
+
+Multiple tabs retain independent camera positions and scales.
+`preferences.scale` remains independent global interface presentation state.
+
+Tabs created from reusable panel templates/setups begin from deterministic
+camera state rather than inheriting an unrelated transient source-tab view.
+
+During runtime restoration, logical camera state is converted to physical
+scroll using current bounds, viewport dimensions, and `canvasScale`.
+Programmatic restoration must not feed temporary scroll/clamping results
+back into persisted camera truth.
+
+## Appearance And Control Persistence Additions
+
+`chronogit` is a valid persisted `themePreset` value.
+Unknown theme preset values continue to normalize according to the existing
+theme repair contract.
+
+Workspace-owned control implementations do not change domain persistence:
+`WorkspaceSelect` and `WorkspaceNumberInput` are presentation primitives.
+Their owning preferences/state continue to persist through the existing
+Workspace state model.

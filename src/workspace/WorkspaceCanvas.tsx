@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Image } from "@tauri-apps/api/image";
 import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
 import { domToBlob } from "modern-screenshot";
@@ -6,19 +6,31 @@ import type {
   PanelGeometry,
   PanelInstance,
   PanelViewPreferences,
+  WorkspaceCanvasCamera,
   WorkspaceCanvasBounds,
   WorkspaceModuleDefinition,
   WorkspacePreferences,
 } from "../core/types";
 import type { PanelRegistry } from "../core/panelRegistry";
 import type { OpenResourceRequest, OpenResourceResult } from "../core/resources";
+import {
+  cameraOriginFromScroll,
+  clampScroll,
+  nextCanvasScaleFromWheel,
+  panelNavigationAnchor,
+  scrollForCameraOrigin,
+  scrollForAnchor,
+  zoomAnchorForMode,
+  type WorkspaceViewportAnchor,
+} from "../core/cameraMath";
+import { shouldReserveLocalWheel } from "../core/panelInteractions";
 import { PanelFrame } from "./PanelFrame";
 
 const CANVAS_GRID_SIZE = 24;
 const MIN_CANVAS_WIDTH = 900;
 const MIN_CANVAS_HEIGHT = 700;
 
-type ResizeMode = "width" | "height" | "both";
+type ResizeMode = "left" | "top" | "right" | "bottom" | "both";
 
 type CanvasResizeState = {
   mode: ResizeMode;
@@ -41,6 +53,8 @@ type Props = {
   title: string;
   panels: PanelInstance[];
   canvasBounds: WorkspaceCanvasBounds;
+  canvasScale: number;
+  canvasCamera: WorkspaceCanvasCamera;
   preferences: WorkspacePreferences;
   modules: Array<Pick<WorkspaceModuleDefinition, "moduleId" | "title">>;
   onOpenPanelsMenu: () => void;
@@ -55,6 +69,8 @@ type Props = {
     preferences: PanelViewPreferences,
   ) => void;
   onCanvasBoundsChange: (bounds: WorkspaceCanvasBounds) => void;
+  onCanvasScaleChange: (canvasScale: number) => void;
+  onCanvasCameraChange: (camera: WorkspaceCanvasCamera) => void;
   onPreferencesChange: (preferences: Partial<WorkspacePreferences>) => void;
   onOpenPanel: (
     moduleId: string,
@@ -122,6 +138,8 @@ export function WorkspaceCanvas({
   title,
   panels,
   canvasBounds,
+  canvasScale,
+  canvasCamera,
   preferences,
   modules,
   onOpenPanelsMenu,
@@ -132,6 +150,8 @@ export function WorkspaceCanvas({
   onPanelStateChange,
   onPanelViewPreferencesChange,
   onCanvasBoundsChange,
+  onCanvasScaleChange,
+  onCanvasCameraChange,
   onPreferencesChange,
   onOpenPanel,
   onOpenResource,
@@ -139,20 +159,73 @@ export function WorkspaceCanvas({
   const [resizeState, setResizeState] = useState<CanvasResizeState | null>(null);
   const [panState, setPanState] = useState<CanvasPanState | null>(null);
   const [previewBounds, setPreviewBounds] = useState<WorkspaceCanvasBounds | null>(null);
+  const [cameraViewportSize, setCameraViewportSize] = useState({
+    width: 0,
+    height: 0,
+  });
   const [screenshotState, setScreenshotState] = useState<
     "idle" | "copying" | "copied" | "failed"
   >("idle");
   const previewBoundsRef = useRef<WorkspaceCanvasBounds | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const logicalRef = useRef<HTMLDivElement | null>(null);
-  const viewportByTabRef = useRef(
-    new Map<string, { scrollLeft: number; scrollTop: number }>(),
-  );
+  const pendingCanvasZoomAnchorRef =
+    useRef<WorkspaceViewportAnchor | null>(null);
+  const restoringCameraRef = useRef(false);
 
   const effectiveBounds = normalizeBounds(
     previewBounds ?? canvasBounds,
     panels,
   );
+
+  useLayoutEffect(() => {
+    const surface = surfaceRef.current;
+    if (!surface || pendingCanvasZoomAnchorRef.current) {
+      return;
+    }
+
+    const targetScroll = scrollForCameraOrigin(
+      canvasCamera,
+      effectiveBounds,
+      { width: surface.clientWidth, height: surface.clientHeight },
+      canvasScale,
+    );
+    const nextScroll = clampScroll(targetScroll, {
+      scrollLeft: surface.scrollWidth - surface.clientWidth,
+      scrollTop: surface.scrollHeight - surface.clientHeight,
+    });
+
+    if (
+      Math.abs(surface.scrollLeft - nextScroll.scrollLeft) < 0.5 &&
+      Math.abs(surface.scrollTop - nextScroll.scrollTop) < 0.5
+    ) {
+      return;
+    }
+
+    restoringCameraRef.current = true;
+    surface.scrollLeft = nextScroll.scrollLeft;
+    surface.scrollTop = nextScroll.scrollTop;
+
+    const frameId = window.requestAnimationFrame(() => {
+      restoringCameraRef.current = false;
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      restoringCameraRef.current = false;
+    };
+  }, [
+    tabId,
+    canvasCamera.x,
+    canvasCamera.y,
+    canvasScale,
+    effectiveBounds.x,
+    effectiveBounds.y,
+    effectiveBounds.width,
+    effectiveBounds.height,
+    cameraViewportSize.width,
+    cameraViewportSize.height,
+  ]);
 
   useEffect(() => {
     const surface = surfaceRef.current;
@@ -160,30 +233,164 @@ export function WorkspaceCanvas({
       return undefined;
     }
 
-    const savedViewport = viewportByTabRef.current.get(tabId) ?? {
-      scrollLeft: 0,
-      scrollTop: 0,
-    };
+    const measuredSurface = surface;
 
-    const frameId = window.requestAnimationFrame(() => {
-      surface.scrollLeft = savedViewport.scrollLeft;
-      surface.scrollTop = savedViewport.scrollTop;
-    });
+    function measureCameraViewport() {
+      const next = {
+        width: Math.max(1, measuredSurface.clientWidth),
+        height: Math.max(1, measuredSurface.clientHeight),
+      };
 
-    return () => window.cancelAnimationFrame(frameId);
-  }, [tabId]);
+      setCameraViewportSize((current) =>
+        current.width === next.width && current.height === next.height
+          ? current
+          : next,
+      );
+    }
+
+    measureCameraViewport();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measureCameraViewport);
+      return () =>
+        window.removeEventListener("resize", measureCameraViewport);
+    }
+
+    const observer = new ResizeObserver(measureCameraViewport);
+    observer.observe(measuredSurface);
+
+    return () => observer.disconnect();
+  }, []);
 
   function rememberViewport() {
     const surface = surfaceRef.current;
-    if (!surface) {
+    if (!surface || restoringCameraRef.current) {
       return;
     }
 
-    viewportByTabRef.current.set(tabId, {
-      scrollLeft: surface.scrollLeft,
-      scrollTop: surface.scrollTop,
-    });
+    onCanvasCameraChange(
+      cameraOriginFromScroll(
+        effectiveBounds,
+        { width: surface.clientWidth, height: surface.clientHeight },
+        { scrollLeft: surface.scrollLeft, scrollTop: surface.scrollTop },
+        canvasScale,
+      ),
+    );
   }
+
+  useEffect(() => {
+    const surface = surfaceRef.current;
+    if (!surface) {
+      return undefined;
+    }
+
+    const canvasSurface = surface;
+
+    function handleWorkspaceWheel(event: WheelEvent) {
+      if (event.ctrlKey) {
+        event.preventDefault();
+
+        const currentScale = canvasScale;
+        const nextScale = nextCanvasScaleFromWheel(
+          currentScale,
+          event.deltaY,
+          preferences.workspaceZoomIncrement,
+        );
+
+        if (nextScale === currentScale) {
+          return;
+        }
+
+        const surfaceRect = canvasSurface.getBoundingClientRect();
+        const pointerX = Math.min(
+          canvasSurface.clientWidth,
+          Math.max(0, event.clientX - surfaceRect.left),
+        );
+        const pointerY = Math.min(
+          canvasSurface.clientHeight,
+          Math.max(0, event.clientY - surfaceRect.top),
+        );
+
+        pendingCanvasZoomAnchorRef.current = zoomAnchorForMode({
+          mode: preferences.workspaceZoomAnchorMode,
+          panels,
+          pointer: { x: pointerX, y: pointerY },
+          bounds: effectiveBounds,
+          viewport: {
+            width: canvasSurface.clientWidth,
+            height: canvasSurface.clientHeight,
+          },
+          scroll: {
+            scrollLeft: canvasSurface.scrollLeft,
+            scrollTop: canvasSurface.scrollTop,
+          },
+          canvasScale: currentScale,
+        });
+
+        onCanvasScaleChange(nextScale);
+        return;
+      }
+
+      if (shouldReserveLocalWheel(event)) {
+        event.preventDefault();
+      }
+    }
+
+    function handleWorkspaceScroll() {
+      rememberViewport();
+    }
+
+    canvasSurface.addEventListener("wheel", handleWorkspaceWheel, {
+      passive: false,
+    });
+    canvasSurface.addEventListener("scroll", handleWorkspaceScroll, {
+      passive: true,
+    });
+
+    return () => {
+      canvasSurface.removeEventListener("wheel", handleWorkspaceWheel);
+      canvasSurface.removeEventListener("scroll", handleWorkspaceScroll);
+    };
+  }, [
+    canvasScale,
+    effectiveBounds.x,
+    effectiveBounds.y,
+    panels,
+    preferences.workspaceZoomIncrement,
+    preferences.workspaceZoomAnchorMode,
+    onCanvasScaleChange,
+  ]);
+
+  useLayoutEffect(() => {
+    const anchor = pendingCanvasZoomAnchorRef.current;
+    const surface = surfaceRef.current;
+
+    if (!anchor || !surface) {
+      return;
+    }
+
+    const targetScroll = scrollForAnchor(
+      anchor,
+      effectiveBounds,
+      { width: surface.clientWidth, height: surface.clientHeight },
+      canvasScale,
+    );
+    const nextScroll = clampScroll(targetScroll, {
+      scrollLeft: surface.scrollWidth - surface.clientWidth,
+      scrollTop: surface.scrollHeight - surface.clientHeight,
+    });
+
+    surface.scrollLeft = nextScroll.scrollLeft;
+    surface.scrollTop = nextScroll.scrollTop;
+    pendingCanvasZoomAnchorRef.current = null;
+    rememberViewport();
+  }, [
+    canvasScale,
+    effectiveBounds.x,
+    effectiveBounds.y,
+    effectiveBounds.width,
+    effectiveBounds.height,
+  ]);
 
   useEffect(() => {
     const normalized = normalizeBounds(canvasBounds, panels);
@@ -205,21 +412,40 @@ export function WorkspaceCanvas({
     const activeResize = resizeState;
 
     function previewFromPointer(event: PointerEvent) {
-      const deltaX = (event.clientX - activeResize.startX) / preferences.scale;
-      const deltaY = (event.clientY - activeResize.startY) / preferences.scale;
+      const deltaX = (event.clientX - activeResize.startX) / canvasScale;
+      const deltaY = (event.clientY - activeResize.startY) / canvasScale;
+
+      const start = activeResize.startBounds;
+      const startRight = start.x + start.width;
+      const startBottom = start.y + start.height;
+
+      let nextX = start.x;
+      let nextY = start.y;
+      let nextRight = startRight;
+      let nextBottom = startBottom;
+
+      if (activeResize.mode === "left") {
+        nextX = Math.min(startRight - MIN_CANVAS_WIDTH, start.x + deltaX);
+      }
+
+      if (activeResize.mode === "top") {
+        nextY = Math.min(startBottom - MIN_CANVAS_HEIGHT, start.y + deltaY);
+      }
+
+      if (activeResize.mode === "right" || activeResize.mode === "both") {
+        nextRight = Math.max(start.x + MIN_CANVAS_WIDTH, startRight + deltaX);
+      }
+
+      if (activeResize.mode === "bottom" || activeResize.mode === "both") {
+        nextBottom = Math.max(start.y + MIN_CANVAS_HEIGHT, startBottom + deltaY);
+      }
 
       const nextBounds = normalizeBounds(
         {
-          x: activeResize.startBounds.x,
-          y: activeResize.startBounds.y,
-          width:
-            activeResize.mode === "width" || activeResize.mode === "both"
-              ? activeResize.startBounds.width + deltaX
-              : activeResize.startBounds.width,
-          height:
-            activeResize.mode === "height" || activeResize.mode === "both"
-              ? activeResize.startBounds.height + deltaY
-              : activeResize.startBounds.height,
+          x: nextX,
+          y: nextY,
+          width: nextRight - nextX,
+          height: nextBottom - nextY,
         },
         panels,
       );
@@ -257,7 +483,7 @@ export function WorkspaceCanvas({
       window.removeEventListener("pointerup", commitResize);
       window.removeEventListener("keydown", cancelResize);
     };
-  }, [resizeState, panels, preferences.scale, onCanvasBoundsChange]);
+  }, [resizeState, panels, canvasScale, onCanvasBoundsChange]);
 
   useEffect(() => {
     if (!panState) {
@@ -345,74 +571,41 @@ export function WorkspaceCanvas({
     });
   }
 
-  function revealPanelInViewport(panel: PanelInstance) {
+  function positionPanelInViewport(panel: PanelInstance) {
     const surface = surfaceRef.current;
     if (!surface) {
       return;
     }
 
-    const scale = preferences.scale;
-    const margin = 24;
-
-    const panelLeft = panel.geometry.x * scale;
-    const panelTop = panel.geometry.y * scale;
-    const panelWidth = panel.geometry.width * scale;
-    const panelHeight = panel.geometry.height * scale;
-    const panelRight = panelLeft + panelWidth;
-    const panelBottom = panelTop + panelHeight;
-
-    const viewportLeft = surface.scrollLeft;
-    const viewportTop = surface.scrollTop;
-    const viewportRight = viewportLeft + surface.clientWidth;
-    const viewportBottom = viewportTop + surface.clientHeight;
-
-    const usableWidth = Math.max(0, surface.clientWidth - margin * 2);
-    const usableHeight = Math.max(0, surface.clientHeight - margin * 2);
-
-    let nextLeft = viewportLeft;
-    let nextTop = viewportTop;
-
-    if (panelWidth > usableWidth) {
-      if (
-        panelLeft < viewportLeft + margin ||
-        panelLeft > viewportRight - margin
-      ) {
-        nextLeft = panelLeft - margin;
-      }
-    } else if (panelLeft < viewportLeft + margin) {
-      nextLeft = panelLeft - margin;
-    } else if (panelRight > viewportRight - margin) {
-      nextLeft = panelRight - surface.clientWidth + margin;
-    }
-
-    if (panelHeight > usableHeight) {
-      if (
-        panelTop < viewportTop + margin ||
-        panelTop > viewportBottom - margin
-      ) {
-        nextTop = panelTop - margin;
-      }
-    } else if (panelTop < viewportTop + margin) {
-      nextTop = panelTop - margin;
-    } else if (panelBottom > viewportBottom - margin) {
-      nextTop = panelBottom - surface.clientHeight + margin;
-    }
-
-    nextLeft = Math.max(0, nextLeft);
-    nextTop = Math.max(0, nextTop);
-
-    if (
-      nextLeft === viewportLeft &&
-      nextTop === viewportTop
-    ) {
-      return;
-    }
+    const targetScroll = scrollForAnchor(
+      panelNavigationAnchor(
+        panel,
+        preferences.panelNavigationAlignment,
+        { width: surface.clientWidth, height: surface.clientHeight },
+      ),
+      effectiveBounds,
+      { width: surface.clientWidth, height: surface.clientHeight },
+      canvasScale,
+    );
+    const nextScroll = clampScroll(targetScroll, {
+      scrollLeft: surface.scrollWidth - surface.clientWidth,
+      scrollTop: surface.scrollHeight - surface.clientHeight,
+    });
 
     surface.scrollTo({
-      left: nextLeft,
-      top: nextTop,
+      left: nextScroll.scrollLeft,
+      top: nextScroll.scrollTop,
       behavior: "auto",
     });
+    rememberViewport();
+  }
+
+  function focusPanel(panel: PanelInstance, navigation: "none" | "panel-bar") {
+    onFocusPanel(panel.id);
+
+    if (navigation === "panel-bar") {
+      positionPanelInViewport(panel);
+    }
   }
 
   function beginCanvasResize(event: React.PointerEvent, mode: ResizeMode) {
@@ -531,8 +724,7 @@ export function WorkspaceCanvas({
                     onTogglePanelMinimized(panel.id);
                   }
 
-                  onFocusPanel(panel.id);
-                  revealPanelInViewport(panel);
+                  focusPanel(panel, "panel-bar");
                 }}
               >
                 {panel.title}
@@ -565,26 +757,51 @@ export function WorkspaceCanvas({
       <div
         className={`workspace-canvas__surface ${panState ? "workspace-canvas__surface--panning" : ""}`}
         ref={surfaceRef}
+        style={{
+          "--workspace-canvas-scale": canvasScale,
+        } as React.CSSProperties}
         onScroll={rememberViewport}
-        onPointerDown={beginCanvasPan}
+        onPointerDownCapture={beginCanvasPan}
       >
+        <div
+          className="workspace-canvas__world"
+          style={{
+            "--workspace-camera-pad-x": `${cameraViewportSize.width}px`,
+            "--workspace-camera-pad-y": `${cameraViewportSize.height}px`,
+            "--workspace-scaled-canvas-width":
+              `${effectiveBounds.width * canvasScale}px`,
+            "--workspace-scaled-canvas-height":
+              `${effectiveBounds.height * canvasScale}px`,
+          } as React.CSSProperties}
+        >
         <div
           className="workspace-canvas__logical"
           ref={logicalRef}
           style={{
             "--workspace-canvas-width": `${effectiveBounds.width}px`,
             "--workspace-canvas-height": `${effectiveBounds.height}px`,
+            "--workspace-grid-size": `${preferences.gridSize}px`,
           } as React.CSSProperties}
         >
+          <div
+            className="workspace-canvas__contents"
+            style={{
+              "--workspace-canvas-origin-x": `${effectiveBounds.x}px`,
+              "--workspace-canvas-origin-y": `${effectiveBounds.y}px`,
+            } as React.CSSProperties}
+          >
           {panels.map((panel) => (
             <PanelFrame
               key={panel.id}
               registry={registry}
               panel={panel}
               canvasSurfaceRef={surfaceRef}
+              canvasScale={canvasScale}
               preferences={preferences}
               modules={modules}
-              onFocus={onFocusPanel}
+              onFocus={(_panelId, navigation = "none") =>
+                focusPanel(panel, navigation)
+              }
               onClose={onClosePanel}
               onToggleMinimized={onTogglePanelMinimized}
               onGeometryChange={onGeometryChange}
@@ -595,6 +812,7 @@ export function WorkspaceCanvas({
               onOpenResource={onOpenResource}
             />
           ))}
+          </div>
 
           {panels.length === 0 ? (
             <div className="workspace-empty">
@@ -606,18 +824,29 @@ export function WorkspaceCanvas({
           <span
             className="workspace-canvas__resize-handle workspace-canvas__resize-handle--right"
             aria-hidden="true"
-            onPointerDown={(event) => beginCanvasResize(event, "width")}
+            onPointerDown={(event) => beginCanvasResize(event, "right")}
+          />
+          <span
+            className="workspace-canvas__resize-handle workspace-canvas__resize-handle--left"
+            aria-hidden="true"
+            onPointerDown={(event) => beginCanvasResize(event, "left")}
+          />
+          <span
+            className="workspace-canvas__resize-handle workspace-canvas__resize-handle--top"
+            aria-hidden="true"
+            onPointerDown={(event) => beginCanvasResize(event, "top")}
           />
           <span
             className="workspace-canvas__resize-handle workspace-canvas__resize-handle--bottom"
             aria-hidden="true"
-            onPointerDown={(event) => beginCanvasResize(event, "height")}
+            onPointerDown={(event) => beginCanvasResize(event, "bottom")}
           />
           <span
             className="workspace-canvas__resize-handle workspace-canvas__resize-handle--corner"
             aria-hidden="true"
             onPointerDown={(event) => beginCanvasResize(event, "both")}
           />
+        </div>
         </div>
       </div>
     </section>
