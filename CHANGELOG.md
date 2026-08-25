@@ -22,3 +22,17 @@
 
 ### Notes
 This release syncs stable generic infrastructure improvements from Workspace Lab while excluding private/local Jarri integrations.
+
+## 2026-08-25 — Native File Browser and camera resize hardening
+
+- Added the first Core-owned native File Browser and filesystem provider.
+- Added native directory enumeration, bounded recursive search, cancellation,
+  filesystem operations and bounded text reading through Tauri.
+- Added reusable file-type/icon classification and Core text-resource viewing.
+- Added File Browser panel persistence and Workspace resource integration.
+- Hardened Add Panel presentation for the expanded Core panel catalog.
+- Fixed native resize/maximize camera corruption caused by publishing stale
+  pre-resize scroll against new viewport dimensions.
+- Added deterministic camera tests reproducing the observed `(-2200, -516)`
+  synthetic camera failure and verifying resize preservation of arbitrary
+  logical camera positions.

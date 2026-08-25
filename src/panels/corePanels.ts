@@ -14,6 +14,14 @@ import {
   ImageViewerPanel,
   normalizeImageViewerState,
 } from "./ImageViewerPanel";
+import {
+  FileBrowserPanel,
+  normalizeFileBrowserState,
+} from "./FileBrowserPanel";
+import {
+  TextViewerPanel,
+  normalizeTextViewerState,
+} from "./TextViewerPanel";
 
 const missingPanelDefinition: PanelDefinition = {
   moduleId: "core",
@@ -173,6 +181,83 @@ const imageViewerPanelDefinition: PanelDefinition = {
   Component: ImageViewerPanel,
 };
 
+const textViewerPanelDefinition: PanelDefinition = {
+  moduleId: "core",
+  panelType: "text-viewer",
+  title: "Text Viewer",
+  description: "Read-only text and source file resource viewer.",
+  category: "core",
+  defaultGeometry: { x: 260, y: 260, width: 900, height: 640 },
+  minGeometry: { width: 460, height: 320 },
+  stateVersion: 1,
+  capabilities: {
+    closable: true,
+    resizable: true,
+    movable: true,
+    renameable: false,
+    canBeDirty: false,
+  },
+  createInitialState: () => ({ resourceUri: "" }),
+  normalizeState: (input) => ({
+    state: normalizeTextViewerState(input),
+    repaired: false,
+    warnings: [],
+  }),
+  semanticStrategy: panelSummarySemantic(
+    "Ready",
+    "Text and source resources open in this Workspace Core panel.",
+  ),
+  surfacePresentationMemory: {
+    rememberPanelState: false,
+  },
+  Component: TextViewerPanel,
+};
+
+const fileBrowserPanelDefinition: PanelDefinition = {
+  moduleId: "core",
+  panelType: "file-browser",
+  title: "File Browser",
+  description: "Generic Core filesystem browser and file manager.",
+  category: "core",
+  defaultGeometry: { x: 168, y: 168, width: 920, height: 640 },
+  minGeometry: { width: 520, height: 360 },
+  stateVersion: 1,
+  capabilities: {
+    closable: true,
+    resizable: true,
+    movable: true,
+    renameable: false,
+    canBeDirty: false,
+  },
+  createInitialState: () => ({
+    browserRoot: "/",
+    currentDirectoryPath: "/",
+    selectedPath: null,
+    selectedEntryKind: "",
+    expandedPaths: [],
+    showHidden: false,
+    sort: {
+      field: "name",
+      direction: "asc",
+      foldersFirst: true,
+    },
+    search: {
+      query: "",
+    },
+  }),
+  normalizeState: (input) => ({
+    state: normalizeFileBrowserState(input),
+    repaired: false,
+    warnings: [],
+  }),
+  semanticStrategy: panelSummarySemantic(
+    "Ready",
+    "Generic filesystem browsing and file operations are available.",
+  ),
+  surfacePresentationMemory: {},
+  Component: FileBrowserPanel,
+};
+
 export const coreModule: WorkspaceModuleDefinition = {
   moduleId: "core",
   title: "Workspace Core",
@@ -183,5 +268,7 @@ export const coreModule: WorkspaceModuleDefinition = {
     themeColorsPanelDefinition,
     colorPickerPanelDefinition,
     imageViewerPanelDefinition,
+    textViewerPanelDefinition,
+    fileBrowserPanelDefinition,
   ],
 };

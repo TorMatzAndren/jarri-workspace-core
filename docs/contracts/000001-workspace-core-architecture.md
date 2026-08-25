@@ -489,3 +489,41 @@ scrollbar, and related presentation may receive ChronoGit styling.
 
 Semantic custom colour overrides continue to supersede preset token values
 where the generic override architecture defines that behavior.
+
+## Native Filesystem Surface
+
+Workspace Core may expose native filesystem capabilities through Core-owned
+Tauri commands and frontend providers.
+
+The Core File Browser is a presentation and interaction surface over native
+filesystem truth. Browser state does not become authoritative filesystem state.
+
+Core filesystem functionality must remain usable without `/opt/jarri`.
+Jarri-specific filesystem observation, historical evidence, indexing and
+semantic knowledge belong behind explicit integration boundaries rather than
+becoming implicit dependencies of Workspace Core.
+
+Filesystem search must expose bounded or incomplete execution truth when
+applicable. Result limits, traversal limits, cancellation, skipped paths or
+other conditions that prevent exhaustive search must not be represented as a
+complete filesystem result.
+
+Opening a filesystem resource must use Workspace resource/projection semantics
+where an appropriate Core resource handler exists. The File Browser does not
+take ownership of Workspace frame lifecycle.
+
+## Camera and Viewport Lifecycle
+
+`canvasCamera` represents logical Workspace position independently of native
+window dimensions.
+
+A native viewport resize must not reinterpret transient DOM scroll state as
+logical user navigation.
+
+When viewport dimensions change, Workspace must first derive and restore the
+scroll position corresponding to the existing logical camera under the new
+viewport geometry. Scroll-derived camera publication must remain suppressed
+until that restoration is coherent.
+
+Therefore native maximize, restore and resize operations preserve logical
+camera position unless an actual navigation operation occurs.

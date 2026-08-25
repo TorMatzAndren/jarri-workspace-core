@@ -77,6 +77,7 @@ function createDefaultWorkspace(): WorkspaceState {
         moduleOrder: ["core", "demo"],
         hiddenModuleIds: [],
         panelSort: "registered",
+        expandedModuleIds: ["core", "demo"],
       },
       frameControls: {
         visibility: {},
@@ -519,6 +520,53 @@ function testCanvasCameraSurvivesNormalizationPerTab() {
   );
 }
 
+function testPanelMenuExpandedModulesNormalizeDeterministically() {
+  const workspace = basePersistedWorkspace();
+  const preferences = workspace.preferences as WorkspaceState["preferences"];
+  preferences.panelMenu = {
+    moduleOrder: ["demo", "core", "demo"],
+    hiddenModuleIds: ["unused", "unused"],
+    panelSort: "title",
+    expandedModuleIds: ["demo", "core", 42, "demo"],
+  } as unknown as WorkspaceState["preferences"]["panelMenu"];
+
+  const panelMenu = load(workspace).state.preferences.panelMenu;
+
+  assertEqual(
+    panelMenu.moduleOrder.join(","),
+    "demo,core",
+    "Panel menu module order preserves unique string entries",
+  );
+  assertEqual(
+    panelMenu.hiddenModuleIds.join(","),
+    "unused",
+    "Panel menu hidden modules preserve unique string entries",
+  );
+  assertEqual(
+    panelMenu.panelSort,
+    "title",
+    "Panel menu sort survives expandedModuleIds normalization",
+  );
+  assertEqual(
+    panelMenu.expandedModuleIds.join(","),
+    "demo,core",
+    "Expanded module ids preserve strings and discard malformed entries",
+  );
+
+  const missingExpanded = basePersistedWorkspace();
+  delete (
+    (missingExpanded.preferences as WorkspaceState["preferences"]).panelMenu as {
+      expandedModuleIds?: unknown;
+    }
+  ).expandedModuleIds;
+
+  assertEqual(
+    load(missingExpanded).state.preferences.panelMenu.expandedModuleIds.join(","),
+    "core,demo",
+    "Missing expandedModuleIds defaults to discoverable Core and demo modules",
+  );
+}
+
 function main() {
   testLegacyWorkspaceGetsEmptyPresentationMemory();
   testValidPresentationMemorySurvivesNormalization();
@@ -528,6 +576,7 @@ function main() {
   testInvalidGenericCameraValuesRepairDeterministically();
   testCanvasBoundsPreserveNegativeOriginAndExpandAroundPanels();
   testCanvasCameraSurvivesNormalizationPerTab();
+  testPanelMenuExpandedModulesNormalizeDeterministically();
   console.log("layout persistence tests passed");
 }
 

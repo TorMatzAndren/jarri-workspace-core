@@ -385,17 +385,25 @@ function normalizeGridSize(input: unknown): number {
 function normalizePanelMenuPreferences(input: unknown): WorkspacePreferences["panelMenu"] {
   const raw = isRecord(input) ? input : {};
   const moduleOrder = Array.isArray(raw.moduleOrder)
-    ? raw.moduleOrder.filter((entry): entry is string => typeof entry === "string")
+    ? uniqueStrings(raw.moduleOrder)
     : ["core", "demo"];
   const hiddenModuleIds = Array.isArray(raw.hiddenModuleIds)
-    ? raw.hiddenModuleIds.filter((entry): entry is string => typeof entry === "string")
+    ? uniqueStrings(raw.hiddenModuleIds)
     : [];
+  const expandedModuleIds = Array.isArray(raw.expandedModuleIds)
+    ? uniqueStrings(raw.expandedModuleIds)
+    : ["core", "demo"];
 
   return {
     moduleOrder,
     hiddenModuleIds,
     panelSort: raw.panelSort === "title" ? "title" : "registered",
+    expandedModuleIds,
   };
+}
+
+function uniqueStrings(input: unknown[]) {
+  return [...new Set(input.filter((entry): entry is string => typeof entry === "string"))];
 }
 
 function normalizeCanvasBounds(

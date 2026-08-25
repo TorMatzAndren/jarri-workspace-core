@@ -2,8 +2,10 @@ import {
   filePathBasename,
   filePathToResourceUri,
   isImageFilePath,
+  isTextFilePath,
   resourceUriToFilePath,
   resourceUriToImageFilePath,
+  resourceUriToTextFilePath,
 } from "./resources";
 
 function assertEqual<T>(actual: T, expected: T, message: string) {
@@ -28,6 +30,9 @@ assertEqual(
 
 assertEqual(isImageFilePath("/tmp/photo.JPG"), true, "jpg is an image path");
 assertEqual(isImageFilePath("/tmp/readme.md"), false, "markdown is not an image path");
+assertEqual(isTextFilePath("/tmp/readme.md"), true, "markdown is a text path");
+assertEqual(isTextFilePath("/tmp/source.tsx"), true, "tsx is a source text path");
+assertEqual(isTextFilePath("/tmp/photo.png"), false, "image is not a text path");
 
 assertEqual(
   resourceUriToImageFilePath("file:///tmp/photo.webp"),
@@ -39,6 +44,12 @@ assertEqual(
   resourceUriToImageFilePath("file:///tmp/readme.md"),
   null,
   "non-image file resource is not an image opener",
+);
+
+assertEqual(
+  resourceUriToTextFilePath("file:///tmp/readme.md"),
+  "/tmp/readme.md",
+  "text resource URI resolves to file path",
 );
 
 assertEqual(

@@ -16,51 +16,19 @@ import { useWorkspaceController } from "../core/workspaceController";
 import { workspaceRuntime } from "../bootstrap/workspaceRuntime";
 import { TabBar } from "../tabs/TabBar";
 import { WorkspaceCanvas } from "../workspace/WorkspaceCanvas";
-import type { PanelDefinition, WorkspaceModuleDefinition } from "../core/types";
+import {
+  isPanelMenuModuleExpanded,
+  projectPanelMenuGroups,
+} from "../core/panelMenu";
 import {
   filePathBasename,
   resourceUriToImageFilePath,
+  resourceUriToTextFilePath,
   type OpenResourceRequest,
   type OpenResourceResult,
 } from "../core/resources";
 import jarriWorkspaceLogo from "../assets/jarri-workspace.png";
 import { WorkspaceClock } from "./WorkspaceClock";
-
-type PanelMenuGroup = {
-  module: WorkspaceModuleDefinition;
-  panels: PanelDefinition[];
-};
-
-function arrangePanelGroups(
-  modules: WorkspaceModuleDefinition[],
-  panels: PanelDefinition[],
-  preferences: ReturnType<typeof useWorkspaceController>["workspace"]["preferences"],
-): PanelMenuGroup[] {
-  const orderIndex = new Map(
-    preferences.panelMenu.moduleOrder.map((moduleId, index) => [moduleId, index]),
-  );
-  const hidden = new Set(preferences.panelMenu.hiddenModuleIds);
-
-  return modules
-    .filter((module) => !hidden.has(module.moduleId))
-    .sort((a, b) => {
-      const aIndex = orderIndex.get(a.moduleId) ?? Number.MAX_SAFE_INTEGER;
-      const bIndex = orderIndex.get(b.moduleId) ?? Number.MAX_SAFE_INTEGER;
-      if (aIndex !== bIndex) return aIndex - bIndex;
-      return a.title.localeCompare(b.title);
-    })
-    .map((module) => {
-      const modulePanels = panels.filter((panel) => panel.moduleId === module.moduleId);
-      return {
-        module,
-        panels:
-          preferences.panelMenu.panelSort === "title"
-            ? [...modulePanels].sort((a, b) => a.title.localeCompare(b.title))
-            : modulePanels,
-      };
-    })
-    .filter((group) => group.panels.length > 0);
-}
 
 export function WorkspaceShell() {
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
@@ -68,6 +36,8 @@ export function WorkspaceShell() {
   const [collapsedFrameControlGroups, setCollapsedFrameControlGroups] = useState<
     Record<string, boolean>
   >({});
+  const [fileOperationClipboard, setFileOperationClipboard] =
+    useState<unknown>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const systemSurfaceDragRef = useRef<{
     surface: "addPanel" | "frameSettings";
@@ -180,12 +150,12 @@ export function WorkspaceShell() {
 
   const panelGroups = useMemo(
     () =>
-      arrangePanelGroups(
+      projectPanelMenuGroups(
         runtime.listModules(),
         controller.availablePanels,
-        preferences,
+        preferences.panelMenu,
       ),
-    [controller.availablePanels, preferences, runtime],
+    [controller.availablePanels, preferences.panelMenu, runtime],
   );
 
   const frameControlColumns = WORKSPACE_FRAME_CONTROL_CATALOG;
@@ -196,6 +166,22 @@ export function WorkspaceShell() {
       ...current,
       [moduleId]: !current[moduleId],
     }));
+  }
+
+  function togglePanelMenuModule(moduleId: string) {
+    const expandedModuleIds = new Set(preferences.panelMenu.expandedModuleIds);
+    if (expandedModuleIds.has(moduleId)) {
+      expandedModuleIds.delete(moduleId);
+    } else {
+      expandedModuleIds.add(moduleId);
+    }
+
+    controller.updatePreferences({
+      panelMenu: {
+        ...preferences.panelMenu,
+        expandedModuleIds: [...expandedModuleIds],
+      },
+    });
   }
 
   function setFrameControlVisibility(
@@ -246,19 +232,23 @@ export function WorkspaceShell() {
 
   function openResource(request: OpenResourceRequest): OpenResourceResult {
     const imagePath = resourceUriToImageFilePath(request.uri);
+    const textPath = resourceUriToTextFilePath(request.uri);
 
-    if (imagePath) {
+    if (imagePath || textPath) {
       const moduleId = request.preferredModuleId ?? "core";
-      const panelType = request.preferredPanelType ?? "image-viewer";
+      const panelType =
+        request.preferredPanelType ?? (imagePath ? "image-viewer" : "text-viewer");
+      const expectedPanelType = imagePath ? "image-viewer" : "text-viewer";
+      const resourcePath = imagePath ?? textPath ?? "";
 
-      if (moduleId !== "core" || panelType !== "image-viewer") {
+      if (moduleId !== "core" || panelType !== expectedPanelType) {
         return {
           ok: false,
-          error: `No image opener is registered for ${moduleId}/${panelType}.`,
+          error: `No ${imagePath ? "image" : "text"} opener is registered for ${moduleId}/${panelType}.`,
         };
       }
 
-      const sameImagePanel = controller.activeTab.panels.find(
+      const sameResourcePanel = controller.activeTab.panels.find(
         (panel) =>
           panel.moduleId === moduleId &&
           panel.panelType === panelType &&
@@ -269,13 +259,13 @@ export function WorkspaceShell() {
             request.uri,
       );
 
-      if (sameImagePanel && request.disposition !== "new-panel") {
-        controller.focusPanel(sameImagePanel.id);
-        return { ok: true, panelId: sameImagePanel.id };
+      if (sameResourcePanel && request.disposition !== "new-panel") {
+        controller.focusPanel(sameResourcePanel.id);
+        return { ok: true, panelId: sameResourcePanel.id };
       }
 
       const panelId = controller.createPanel(moduleId, panelType, {
-        title: request.label?.trim() || filePathBasename(imagePath),
+        title: request.label?.trim() || filePathBasename(resourcePath),
         panelState: { resourceUri: request.uri },
         sourcePanelId: request.sourcePanelId,
       });
@@ -424,34 +414,79 @@ export function WorkspaceShell() {
                 onPointerCancel={endSystemSurfaceDrag}
               >
                 <strong>Add Panel</strong>
-                <button
-                  type="button"
-                  className="panel-menu__close"
-                  onClick={() => setPanelMenuOpen(false)}
-                  aria-label="Close Add Panel menu"
-                >
-                  ×
-                </button>
+                <div className="panel-menu__header-actions">
+                  <button
+                    type="button"
+                    className="panel-menu__collapse-all"
+                    disabled={
+                      !panelGroups.some((group) =>
+                        isPanelMenuModuleExpanded(
+                          preferences.panelMenu,
+                          group.module.moduleId,
+                        ),
+                      )
+                    }
+                    onClick={() =>
+                      controller.updatePreferences({
+                        panelMenu: {
+                          ...preferences.panelMenu,
+                          expandedModuleIds: [],
+                        },
+                      })
+                    }
+                  >
+                    Collapse all
+                  </button>
+                  <button
+                    type="button"
+                    className="panel-menu__close"
+                    onClick={() => setPanelMenuOpen(false)}
+                    aria-label="Close Add Panel menu"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
 
-              {panelGroups.map((group) => (
-                <section className="panel-menu__group" key={group.module.moduleId}>
-                  <h2>{group.module.title}</h2>
-                  {group.panels.map((panel) => (
+              {panelGroups.map((group) => {
+                const expanded = isPanelMenuModuleExpanded(
+                  preferences.panelMenu,
+                  group.module.moduleId,
+                );
+
+                return (
+                  <section className="panel-menu__group" key={group.module.moduleId}>
                     <button
-                      key={`${panel.moduleId}:${panel.panelType}`}
                       type="button"
-                      onClick={() => {
-                        controller.createPanel(panel.moduleId, panel.panelType);
-                        setPanelMenuOpen(false);
-                      }}
+                      className="panel-menu__group-toggle"
+                      onClick={() => togglePanelMenuModule(group.module.moduleId)}
+                      aria-expanded={expanded}
                     >
-                      <strong>{panel.title}</strong>
-                      <span>{panel.description}</span>
+                      <h2>{group.module.title}</h2>
+                      <span>{expanded ? "Collapse" : "Expand"}</span>
                     </button>
-                  ))}
-                </section>
-              ))}
+
+                    {expanded ? (
+                      <div className="panel-menu__group-panels">
+                        {group.panels.map((panel) => (
+                          <button
+                            key={`${panel.moduleId}:${panel.panelType}`}
+                            type="button"
+                            className="panel-menu__panel-button"
+                            onClick={() => {
+                              controller.createPanel(panel.moduleId, panel.panelType);
+                              setPanelMenuOpen(false);
+                            }}
+                          >
+                            <strong>{panel.title}</strong>
+                            <span>{panel.description}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </section>
+                );
+              })}
             </div>
           ) : null}
         </div>
@@ -603,6 +638,8 @@ export function WorkspaceShell() {
         canvasCamera={controller.activeTab.canvasCamera}
         preferences={preferences}
         modules={modules}
+        fileOperationClipboard={fileOperationClipboard}
+        setFileOperationClipboard={setFileOperationClipboard}
         onOpenPanelsMenu={() => {
           setFrameControlsMenuOpen(false);
           setPanelMenuOpen((open) => !open);

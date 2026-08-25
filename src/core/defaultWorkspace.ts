@@ -77,6 +77,7 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
         moduleOrder: ["core", "demo"],
         hiddenModuleIds: [],
         panelSort: "registered",
+        expandedModuleIds: ["core", "demo"],
       },
       frameControls: {
         visibility: {},

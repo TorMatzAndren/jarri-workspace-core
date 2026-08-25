@@ -88,6 +88,8 @@ type Props = {
   moduleTitle?: string;
   semanticController: WorkspaceProjectionPublicationController;
   frameControlPublisher: PanelFrameControlPublisher;
+  fileOperationClipboard: unknown;
+  setFileOperationClipboard: (clipboard: unknown) => void;
   onPanelStateChange: (panelId: string, panelState: unknown) => void;
   onPreferencesChange: (preferences: Partial<WorkspacePreferences>) => void;
   onOpenPanel: (
@@ -107,6 +109,8 @@ export function PanelProjectionHost({
   moduleTitle,
   semanticController,
   frameControlPublisher,
+  fileOperationClipboard,
+  setFileOperationClipboard,
   onPanelStateChange,
   onPreferencesChange,
   onOpenPanel,
@@ -161,6 +165,8 @@ export function PanelProjectionHost({
       updatePanelState: (panelState) =>
         onPanelStateChange(panel.id, panelState),
       updatePreferences: onPreferencesChange,
+      fileOperationClipboard,
+      setFileOperationClipboard,
       openPanel: (moduleId, panelType, panelState) =>
         onOpenPanel(moduleId, panelType, panel.id, panelState),
       openResource: (request) =>
@@ -178,6 +184,8 @@ export function PanelProjectionHost({
       onOpenResource,
       onPanelStateChange,
       onPreferencesChange,
+      fileOperationClipboard,
+      setFileOperationClipboard,
       panel,
       preferences,
       semanticController,

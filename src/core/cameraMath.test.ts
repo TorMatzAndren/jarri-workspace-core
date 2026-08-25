@@ -8,6 +8,7 @@ import {
   scrollDeltaForCanvasOriginChange,
   scrollForCameraOrigin,
   scrollForAnchor,
+  viewportSizesMatch,
   zoomAnchorForMode,
 } from "./cameraMath";
 import type { PanelInstance, WorkspaceCanvasBounds } from "./types";
@@ -227,6 +228,128 @@ function testCameraOriginRestoresIndependentOfViewportSize() {
   assertClose(finalRestored.y, camera.y, "final viewport restores camera y");
 }
 
+function testResizeRequiresRestoredScrollBeforePublishingCamera() {
+  const zeroOriginBounds = {
+    x: 0,
+    y: 0,
+    width: 1800,
+    height: 1100,
+  };
+  const camera = {
+    x: 0,
+    y: 0,
+  };
+  const oldViewport = {
+    width: 1240,
+    height: 708,
+  };
+  const maximizedViewport = {
+    width: 3440,
+    height: 1224,
+  };
+
+  const oldScroll = scrollForCameraOrigin(
+    camera,
+    zeroOriginBounds,
+    oldViewport,
+    1,
+  );
+  const syntheticCamera = cameraOriginFromScroll(
+    zeroOriginBounds,
+    maximizedViewport,
+    oldScroll,
+    1,
+  );
+
+  assertClose(
+    syntheticCamera.x,
+    -2200,
+    "stale pre-resize scroll plus new viewport produces observed bad camera x",
+  );
+  assertClose(
+    syntheticCamera.y,
+    -516,
+    "stale pre-resize scroll plus new viewport produces observed bad camera y",
+  );
+  assertEqual(
+    viewportSizesMatch(oldViewport, maximizedViewport),
+    false,
+    "viewport mismatch blocks synthetic resize navigation",
+  );
+
+  const restoredScroll = scrollForCameraOrigin(
+    camera,
+    zeroOriginBounds,
+    maximizedViewport,
+    1,
+  );
+  const restoredCamera = cameraOriginFromScroll(
+    zeroOriginBounds,
+    maximizedViewport,
+    restoredScroll,
+    1,
+  );
+
+  assertClose(restoredCamera.x, camera.x, "restored resize scroll keeps origin x");
+  assertClose(restoredCamera.y, camera.y, "restored resize scroll keeps origin y");
+}
+
+function testResizePreservesNonzeroLogicalCamera() {
+  const camera = {
+    x: 384,
+    y: 216,
+  };
+  const smallViewport = {
+    width: 980,
+    height: 620,
+  };
+  const largeViewport = {
+    width: 2560,
+    height: 1300,
+  };
+  const scale = 1.25;
+
+  const staleScroll = scrollForCameraOrigin(
+    camera,
+    bounds,
+    smallViewport,
+    scale,
+  );
+  const syntheticCamera = cameraOriginFromScroll(
+    bounds,
+    largeViewport,
+    staleScroll,
+    scale,
+  );
+
+  assertEqual(
+    syntheticCamera.x === camera.x && syntheticCamera.y === camera.y,
+    false,
+    "old scroll is not a valid camera publication after resize",
+  );
+  assertEqual(
+    viewportSizesMatch(smallViewport, largeViewport),
+    false,
+    "small-to-large resize is treated as pending restoration",
+  );
+
+  const restoredScroll = scrollForCameraOrigin(
+    camera,
+    bounds,
+    largeViewport,
+    scale,
+  );
+  const restoredCamera = cameraOriginFromScroll(
+    bounds,
+    largeViewport,
+    restoredScroll,
+    scale,
+  );
+
+  assertClose(restoredCamera.x, camera.x, "nonzero camera x survives resize");
+  assertClose(restoredCamera.y, camera.y, "nonzero camera y survives resize");
+}
+
 function testCameraOriginPreservesGutterAndNegativeCanvasOrigin() {
   const negativeBounds = {
     x: -960,
@@ -300,6 +423,8 @@ testActivePanelAnchorUsesFocusedPanelOnlyForNavigationMath();
 testPanelNavigationAlignment();
 testOriginCompensationUsesCanvasScale();
 testCameraOriginRestoresIndependentOfViewportSize();
+testResizeRequiresRestoredScrollBeforePublishingCamera();
+testResizePreservesNonzeroLogicalCamera();
 testCameraOriginPreservesGutterAndNegativeCanvasOrigin();
 testScaleAndScrollClamps();
 

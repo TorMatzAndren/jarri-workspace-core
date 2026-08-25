@@ -20,6 +20,7 @@ import {
   panelNavigationAnchor,
   scrollForCameraOrigin,
   scrollForAnchor,
+  viewportSizesMatch,
   zoomAnchorForMode,
   type WorkspaceViewportAnchor,
 } from "../core/cameraMath";
@@ -57,6 +58,8 @@ type Props = {
   canvasCamera: WorkspaceCanvasCamera;
   preferences: WorkspacePreferences;
   modules: Array<Pick<WorkspaceModuleDefinition, "moduleId" | "title">>;
+  fileOperationClipboard: unknown;
+  setFileOperationClipboard: (clipboard: unknown) => void;
   onOpenPanelsMenu: () => void;
   onFocusPanel: (panelId: string) => void;
   onClosePanel: (panelId: string) => void;
@@ -142,6 +145,8 @@ export function WorkspaceCanvas({
   canvasCamera,
   preferences,
   modules,
+  fileOperationClipboard,
+  setFileOperationClipboard,
   onOpenPanelsMenu,
   onFocusPanel,
   onClosePanel,
@@ -172,6 +177,11 @@ export function WorkspaceCanvas({
   const pendingCanvasZoomAnchorRef =
     useRef<WorkspaceViewportAnchor | null>(null);
   const restoringCameraRef = useRef(false);
+  const cameraViewportReadyRef = useRef(false);
+  const measuredCameraViewportRef = useRef({
+    width: 0,
+    height: 0,
+  });
 
   const effectiveBounds = normalizeBounds(
     previewBounds ?? canvasBounds,
@@ -180,14 +190,19 @@ export function WorkspaceCanvas({
 
   useLayoutEffect(() => {
     const surface = surfaceRef.current;
-    if (!surface || pendingCanvasZoomAnchorRef.current) {
+    if (
+      !surface ||
+      pendingCanvasZoomAnchorRef.current ||
+      cameraViewportSize.width <= 0 ||
+      cameraViewportSize.height <= 0
+    ) {
       return;
     }
 
     const targetScroll = scrollForCameraOrigin(
       canvasCamera,
       effectiveBounds,
-      { width: surface.clientWidth, height: surface.clientHeight },
+      cameraViewportSize,
       canvasScale,
     );
     const nextScroll = clampScroll(targetScroll, {
@@ -195,24 +210,27 @@ export function WorkspaceCanvas({
       scrollTop: surface.scrollHeight - surface.clientHeight,
     });
 
-    if (
+    const scrollAlreadyRestored =
       Math.abs(surface.scrollLeft - nextScroll.scrollLeft) < 0.5 &&
-      Math.abs(surface.scrollTop - nextScroll.scrollTop) < 0.5
-    ) {
-      return;
-    }
+      Math.abs(surface.scrollTop - nextScroll.scrollTop) < 0.5;
 
     restoringCameraRef.current = true;
-    surface.scrollLeft = nextScroll.scrollLeft;
-    surface.scrollTop = nextScroll.scrollTop;
+    cameraViewportReadyRef.current = false;
+
+    if (!scrollAlreadyRestored) {
+      surface.scrollLeft = nextScroll.scrollLeft;
+      surface.scrollTop = nextScroll.scrollTop;
+    }
 
     const frameId = window.requestAnimationFrame(() => {
       restoringCameraRef.current = false;
+      cameraViewportReadyRef.current = true;
     });
 
     return () => {
       window.cancelAnimationFrame(frameId);
       restoringCameraRef.current = false;
+      cameraViewportReadyRef.current = false;
     };
   }, [
     tabId,
@@ -241,11 +259,15 @@ export function WorkspaceCanvas({
         height: Math.max(1, measuredSurface.clientHeight),
       };
 
-      setCameraViewportSize((current) =>
-        current.width === next.width && current.height === next.height
-          ? current
-          : next,
-      );
+      const measured = measuredCameraViewportRef.current;
+
+      if (measured.width === next.width && measured.height === next.height) {
+        return;
+      }
+
+      measuredCameraViewportRef.current = next;
+      cameraViewportReadyRef.current = false;
+      setCameraViewportSize(next);
     }
 
     measureCameraViewport();
@@ -264,17 +286,37 @@ export function WorkspaceCanvas({
 
   function rememberViewport() {
     const surface = surfaceRef.current;
-    if (!surface || restoringCameraRef.current) {
+    if (!surface) {
       return;
     }
 
+    const currentViewport = {
+      width: surface.clientWidth,
+      height: surface.clientHeight,
+    };
+    const viewportMeasurementCurrent = viewportSizesMatch(
+      measuredCameraViewportRef.current,
+      currentViewport,
+    );
+
+    if (
+      restoringCameraRef.current ||
+      !cameraViewportReadyRef.current ||
+      !viewportMeasurementCurrent
+    ) {
+      cameraViewportReadyRef.current = false;
+      return;
+    }
+
+    const nextCamera = cameraOriginFromScroll(
+      effectiveBounds,
+      currentViewport,
+      { scrollLeft: surface.scrollLeft, scrollTop: surface.scrollTop },
+      canvasScale,
+    );
+
     onCanvasCameraChange(
-      cameraOriginFromScroll(
-        effectiveBounds,
-        { width: surface.clientWidth, height: surface.clientHeight },
-        { scrollLeft: surface.scrollLeft, scrollTop: surface.scrollTop },
-        canvasScale,
-      ),
+      nextCamera,
     );
   }
 
@@ -760,7 +802,6 @@ export function WorkspaceCanvas({
         style={{
           "--workspace-canvas-scale": canvasScale,
         } as React.CSSProperties}
-        onScroll={rememberViewport}
         onPointerDownCapture={beginCanvasPan}
       >
         <div
@@ -799,6 +840,8 @@ export function WorkspaceCanvas({
               canvasScale={canvasScale}
               preferences={preferences}
               modules={modules}
+              fileOperationClipboard={fileOperationClipboard}
+              setFileOperationClipboard={setFileOperationClipboard}
               onFocus={(_panelId, navigation = "none") =>
                 focusPanel(panel, navigation)
               }

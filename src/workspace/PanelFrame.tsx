@@ -55,6 +55,8 @@ type Props = {
   canvasScale: number;
   preferences: WorkspacePreferences;
   modules: Array<Pick<WorkspaceModuleDefinition, "moduleId" | "title">>;
+  fileOperationClipboard: unknown;
+  setFileOperationClipboard: (clipboard: unknown) => void;
   onFocus: (
     panelId: string,
     navigation?: "none",
@@ -85,6 +87,8 @@ export function PanelFrame({
   canvasScale,
   preferences,
   modules,
+  fileOperationClipboard,
+  setFileOperationClipboard,
   onFocus,
   onClose,
   onToggleMinimized,
@@ -487,6 +491,8 @@ export function PanelFrame({
             moduleTitle={moduleTitle}
             semanticController={semanticController}
             frameControlPublisher={frameControlCenter}
+            fileOperationClipboard={fileOperationClipboard}
+            setFileOperationClipboard={setFileOperationClipboard}
             onPanelStateChange={onPanelStateChange}
             onPreferencesChange={onPreferencesChange}
             onOpenPanel={onOpenPanel}

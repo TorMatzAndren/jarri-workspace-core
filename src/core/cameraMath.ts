@@ -97,6 +97,17 @@ export function cameraOriginFromScroll(
   };
 }
 
+export function viewportSizesMatch(
+  measured: WorkspaceViewportSize,
+  current: WorkspaceViewportSize,
+  tolerance = 0.5,
+) {
+  return (
+    Math.abs(measured.width - current.width) <= tolerance &&
+    Math.abs(measured.height - current.height) <= tolerance
+  );
+}
+
 export function scrollForCameraOrigin(
   camera: WorkspaceCanvasCamera,
   bounds: WorkspaceCanvasBounds,

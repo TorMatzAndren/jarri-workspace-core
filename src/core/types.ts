@@ -104,6 +104,7 @@ export type PanelMenuPreferences = {
   moduleOrder: string[];
   hiddenModuleIds: string[];
   panelSort: "registered" | "title";
+  expandedModuleIds: string[];
 };
 
 export type PanelViewPreferences = {
@@ -266,6 +267,8 @@ export type PanelBodyProps = {
   modules: Array<Pick<WorkspaceModuleDefinition, "moduleId" | "title">>;
   updatePanelState: (panelState: unknown) => void;
   updatePreferences: (preferences: Partial<WorkspacePreferences>) => void;
+  fileOperationClipboard: unknown;
+  setFileOperationClipboard: (clipboard: unknown) => void;
   openPanel: (
     moduleId: string,
     panelType: string,
