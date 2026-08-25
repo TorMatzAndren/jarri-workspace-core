@@ -60,6 +60,22 @@ result limits, traversal limits, skipped paths, cancellation and completeness.
 
 Recursive search also avoids silently traversing filesystem mount boundaries.
 
+An RC hardening pass keeps search live and recursive from the File Browser
+Current Directory, raises the frontend traversal request from 25,000 to the
+backend safety ceiling of 100,000 entries for broad development locations, and
+keeps the 200-result cap. Incomplete result sets are surfaced directly in the
+File Browser. Selected recursive search results are valid opening evidence even
+when their parent directories are not present in the directory cache.
+
+The same hardening pass separates Browser Root, Current Directory, Selection,
+and tree Expansion. Browser Root is the outer navigation boundary. Current
+Directory represents where the user is browsing and owns recursive-search
+origin. Selection identifies an entry without navigating to it, while expansion
+only exposes or hides directory descendants in the tree. Double-click, Enter,
+breadcrumbs, Up and other explicit navigation operations change Current
+Directory. This prevents ordinary selection or disclosure actions from silently
+changing search scope.
+
 This is a Core-native implementation. It does not require the `/opt/jarri`
 Storage Watcher filesystem index in order to browse the filesystem.
 
@@ -91,6 +107,38 @@ including grouped/collapsible module presentation.
 The File Browser receives dedicated Core styling for its toolbar, controls,
 tree, directory projection, breadcrumbs, selection state and grid/list
 presentation.
+
+An RC follow-up tightened two generic Workspace ownership seams exposed by
+File Browser and resource-viewer verification:
+
+- panel creation with `preferredGeometry` now lets supplied preferred
+  dimensions override type-level remembered width/height while remembered
+  x/y may still seed placement;
+- ordinary text/search inputs and textareas inside the Workspace shell now
+  consume semantic Workspace control, text, muted, border and focus tokens
+  without adding File Browser-specific colour ownership.
+
+This remains type-level presentation memory. It does not introduce
+resource-aware presentation memory for closed Text Viewer or Image Viewer
+resources.
+
+Resource-opening hardening also removes the assumption that useful text must
+have a recognized extension. Conventional extensionless text names such as
+README and LICENSE remain cheap filename-based routing hints. For otherwise
+unclassified files, File Browser performs a bounded 64 KiB content probe.
+Valid ordinary UTF-8 text can be explicitly routed to Core Text Viewer while
+NUL-bearing, invalid-UTF-8 and control-heavy binary content is rejected.
+
+Text Viewer performs the same content-capability validation independently
+before reading and projecting the file as text. This keeps the resource
+boundary defensive even when a caller explicitly requests `core/text-viewer`.
+Known image classification remains authoritative and cannot be overridden by
+the explicit extensionless-text route.
+
+Manual native acceptance verified both sides of this boundary: an arbitrary
+extensionless UTF-8 file opened successfully in Text Viewer, while `/bin/ls`
+was rejected with an explicit binary-resource diagnostic rather than being
+lossy-decoded as text.
 
 ## Camera Resize Failure
 
@@ -192,7 +240,8 @@ At this stopping point:
 - files can project into Core-owned resource viewers;
 - file semantics/icons are reusable Core concepts;
 - browser state participates in Workspace persistence;
-- filesystem search is bounded and reports incomplete truth explicitly;
+- filesystem search follows Current Directory and reports incomplete truth explicitly;
+- Browser Root, Current Directory, Selection and tree Expansion have distinct ownership;
 - the native maximize/resize camera corruption is repaired;
 - camera state survives native restart correctly.
 

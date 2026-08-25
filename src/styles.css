@@ -67,7 +67,8 @@ body {
 
 button,
 select,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -138,6 +139,70 @@ button:disabled {
   color: var(--color-text);
   font-family: var(--font-family-active);
   font-size: var(--workspace-font-size);
+}
+
+.workspace-shell
+  :where(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="password"],
+    textarea
+  ):not(.workspace-number-input *):not(.color-picker-panel *) {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  background: var(--color-control);
+  color: var(--color-text);
+  outline: none;
+}
+
+.workspace-shell
+  :where(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="password"],
+    textarea
+  ):not(.workspace-number-input *):not(.color-picker-panel *)::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
+}
+
+.workspace-shell
+  :where(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="password"],
+    textarea
+  ):not(.workspace-number-input *):not(.color-picker-panel *):focus-visible {
+  border-color: var(--color-text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-text) 16%, transparent);
+}
+
+.workspace-shell
+  :where(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="password"],
+    textarea
+  ):not(.workspace-number-input *):not(.color-picker-panel *):disabled {
+  color: var(--color-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .workspace-shell[data-font-family="humanist"] {
@@ -271,12 +336,21 @@ button:disabled {
   border-color: rgba(100, 240, 200, 0.34);
 }
 
-.workspace-shell[data-theme-preset="chronogit"] input,
-.workspace-shell[data-theme-preset="chronogit"] textarea {
+.workspace-shell[data-theme-preset="chronogit"]
+  :where(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="password"],
+    textarea
+  ):not(.workspace-number-input *):not(.color-picker-panel *) {
   color-scheme: dark;
   color: var(--color-text);
   background: var(--color-control);
-  border-color: rgba(100, 240, 200, 0.34);
+  border-color: var(--color-border-strong);
 }
 
 .workspace-shell[data-theme-preset="chronogit"] button:hover {

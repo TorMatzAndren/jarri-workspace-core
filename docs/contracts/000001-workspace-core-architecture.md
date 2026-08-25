@@ -423,8 +423,9 @@ Zoom step, Zoom anchor, and Navigate to.
 
 ## Workspace-Owned Generic Input Controls
 
-Workspace owns generic single-choice and ordinary numeric-input
-presentation instead of exposing browser/operating-system widget chrome.
+Workspace owns generic single-choice, ordinary numeric-input, and ordinary
+textual native-control presentation instead of exposing browser/operating-system
+widget chrome.
 
 `WorkspaceSelect` is the canonical ordinary single-choice primitive.
 Its opened popup uses the trigger width as a minimum, may grow
@@ -435,6 +436,13 @@ is positioned within the visible viewport.
 It provides Workspace-owned numeric text entry, increment/decrement
 controls, keyboard stepping, focus/disabled presentation, and generic
 min/max/step handling.
+
+Ordinary native text/search inputs and ordinary textareas inside
+`.workspace-shell` consume Workspace semantic colour tokens for control
+background, text, muted placeholder text, border and focus presentation.
+Specialized inputs such as checkboxes, ranges, file/hidden controls,
+colour-picker internals and `WorkspaceNumberInput` internals retain their
+own specialized presentation ownership.
 
 Feature owners retain ownership of values, domain meaning, units,
 domain-specific limits, and persistence.
@@ -503,10 +511,46 @@ Jarri-specific filesystem observation, historical evidence, indexing and
 semantic knowledge belong behind explicit integration boundaries rather than
 becoming implicit dependencies of Workspace Core.
 
-Filesystem search must expose bounded or incomplete execution truth when
-applicable. Result limits, traversal limits, cancellation, skipped paths or
-other conditions that prevent exhaustive search must not be represented as a
-complete filesystem result.
+The File Browser separates four navigation concepts:
+
+- Browser Root is the outer navigation boundary.
+- Current Directory is the active browsing location and recursive-search origin.
+- Selection identifies the filesystem entry targeted by entry actions.
+- Expansion controls which directory descendants are projected in the tree.
+
+Selection and tree expansion must not implicitly change Current Directory.
+Explicit directory navigation changes Current Directory. Setting a directory
+as Browser Root changes the navigation boundary and establishes that directory
+as the current browsing location.
+
+Filesystem search is recursive from Current Directory, bounded by the native
+filesystem search contract, and must expose bounded or incomplete execution
+truth when applicable. Result limits, traversal limits, cancellation, skipped
+paths or other conditions that prevent exhaustive search must not be
+represented as a complete filesystem result.
+
+Search results are filesystem entry evidence. Selecting a recursive search
+result must be sufficient to open that entry even when the entry's parent
+directory has not been loaded into the browser directory cache.
+
+File resource routing distinguishes filename identity from observed content
+capability. Known image extensions remain authoritative image resources.
+Known text extensions and conventional extensionless text names such as
+README, LICENSE, COPYING, CHANGELOG, AUTHORS, CONTRIBUTORS, NOTICE, TODO,
+Makefile and Dockerfile may route directly to the Core Text Viewer.
+
+An otherwise-unclassified regular file or file symlink is not assumed to be
+text merely because it lacks a recognized extension. The File Browser may
+perform a bounded binary read and classify the observed sample as usable
+UTF-8 text. Text capability probing rejects NUL-bearing, invalid-UTF-8 and
+control-heavy content. A probe truncated at its byte limit may tolerate only
+an incomplete UTF-8 scalar at the probe boundary. Content-probed text may
+then be explicitly routed to the Core Text Viewer; known image classification
+must not be overridden by this explicit text route.
+
+The Text Viewer independently validates file content before projecting it as
+text. Filename classification is therefore a fast routing hint, not authority
+to lossy-decode arbitrary binary filesystem content.
 
 Opening a filesystem resource must use Workspace resource/projection semantics
 where an appropriate Core resource handler exists. The File Browser does not

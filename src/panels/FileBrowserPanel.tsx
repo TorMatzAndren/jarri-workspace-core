@@ -8,19 +8,33 @@ import {
   type WorkspaceFilesystemListPayload,
 } from "../core/filesystemProvider";
 import {
+  base64ContentLooksLikeUtf8Text,
+  TEXT_CONTENT_PROBE_BYTE_LIMIT,
+} from "../core/textContent";
+import {
+  imageDimensionsFromBase64,
+  preferredImageViewerSizeFromDimensions,
+  preferredTextViewerSizeFromContent,
+} from "../core/preferredPanelSize";
+import {
   DEFAULT_FILE_BROWSER_SORT,
   ancestorDirectoryPaths,
   classifyFileIcon,
   describeFileType,
   createFileOperationClipboard,
   fileNameFromPath,
+  fileBrowserEntryOpenIntent,
   filterHiddenEntries,
   type FileBrowserSortField,
   type FileBrowserSortState,
+  formatSearchCompletenessSummary,
   formatSearchRuntimeSummary,
   formatSearchSkipSummary,
   isDirectoryLikeEntry,
   parentPath,
+  resolveSelectedFileBrowserEntry,
+  fileBrowserSearchRequestKey,
+  fileBrowserSearchOrigin,
   resourceRequestForFile,
   sortFileEntries,
   searchResultIsCurrent,
@@ -70,7 +84,7 @@ type SearchState =
 
 const DEFAULT_ROOT_PATH = "/";
 const DEFAULT_SEARCH_RESULT_LIMIT = 200;
-const DEFAULT_SEARCH_TRAVERSAL_LIMIT = 25000;
+const DEFAULT_SEARCH_TRAVERSAL_LIMIT = 100000;
 
 type SearchRuntimeState = {
   entriesScanned: number;
@@ -78,6 +92,7 @@ type SearchRuntimeState = {
   resultLimitReached: boolean;
   traversalLimitReached: boolean;
   cancelled: boolean;
+  complete: boolean;
   resultLimit: number;
   traversalLimit: number;
   source: "indexed" | "live" | "";
@@ -103,6 +118,7 @@ function emptySearchRuntime(): SearchRuntimeState {
     resultLimitReached: false,
     traversalLimitReached: false,
     cancelled: false,
+    complete: true,
     resultLimit: DEFAULT_SEARCH_RESULT_LIMIT,
     traversalLimit: DEFAULT_SEARCH_TRAVERSAL_LIMIT,
     source: "",
@@ -345,8 +361,33 @@ export function FileBrowserPanel({
     name: state.browserRoot === "/" ? "/" : fileNameFromPath(state.browserRoot),
     kind: "directory",
   };
-  const selectedEntryForActions =
-    state.selectedPath === state.browserRoot ? rootEntry : findCachedEntry(state.selectedPath ?? "");
+  const searchActive = Boolean(state.search.query.trim());
+  const cachedEntries = useMemo(
+    () =>
+      Object.values(directoryCache).flatMap(
+        (cacheEntry) => cacheEntry.payload?.entries.map(genericEntry) ?? [],
+      ),
+    [directoryCache],
+  );
+  const selectedEntryForActions = resolveSelectedFileBrowserEntry({
+    selectedPath: state.selectedPath,
+    browserRoot: state.browserRoot,
+    rootEntry,
+    cachedEntries,
+    searchEntries: searchState.kind === "error" ? [] : searchState.entries,
+    searchActive,
+  });
+  const searchOrigin = fileBrowserSearchOrigin(
+    state.currentDirectoryPath,
+    state.browserRoot,
+  );
+  const searchRequestKey = fileBrowserSearchRequestKey({
+    panelId: panel.id,
+    root: searchOrigin,
+    query: state.search.query,
+    showHidden: state.showHidden,
+    sort: state.sort,
+  });
   const selectedDirectory =
     selectedEntryForActions && isDirectoryLikeEntry(selectedEntryForActions)
       ? selectedEntryForActions.path
@@ -515,7 +556,7 @@ export function FileBrowserPanel({
     const timeout = window.setTimeout(() => {
       void workspaceFilesystemProvider
         .search({
-          root: state.browserRoot,
+          root: searchOrigin,
           query: state.search.query,
           includeHidden: state.showHidden,
           limit: DEFAULT_SEARCH_RESULT_LIMIT,
@@ -544,6 +585,7 @@ export function FileBrowserPanel({
               resultLimitReached: result.data.resultLimitReached,
               traversalLimitReached: result.data.traversalLimitReached,
               cancelled: result.data.cancelled ?? false,
+              complete: result.data.complete,
               resultLimit: result.data.resultLimit ?? DEFAULT_SEARCH_RESULT_LIMIT,
               traversalLimit:
                 result.data.traversalLimit ?? DEFAULT_SEARCH_TRAVERSAL_LIMIT,
@@ -564,13 +606,12 @@ export function FileBrowserPanel({
       }
       window.clearTimeout(timeout);
     };
-  }, [panel.id, state.search.query, state.browserRoot, state.showHidden, state.sort]);
+  }, [searchRequestKey]);
 
   function selectEntry(entry: GenericFileEntry) {
     updateState({
       selectedPath: entry.path,
       selectedEntryKind: entry.kind,
-      ...(entry.kind === "directory" ? { currentDirectoryPath: entry.path } : {}),
     });
   }
 
@@ -584,25 +625,84 @@ export function FileBrowserPanel({
     if (ok) {
       updateState({
         expandedPaths: [...state.expandedPaths, path],
-        currentDirectoryPath: path,
-        selectedPath: path,
-        selectedEntryKind: "directory",
       });
     }
   }
 
-  function openEntry(entry: GenericFileEntry) {
-    if (isDirectoryLikeEntry(entry)) {
+  async function preferredGeometryForEntry(
+    entry: GenericFileEntry,
+    panelType: string | undefined,
+  ) {
+    if (panelType === "image-viewer") {
+      const result = await workspaceFilesystemProvider.readBinary(entry.path, 512_000);
+      if (!result.ok || result.data.truncated) return undefined;
+      return preferredImageViewerSizeFromDimensions(
+        imageDimensionsFromBase64(entry.path, result.data.contentBase64),
+      );
+    }
+
+    if (panelType === "text-viewer") {
+      const result = await workspaceFilesystemProvider.readText(entry.path);
+      if (!result.ok) return undefined;
+      return preferredTextViewerSizeFromContent(result.data.content);
+    }
+
+    return undefined;
+  }
+
+  async function openEntry(entry: GenericFileEntry) {
+    const intent = fileBrowserEntryOpenIntent(entry);
+    if (intent === "navigate") {
       void navigateDirectory(entry.path);
       return;
     }
-    if (entry.kind !== "file" && entry.kind !== "symlink") {
+    if (intent === "unsupported") {
       reportError(`Cannot open unsupported filesystem entry: ${entry.path}`);
       return;
     }
 
     try {
-      const result = openResource(resourceRequestForFile(entry.path, entry.name));
+      let request = resourceRequestForFile(entry.path, entry.name);
+
+      if (!request.preferredPanelType) {
+        const probe = await workspaceFilesystemProvider.readBinary(
+          entry.path,
+          TEXT_CONTENT_PROBE_BYTE_LIMIT,
+        );
+
+        if (!probe.ok) {
+          reportError(
+            probe.detail
+              ? `${probe.error} (${probe.detail})`
+              : probe.error,
+          );
+          return;
+        }
+
+        if (
+          base64ContentLooksLikeUtf8Text(
+            probe.data.contentBase64,
+            probe.data.truncated,
+          )
+        ) {
+          request = {
+            ...request,
+            preferredModuleId: "core",
+            preferredPanelType: "text-viewer",
+          };
+        } else {
+          reportError(`No Core viewer is available for binary resource: ${entry.path}`);
+          return;
+        }
+      }
+
+      const result = openResource({
+        ...request,
+        preferredGeometry: await preferredGeometryForEntry(
+          entry,
+          request.preferredPanelType,
+        ),
+      });
       if (!result.ok) reportError(result.error);
     } catch (error) {
       reportError(error instanceof Error ? error.message : String(error));
@@ -795,10 +895,7 @@ export function FileBrowserPanel({
     }
 
     if (event.key === "Enter" && state.selectedPath) {
-      const entry =
-        findCachedEntry(state.selectedPath) ??
-        (state.selectedPath === state.browserRoot ? rootEntry : null);
-      if (entry) openEntry(entry);
+      if (selectedEntryForActions) void openEntry(selectedEntryForActions);
       return;
     }
 
@@ -850,13 +947,7 @@ export function FileBrowserPanel({
   }
 
   function findCachedEntry(path: string) {
-    for (const cacheEntry of Object.values(directoryCache)) {
-      const match = cacheEntry.payload?.entries
-        .map(genericEntry)
-        .find((entry) => entry.path === path);
-      if (match) return match;
-    }
-    return null;
+    return cachedEntries.find((entry) => entry.path === path) ?? null;
   }
 
   function renderInlineEdit() {
@@ -904,7 +995,7 @@ export function FileBrowserPanel({
           className={`workspace-file-browser-row ${state.selectedPath === entry.path ? "workspace-file-browser-row--selected" : ""}`}
           aria-pressed={state.selectedPath === entry.path}
           onClick={() => selectEntry(entry)}
-          onDoubleClick={() => openEntry(entry)}
+          onDoubleClick={() => void openEntry(entry)}
           style={{ paddingLeft: `${8 + depth * 16}px` }}
           title={entry.path}
         >
@@ -965,7 +1056,6 @@ export function FileBrowserPanel({
     ),
     state.sort,
   );
-  const searchActive = Boolean(state.search.query.trim());
   const searchSkipSummary =
     searchState.kind === "error" ? "" : formatSearchSkipSummary(searchState.skipped);
   const searchRuntimeSummary =
@@ -979,8 +1069,21 @@ export function FileBrowserPanel({
           resultLimitReached: searchState.runtime.resultLimitReached,
           traversalLimitReached: searchState.runtime.traversalLimitReached,
           cancelled: searchState.runtime.cancelled,
+          complete: searchState.kind === "ready" ? searchState.runtime.complete : false,
           source: searchState.runtime.source,
           statusText: searchState.runtime.statusText,
+        });
+  const searchCompletenessSummary =
+    searchState.kind === "error" || searchState.kind === "idle"
+      ? ""
+      : formatSearchCompletenessSummary({
+          matches: searchState.entries.length,
+          entriesScanned: searchState.runtime.entriesScanned,
+          directoriesScanned: searchState.runtime.directoriesScanned,
+          resultLimitReached: searchState.runtime.resultLimitReached,
+          traversalLimitReached: searchState.runtime.traversalLimitReached,
+          cancelled: searchState.runtime.cancelled,
+          complete: searchState.kind === "ready" ? searchState.runtime.complete : false,
         });
   const selectedEntry = selectedEntryForActions;
   const breadcrumbs = breadcrumbSegments(currentDirectoryPath);
@@ -1048,7 +1151,7 @@ export function FileBrowserPanel({
             ref={searchInputRef}
             value={state.search.query}
             onChange={(event) => updateSearchQuery(event.target.value)}
-            placeholder="Filename or path"
+            placeholder="png matches path text; *.png matches extension"
           />
           {state.search.query ? (
             <button type="button" onClick={() => updateSearchQuery("")}>
@@ -1141,6 +1244,9 @@ export function FileBrowserPanel({
                 </button>
               ) : null}
             </div>
+            {searchCompletenessSummary ? (
+              <div className="workspace-file-browser-search-diagnostic">{searchCompletenessSummary}</div>
+            ) : null}
             {searchSkipSummary ? (
               <div className="workspace-file-browser-search-diagnostic">{searchSkipSummary}</div>
             ) : null}
@@ -1154,7 +1260,7 @@ export function FileBrowserPanel({
                     key={entry.path}
                     className={`workspace-file-browser-row ${state.selectedPath === entry.path ? "workspace-file-browser-row--selected" : ""}`}
                     onClick={() => selectEntry(entry)}
-                    onDoubleClick={() => openEntry(entry)}
+                    onDoubleClick={() => void openEntry(entry)}
                     title={entry.path}
                   >
                     <span className="workspace-file-browser-row__disclosure" />
@@ -1213,7 +1319,7 @@ export function FileBrowserPanel({
                     className={`workspace-file-browser-grid-item ${state.selectedPath === entry.path ? "workspace-file-browser-grid-item--selected" : ""}`}
                     aria-pressed={state.selectedPath === entry.path}
                     onClick={() => selectEntry(entry)}
-                    onDoubleClick={() => openEntry(entry)}
+                    onDoubleClick={() => void openEntry(entry)}
                     title={entry.path}
                   >
                     <span className="workspace-file-browser-grid-item__icon">
@@ -1253,10 +1359,7 @@ export function FileBrowserPanel({
         <button
           type="button"
           onClick={() => {
-            const entry = state.selectedPath
-              ? findCachedEntry(state.selectedPath)
-              : null;
-            if (entry) openEntry(entry);
+            if (selectedEntryForActions) void openEntry(selectedEntryForActions);
           }}
           disabled={!state.selectedPath || state.selectedEntryKind === "directory"}
         >

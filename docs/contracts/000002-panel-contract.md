@@ -244,18 +244,30 @@ derived from `moduleId + panelType`.
 
 Geometry ownership during creation is deterministic:
 
-1. Valid remembered geometry owns an ordinary reopen.
-2. Without remembered geometry, an explicit invocation position owns the
+1. Valid remembered geometry owns an ordinary reopen when the invocation does
+   not supply preferred geometry.
+2. When preferred geometry is supplied, its width and height own the new
+   panel's initial size. Remembered type-level geometry may still seed x/y
+   position, but remembered width/height must not override the supplied
+   preferred dimensions.
+3. Without remembered geometry, an explicit invocation position owns the
    first summon position.
-3. Without either, the normal deterministic placement engine owns placement.
+4. Without either, the normal deterministic placement engine owns placement.
 
 Explicit preferred width or height participates in initial sizing where the
 creation path permits it. Normal automatic placement may also use source-panel
 causality and configured panel spacing.
 
+Intrinsic or content-derived sizing helpers may propose dimensions larger than
+the current Workspace. Content proposes the requested opening size; Workspace
+geometry ownership applies panel minimums, canvas/workspace bounds and
+deterministic geometry normalization.
+
 Remembered geometry remains subject to the normal geometry normalization
 contract. It is presentation preference, not a surviving panel instance and
-not runtime/domain truth.
+not runtime/domain truth. Surface presentation memory is type-level memory;
+it is not resource-aware presentation memory and does not distinguish two
+resources opened by the same panel type after their live instances are closed.
 
 ## Dirty-State Handling
 

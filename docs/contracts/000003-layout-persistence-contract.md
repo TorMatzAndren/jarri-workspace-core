@@ -298,12 +298,17 @@ Rules:
 
 Panel creation geometry precedence is:
 
-1. remembered geometry when valid and applicable;
-2. explicit invocation position when there is no remembered geometry;
-3. deterministic automatic placement otherwise.
+1. remembered geometry when valid and applicable and no preferred geometry is
+   supplied;
+2. preferred width/height when supplied for a new invocation, with remembered
+   type-level x/y position still allowed to seed placement;
+3. explicit invocation position when there is no remembered geometry;
+4. deterministic automatic placement otherwise.
 
 This precedence preserves user presentation intent while keeping ordinary
-first-summon placement causal and deterministic.
+first-summon placement causal and deterministic. It does not introduce
+resource-aware presentation memory; the persisted memory identity remains
+the panel type identity derived from `moduleId + panelType`.
 
 Workspace preferences also persist generic presentation configuration,
 including appearance and placement preferences.

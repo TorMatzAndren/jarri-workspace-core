@@ -41,19 +41,24 @@ function resolve({
   seededGeometry = canonicalGeometry,
   hasRememberedGeometry = false,
   initialPosition,
+  preferredGeometry,
   existingPanels = [],
+  bounds = canvasBounds,
 }: {
   seededGeometry?: PanelGeometry;
   hasRememberedGeometry?: boolean;
   initialPosition?: { x: number; y: number };
+  preferredGeometry?: { width?: number; height?: number };
   existingPanels?: PanelInstance[];
+  bounds?: typeof canvasBounds;
 } = {}) {
   return resolvePanelCreationGeometry({
     seededGeometry,
     hasRememberedGeometry,
     initialPosition,
+    preferredGeometry,
     existingPanels,
-    canvasBounds,
+    canvasBounds: bounds,
     panelSpacing: 0,
   });
 }
@@ -77,7 +82,7 @@ function testExplicitPositionOwnsFirstSummon() {
   );
 }
 
-function testRememberedGeometryOwnsReopen() {
+function testRememberedPositionSurvivesPreferredOpeningSize() {
   const remembered: PanelGeometry = {
     x: 410,
     y: 275,
@@ -91,12 +96,20 @@ function testRememberedGeometryOwnsReopen() {
     seededGeometry: remembered,
     hasRememberedGeometry: true,
     initialPosition: { x: 120, y: 160 },
+    preferredGeometry: { width: 1300, height: 700 },
   });
 
   assertGeometry(
     geometry,
-    remembered,
-    "remembered geometry overrides summon position",
+    normalizeGeometry(
+      {
+        ...remembered,
+        width: 1300,
+        height: 700,
+      },
+      remembered,
+    ),
+    "preferred geometry overrides remembered size while preserving remembered position",
   );
 }
 
@@ -139,11 +152,196 @@ function testAutomaticPlacementRemainsFallback() {
   );
 }
 
+function testSourcePanelPlacementRemainsCausal() {
+  const sourcePanel = {
+    id: "panel-source",
+    moduleId: "core",
+    panelType: "notes",
+    title: "Source",
+    geometry: normalizeGeometry(
+      {
+        ...canonicalGeometry,
+        x: 240,
+        y: 168,
+        width: 720,
+        height: 480,
+      },
+      canonicalGeometry,
+    ),
+    focusOrder: 1,
+    stateVersion: 1,
+    panelState: {},
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  } satisfies PanelInstance;
+
+  const geometry = resolvePanelCreationGeometry({
+    seededGeometry: canonicalGeometry,
+    hasRememberedGeometry: false,
+    existingPanels: [sourcePanel],
+    canvasBounds,
+    sourcePanelId: sourcePanel.id,
+    panelSpacing: 24,
+  });
+
+  assertGeometry(
+    geometry,
+    normalizeGeometry(
+      {
+        ...canonicalGeometry,
+        x: sourcePanel.geometry.x + sourcePanel.geometry.width + 24,
+        y: sourcePanel.geometry.y,
+      },
+      canonicalGeometry,
+    ),
+    "source-panel opening remains causal placement",
+  );
+}
+
+function testSmallPreferredGeometryOwnsOpeningSize() {
+  const geometry = resolve({
+    seededGeometry: normalizeGeometry(
+      {
+        ...canonicalGeometry,
+        width: 600,
+        height: 420,
+      },
+      canonicalGeometry,
+    ),
+    preferredGeometry: { width: 600, height: 420 },
+  });
+
+  assertGeometry(
+    geometry,
+    normalizeGeometry(
+      {
+        ...canonicalGeometry,
+        x: 0,
+        y: 0,
+        width: 600,
+        height: 420,
+      },
+      canonicalGeometry,
+    ),
+    "small preferred geometry replaces panel default size",
+  );
+}
+
+function testPreferredGeometryBelowMinimumUsesMinimum() {
+  const geometry = resolve({
+    seededGeometry: normalizeGeometry(
+      {
+        ...canonicalGeometry,
+        width: 120,
+        height: 120,
+      },
+      canonicalGeometry,
+    ),
+    preferredGeometry: { width: 120, height: 120 },
+  });
+
+  assertGeometry(
+    geometry,
+    normalizeGeometry(
+      {
+        ...canonicalGeometry,
+        x: 0,
+        y: 0,
+        width: canonicalGeometry.minWidth,
+        height: canonicalGeometry.minHeight,
+      },
+      canonicalGeometry,
+    ),
+    "preferred geometry below minimum is normalized to panel minimum",
+  );
+}
+
+function testHugePreferredGeometryIsClampedToWorkspaceBounds() {
+  const bounds = {
+    x: 0,
+    y: 0,
+    width: 1600,
+    height: 900,
+  };
+
+  const geometry = resolve({
+    seededGeometry: normalizeGeometry(
+      {
+        ...canonicalGeometry,
+        width: 5000,
+        height: 4000,
+      },
+      canonicalGeometry,
+    ),
+    preferredGeometry: { width: 5000, height: 4000 },
+    bounds,
+  });
+
+  assertGeometry(
+    geometry,
+    normalizeGeometry(
+      {
+        ...canonicalGeometry,
+        x: 0,
+        y: 0,
+        width: bounds.width,
+        height: bounds.height,
+      },
+      canonicalGeometry,
+    ),
+    "huge preferred geometry is clamped to current workspace bounds",
+  );
+  assertEqual(
+    bounds.width,
+    1600,
+    "preferred-size clamp does not mutate workspace width",
+  );
+  assertEqual(
+    bounds.height,
+    900,
+    "preferred-size clamp does not mutate workspace height",
+  );
+}
+
+function testPreferredGeometryDoesNotClampOrdinaryCreation() {
+  const geometry = resolve({
+    seededGeometry: normalizeGeometry(
+      {
+        ...canonicalGeometry,
+        width: 2000,
+        height: 1300,
+      },
+      canonicalGeometry,
+    ),
+    bounds: { x: 0, y: 0, width: 1600, height: 900 },
+  });
+
+  assertGeometry(
+    geometry,
+    normalizeGeometry(
+      {
+        ...canonicalGeometry,
+        x: 0,
+        y: 0,
+        width: 2000,
+        height: 1300,
+      },
+      canonicalGeometry,
+    ),
+    "creation without preferred geometry preserves existing behavior",
+  );
+}
+
 function main() {
   testExplicitPositionOwnsFirstSummon();
-  testRememberedGeometryOwnsReopen();
+  testRememberedPositionSurvivesPreferredOpeningSize();
   testRememberedGeometryNeedsNoExplicitPosition();
   testAutomaticPlacementRemainsFallback();
+  testSourcePanelPlacementRemainsCausal();
+  testSmallPreferredGeometryOwnsOpeningSize();
+  testPreferredGeometryBelowMinimumUsesMinimum();
+  testHugePreferredGeometryIsClampedToWorkspaceBounds();
+  testPreferredGeometryDoesNotClampOrdinaryCreation();
   console.log("workspace controller geometry tests passed");
 }
 

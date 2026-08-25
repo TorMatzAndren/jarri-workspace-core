@@ -1,3 +1,5 @@
+import type { PreferredPanelSize } from "./types";
+
 export type ResourceUri = string & { readonly __resourceUri: unique symbol };
 
 export type ResourceOpenDisposition = "reuse" | "new-panel" | "preview";
@@ -9,6 +11,7 @@ export type OpenResourceRequest = {
   preferredPanelType?: string;
   disposition?: ResourceOpenDisposition;
   sourcePanelId?: string;
+  preferredGeometry?: PreferredPanelSize;
 };
 
 export type OpenResourceResult =
@@ -47,6 +50,19 @@ const IMAGE_FILE_EXTENSION_PATTERN =
 const TEXT_FILE_EXTENSION_PATTERN =
   /\.(?:adoc|bash|c|cc|cfg|cjs|conf|cpp|css|csv|cxx|env|fish|go|h|hh|hpp|htm|html|ini|java|js|json|jsonc|jsx|kt|kts|less|log|lua|mjs|md|markdown|php|profile|ps1|py|rb|rs|rst|sass|scss|sh|sql|swift|toml|ts|tsx|txt|xml|yaml|yml|zsh)$/i;
 
+const CONVENTIONAL_TEXT_FILE_NAMES = new Set([
+  "authors",
+  "changelog",
+  "contributors",
+  "copying",
+  "dockerfile",
+  "license",
+  "makefile",
+  "notice",
+  "readme",
+  "todo",
+]);
+
 export function isImageFilePath(path: string): boolean {
   return IMAGE_FILE_EXTENSION_PATTERN.test(path.trim());
 }
@@ -56,8 +72,7 @@ export function isTextFilePath(path: string): boolean {
   const name = filePathBasename(trimmed).toLowerCase();
   return (
     TEXT_FILE_EXTENSION_PATTERN.test(trimmed) ||
-    name === "dockerfile" ||
-    name === "makefile" ||
+    CONVENTIONAL_TEXT_FILE_NAMES.has(name) ||
     name === "cmakelists.txt" ||
     name === ".bashrc" ||
     name === ".zshrc" ||
@@ -80,6 +95,31 @@ export function resourceUriToTextFilePath(
 ): string | null {
   const path = resourceUriToFilePath(uri);
   return path && isTextFilePath(path) ? path : null;
+}
+
+export function explicitTextViewerResourcePath(
+  request: OpenResourceRequest,
+): string | null {
+  if (
+    request.preferredModuleId !== "core" ||
+    request.preferredPanelType !== "text-viewer"
+  ) {
+    return null;
+  }
+
+  const path = resourceUriToFilePath(request.uri);
+  if (!path) {
+    return null;
+  }
+
+  // Filename classification remains authoritative for resources that Core
+  // already recognizes. This exception exists only for content-probed,
+  // otherwise-unclassified files explicitly routed to the Text Viewer.
+  if (isImageFilePath(path)) {
+    return null;
+  }
+
+  return path;
 }
 
 export function filePathBasename(path: string): string {

@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { workspaceFilesystemProvider } from "../core/filesystemProvider";
 import {
+  base64ContentLooksLikeUtf8Text,
+  TEXT_CONTENT_PROBE_BYTE_LIMIT,
+} from "../core/textContent";
+import {
   resourceUriToFilePath,
-  resourceUriToTextFilePath,
   type ResourceUri,
 } from "../core/resources";
 import type { PanelBodyProps } from "../core/types";
@@ -19,7 +22,7 @@ export function normalizeTextViewerState(input: unknown): TextViewerPanelState {
   if (!isRecord(input)) return { resourceUri: "" };
   if (
     typeof input.resourceUri === "string" &&
-    resourceUriToTextFilePath(input.resourceUri)
+    resourceUriToFilePath(input.resourceUri)
   ) {
     return { resourceUri: input.resourceUri as ResourceUri };
   }
@@ -49,14 +52,53 @@ export function TextViewerPanel({ panel }: PanelBodyProps) {
     let cancelled = false;
     setStatus("loading");
     setMessage("");
-    void workspaceFilesystemProvider.readText(path).then((result) => {
+
+    void (async () => {
+      const probe = await workspaceFilesystemProvider.readBinary(
+        path,
+        TEXT_CONTENT_PROBE_BYTE_LIMIT,
+      );
+
       if (cancelled) return;
+
+      if (!probe.ok) {
+        setStatus("error");
+        setContent("");
+        setMessage(
+          probe.detail
+            ? `${probe.error} (${probe.detail})`
+            : probe.error,
+        );
+        return;
+      }
+
+      if (
+        !base64ContentLooksLikeUtf8Text(
+          probe.data.contentBase64,
+          probe.data.truncated,
+        )
+      ) {
+        setStatus("error");
+        setContent("");
+        setMessage(`File does not appear to contain UTF-8 text: ${path}`);
+        return;
+      }
+
+      const result = await workspaceFilesystemProvider.readText(path);
+
+      if (cancelled) return;
+
       if (!result.ok) {
         setStatus("error");
         setContent("");
-        setMessage(result.detail ? `${result.error} (${result.detail})` : result.error);
+        setMessage(
+          result.detail
+            ? `${result.error} (${result.detail})`
+            : result.error,
+        );
         return;
       }
+
       setStatus("ready");
       setContent(result.data.content);
       setMessage(
@@ -64,7 +106,7 @@ export function TextViewerPanel({ panel }: PanelBodyProps) {
           ? `Showing first ${result.data.bytesRead} bytes of ${path}.`
           : path,
       );
-    });
+    })();
 
     return () => {
       cancelled = true;

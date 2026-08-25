@@ -204,6 +204,11 @@ export type PanelGeometry = {
   minHeight?: number;
 };
 
+export type PreferredPanelSize = {
+  width?: number;
+  height?: number;
+};
+
 export type DirtyStateSnapshot = {
   isDirty: boolean;
   reason?: string;

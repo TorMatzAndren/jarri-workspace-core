@@ -21,6 +21,7 @@ import type {
   PanelDefinition,
   PanelGeometry,
   PanelInstance,
+  PreferredPanelSize,
   PanelViewPreferences,
   SavedTabTemplate,
   WorkspaceCanvasCamera,
@@ -58,25 +59,36 @@ export function resolveInitialPanelGeometry({
   panelSpacing = 0,
 }: {
   geometry: PanelGeometry;
-  preferredGeometry?: {
-    width?: number;
-    height?: number;
-  };
+  preferredGeometry?: PreferredPanelSize;
   existingPanels: PanelInstance[];
   canvasBounds: WorkspaceCanvasBounds;
   sourcePanelId?: string;
   panelSpacing?: number;
 }): PanelGeometry {
-  const sized = normalizeGeometry(
-    {
-      ...geometry,
-      width: preferredGeometry?.width ?? geometry.width,
-      height: preferredGeometry?.height ?? geometry.height,
-      minWidth: geometry.minWidth,
-      minHeight: geometry.minHeight,
-    },
-    geometry,
-  );
+  const sized = preferredGeometry
+    ? clampOpeningGeometryToCanvasBounds(
+        normalizeGeometry(
+          {
+            ...geometry,
+            width: preferredGeometry.width ?? geometry.width,
+            height: preferredGeometry.height ?? geometry.height,
+            minWidth: geometry.minWidth,
+            minHeight: geometry.minHeight,
+          },
+          geometry,
+        ),
+        canvasBounds,
+      )
+    : normalizeGeometry(
+        {
+          ...geometry,
+          width: geometry.width,
+          height: geometry.height,
+          minWidth: geometry.minWidth,
+          minHeight: geometry.minHeight,
+        },
+        geometry,
+      );
 
   // The first surface establishes the tab from the canonical origin.
   if (existingPanels.length === 0) {
@@ -98,7 +110,7 @@ export function resolveInitialPanelGeometry({
     : undefined;
 
   if (sourcePanel) {
-    return normalizeGeometry(
+    const placed = normalizeGeometry(
       {
         ...sized,
         x:
@@ -109,6 +121,9 @@ export function resolveInitialPanelGeometry({
       },
       sized,
     );
+    return preferredGeometry
+      ? clampOpeningGeometryToCanvasBounds(placed, canvasBounds)
+      : placed;
   }
 
   // Ordinary creation uses the first grid-aligned free rectangle available
@@ -156,6 +171,35 @@ export function resolveInitialPanelGeometry({
   );
 }
 
+export function clampOpeningGeometryToCanvasBounds(
+  geometry: PanelGeometry,
+  canvasBounds: WorkspaceCanvasBounds,
+): PanelGeometry {
+  const minWidth = geometry.minWidth ?? 260;
+  const minHeight = geometry.minHeight ?? 160;
+  const right = canvasBounds.x + canvasBounds.width;
+  const bottom = canvasBounds.y + canvasBounds.height;
+  const maxWidth = Math.max(minWidth, canvasBounds.width);
+  const maxHeight = Math.max(minHeight, canvasBounds.height);
+  const width = Math.min(geometry.width, maxWidth);
+  const height = Math.min(geometry.height, maxHeight);
+  const x = Math.max(0, Math.min(geometry.x, right - width));
+  const y = Math.max(0, Math.min(geometry.y, bottom - height));
+
+  return normalizeGeometry(
+    {
+      ...geometry,
+      x,
+      y,
+      width,
+      height,
+      minWidth,
+      minHeight,
+    },
+    geometry,
+  );
+}
+
 export function resolvePanelCreationGeometry({
   seededGeometry,
   hasRememberedGeometry,
@@ -172,21 +216,32 @@ export function resolvePanelCreationGeometry({
     x: number;
     y: number;
   };
-  preferredGeometry?: {
-    width?: number;
-    height?: number;
-  };
+  preferredGeometry?: PreferredPanelSize;
   existingPanels: PanelInstance[];
   canvasBounds: WorkspaceCanvasBounds;
   sourcePanelId?: string;
   panelSpacing: number;
 }): PanelGeometry {
   if (hasRememberedGeometry) {
-    return seededGeometry;
+    if (!preferredGeometry) {
+      return seededGeometry;
+    }
+
+    return clampOpeningGeometryToCanvasBounds(
+      normalizeGeometry(
+        {
+          ...seededGeometry,
+          width: preferredGeometry.width ?? seededGeometry.width,
+          height: preferredGeometry.height ?? seededGeometry.height,
+        },
+        seededGeometry,
+      ),
+      canvasBounds,
+    );
   }
 
   if (initialPosition) {
-    return normalizeGeometry(
+    const positioned = normalizeGeometry(
       {
         ...seededGeometry,
         x: initialPosition.x,
@@ -194,6 +249,9 @@ export function resolvePanelCreationGeometry({
       },
       seededGeometry,
     );
+    return preferredGeometry
+      ? clampOpeningGeometryToCanvasBounds(positioned, canvasBounds)
+      : positioned;
   }
 
   return resolveInitialPanelGeometry({
@@ -216,10 +274,7 @@ type WorkspaceControllerDependencies = {
 type CreatePanelOptions = {
   title?: string;
   panelState?: unknown;
-  preferredGeometry?: {
-    width?: number;
-    height?: number;
-  };
+  preferredGeometry?: PreferredPanelSize;
   sourcePanelId?: string;
   initialPosition?: {
     x: number;
@@ -339,18 +394,7 @@ export function useWorkspaceController({
         const rememberedGeometry = surfaceMemory?.geometry;
 
         const seededGeometry = rememberedGeometry
-          ? normalizeGeometry(
-              {
-                ...rememberedGeometry,
-                width:
-                  options.preferredGeometry?.width ??
-                  rememberedGeometry.width,
-                height:
-                  options.preferredGeometry?.height ??
-                  rememberedGeometry.height,
-              },
-              canonicalGeometry,
-            )
+          ? normalizeGeometry(rememberedGeometry, canonicalGeometry)
           : normalizeGeometry(
               {
                 ...canonicalGeometry,

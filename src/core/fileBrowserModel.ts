@@ -107,6 +107,14 @@ export function isDirectoryLikeEntry(
   return entry.kind === "directory" || entry.targetKind === "directory";
 }
 
+export function fileBrowserEntryOpenIntent(
+  entry: Pick<GenericFileEntry, "kind" | "targetKind">,
+) {
+  if (isDirectoryLikeEntry(entry)) return "navigate";
+  if (entry.kind === "file" || entry.kind === "symlink") return "open-resource";
+  return "unsupported";
+}
+
 export function preferredResourcePanelType(path: string) {
   if (classifyFileIcon({ path, kind: "file" }) === "image") return "image-viewer";
   if (isTextFilePath(path)) return "text-viewer";
@@ -181,6 +189,65 @@ export function searchEntriesByPath(
   );
 }
 
+export function fileBrowserSearchOrigin(
+  currentDirectoryPath: string,
+  browserRoot: string,
+) {
+  return currentDirectoryPath || browserRoot;
+}
+
+export function fileBrowserSearchRequestKey({
+  panelId,
+  root,
+  query,
+  showHidden,
+  sort,
+}: {
+  panelId: string;
+  root: string;
+  query: string;
+  showHidden: boolean;
+  sort: FileBrowserSortState;
+}) {
+  return [
+    panelId,
+    root,
+    query,
+    showHidden ? "hidden" : "visible",
+    sort.field,
+    sort.direction,
+    sort.foldersFirst ? "folders-first" : "mixed",
+  ].join("\u001f");
+}
+
+export function resolveSelectedFileBrowserEntry({
+  selectedPath,
+  browserRoot,
+  rootEntry,
+  cachedEntries,
+  searchEntries,
+  searchActive,
+}: {
+  selectedPath: string | null | undefined;
+  browserRoot: string;
+  rootEntry: GenericFileEntry;
+  cachedEntries: GenericFileEntry[];
+  searchEntries?: GenericFileEntry[];
+  searchActive?: boolean;
+}) {
+  if (!selectedPath) return null;
+  if (selectedPath === browserRoot) return rootEntry;
+
+  const cachedEntry = cachedEntries.find((entry) => entry.path === selectedPath);
+  if (cachedEntry) return cachedEntry;
+
+  if (searchActive) {
+    return searchEntries?.find((entry) => entry.path === selectedPath) ?? null;
+  }
+
+  return null;
+}
+
 export type SearchSkipDiagnostic = {
   path: string;
   reason: string;
@@ -194,6 +261,7 @@ export type SearchRuntimeSummary = {
   resultLimitReached?: boolean;
   traversalLimitReached?: boolean;
   cancelled?: boolean;
+  complete?: boolean;
   source?: string;
   statusText?: string;
 };
@@ -202,6 +270,28 @@ export function formatSearchSkipSummary(skipped: SearchSkipDiagnostic[]) {
   if (skipped.length === 0) return "";
   const first = skipped[0];
   return `${skipped.length} subtree${skipped.length === 1 ? "" : "s"} skipped: ${first.path} (${first.reason})`;
+}
+
+export function formatSearchCompletenessSummary(summary: SearchRuntimeSummary) {
+  if (summary.cancelled) {
+    return "Search cancelled; displayed results may be incomplete.";
+  }
+
+  const scanned = summary.entriesScanned ?? summary.directoriesScanned ?? 0;
+
+  if (summary.traversalLimitReached) {
+    return `Search incomplete: traversal stopped after ${scanned} scanned entries. Results may omit matching paths.`;
+  }
+
+  if (summary.resultLimitReached) {
+    return `Search incomplete: result limit reached at ${summary.matches} matches. Refine the query or root to find later matches.`;
+  }
+
+  if (summary.complete) {
+    return "Search complete.";
+  }
+
+  return "";
 }
 
 export function formatSearchRuntimeSummary(summary: SearchRuntimeSummary) {

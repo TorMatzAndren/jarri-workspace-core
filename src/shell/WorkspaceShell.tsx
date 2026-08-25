@@ -21,6 +21,7 @@ import {
   projectPanelMenuGroups,
 } from "../core/panelMenu";
 import {
+  explicitTextViewerResourcePath,
   filePathBasename,
   resourceUriToImageFilePath,
   resourceUriToTextFilePath,
@@ -232,7 +233,9 @@ export function WorkspaceShell() {
 
   function openResource(request: OpenResourceRequest): OpenResourceResult {
     const imagePath = resourceUriToImageFilePath(request.uri);
-    const textPath = resourceUriToTextFilePath(request.uri);
+    const textPath =
+      resourceUriToTextFilePath(request.uri) ??
+      explicitTextViewerResourcePath(request);
 
     if (imagePath || textPath) {
       const moduleId = request.preferredModuleId ?? "core";
@@ -267,6 +270,7 @@ export function WorkspaceShell() {
       const panelId = controller.createPanel(moduleId, panelType, {
         title: request.label?.trim() || filePathBasename(resourcePath),
         panelState: { resourceUri: request.uri },
+        preferredGeometry: request.preferredGeometry,
         sourcePanelId: request.sourcePanelId,
       });
 

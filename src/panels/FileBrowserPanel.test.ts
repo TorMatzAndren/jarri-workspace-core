@@ -3,11 +3,16 @@ import {
   ancestorDirectoryPaths,
   classifyFileIcon,
   createFileOperationClipboard,
+  fileBrowserEntryOpenIntent,
+  fileBrowserSearchOrigin,
+  fileBrowserSearchRequestKey,
   filterHiddenEntries,
+  formatSearchCompletenessSummary,
   formatSearchSkipSummary,
   formatSearchRuntimeSummary,
   isDirectoryLikeEntry,
   resourceRequestForFile,
+  resolveSelectedFileBrowserEntry,
   searchEntriesByPath,
   searchResultIsCurrent,
   sortFileEntries,
@@ -144,12 +149,211 @@ function testSearchFilteringAndOrdering() {
   const entries: GenericFileEntry[] = [
     { path: "/root/beta.txt", name: "beta.txt", kind: "file" },
     { path: "/root/alpha", name: "alpha", kind: "directory" },
+    { path: "/root/assets/image.png", name: "image.dat", kind: "file" },
     { path: "/root/.alpha-secret", name: ".alpha-secret", kind: "file", hidden: true },
   ];
   const visible = searchEntriesByPath(entries, "alpha", false);
   assertEqual(visible.length, 1, "hidden search result is filtered");
   assertEqual(visible[0].path, "/root/alpha", "directory search result is returned");
   assertEqual(searchEntriesByPath(entries, "alpha", true).length, 2, "hidden search can be included");
+  assertEqual(
+    searchEntriesByPath(entries, "png", false).length,
+    1,
+    "plain search matches full path text as well as filename",
+  );
+}
+
+function testSearchOriginFollowsCurrentDirectoryWithinBrowserRoot() {
+  assertEqual(
+    fileBrowserSearchOrigin("/root/projects/workspace", "/root"),
+    "/root/projects/workspace",
+    "current directory owns recursive search origin",
+  );
+
+  assertEqual(
+    fileBrowserSearchOrigin("", "/root"),
+    "/root",
+    "browser root remains deterministic fallback search origin",
+  );
+
+  const rootScoped = fileBrowserSearchRequestKey({
+    panelId: "panel-a",
+    root: fileBrowserSearchOrigin("/root", "/root"),
+    query: "png",
+    showHidden: false,
+    sort: {
+      field: "name",
+      direction: "asc",
+      foldersFirst: true,
+    },
+  });
+
+  const childScoped = fileBrowserSearchRequestKey({
+    panelId: "panel-a",
+    root: fileBrowserSearchOrigin("/root/projects", "/root"),
+    query: "png",
+    showHidden: false,
+    sort: {
+      field: "name",
+      direction: "asc",
+      foldersFirst: true,
+    },
+  });
+
+  assertEqual(
+    rootScoped === childScoped,
+    false,
+    "directory navigation changes semantic search identity",
+  );
+}
+
+function testSearchRequestKeyIsStableAcrossNormalizedStateObjects() {
+  const input = {
+    browserRoot: "/root",
+    search: { query: "*.png" },
+    showHidden: false,
+    sort: {
+      field: "name",
+      direction: "asc",
+      foldersFirst: true,
+    },
+  };
+  const first = normalizeFileBrowserState(input);
+  const second = normalizeFileBrowserState(input);
+
+  assertEqual(
+    first.sort === second.sort,
+    false,
+    "normalization creates fresh sort objects",
+  );
+  assertEqual(
+    fileBrowserSearchRequestKey({
+      panelId: "panel-a",
+      root: first.browserRoot,
+      query: first.search.query,
+      showHidden: first.showHidden,
+      sort: first.sort,
+    }),
+    fileBrowserSearchRequestKey({
+      panelId: "panel-a",
+      root: second.browserRoot,
+      query: second.search.query,
+      showHidden: second.showHidden,
+      sort: second.sort,
+    }),
+    "semantic search key remains stable across render-normalized state",
+  );
+}
+
+function testSelectedSearchResultResolutionDoesNotRequireDirectoryCache() {
+  const rootEntry: GenericFileEntry = {
+    path: "/root",
+    name: "root",
+    kind: "directory",
+  };
+  const cachedEntry: GenericFileEntry = {
+    path: "/root/current/file.txt",
+    name: "file.txt",
+    kind: "file",
+  };
+  const searchEntry: GenericFileEntry = {
+    path: "/root/deep/result.png",
+    name: "result.png",
+    kind: "file",
+  };
+
+  assertEqual(
+    resolveSelectedFileBrowserEntry({
+      selectedPath: "/root/deep/result.png",
+      browserRoot: "/root",
+      rootEntry,
+      cachedEntries: [cachedEntry],
+      searchEntries: [searchEntry],
+      searchActive: true,
+    })?.path,
+    searchEntry.path,
+    "selected recursive search result resolves independently of directory cache",
+  );
+  assertEqual(
+    fileBrowserEntryOpenIntent(searchEntry),
+    "open-resource",
+    "Enter can open selected recursive search file as a resource",
+  );
+  assertEqual(
+    fileBrowserEntryOpenIntent(
+      resolveSelectedFileBrowserEntry({
+        selectedPath: "/root/deep/result.png",
+        browserRoot: "/root",
+        rootEntry,
+        cachedEntries: [],
+        searchEntries: [searchEntry],
+        searchActive: true,
+      }) ?? rootEntry,
+    ),
+    "open-resource",
+    "Open Selected can use selected search result evidence",
+  );
+}
+
+function testSelectedCachedAndRootEntriesKeepExistingBehavior() {
+  const rootEntry: GenericFileEntry = {
+    path: "/root",
+    name: "root",
+    kind: "directory",
+  };
+  const cachedFile: GenericFileEntry = {
+    path: "/root/current/file.txt",
+    name: "file.txt",
+    kind: "file",
+  };
+  const cachedDirectory: GenericFileEntry = {
+    path: "/root/current/folder",
+    name: "folder",
+    kind: "directory",
+  };
+  const unsupported: GenericFileEntry = {
+    path: "/root/current/socket",
+    name: "socket",
+    kind: "other",
+  };
+
+  assertEqual(
+    resolveSelectedFileBrowserEntry({
+      selectedPath: cachedFile.path,
+      browserRoot: "/root",
+      rootEntry,
+      cachedEntries: [cachedFile, cachedDirectory, unsupported],
+      searchActive: false,
+    })?.path,
+    cachedFile.path,
+    "normal cached selection still resolves",
+  );
+  assertEqual(
+    resolveSelectedFileBrowserEntry({
+      selectedPath: "/root",
+      browserRoot: "/root",
+      rootEntry,
+      cachedEntries: [],
+      searchActive: false,
+    })?.path,
+    rootEntry.path,
+    "root selection still resolves",
+  );
+  assertEqual(
+    fileBrowserEntryOpenIntent(cachedDirectory),
+    "navigate",
+    "directory selection still navigates",
+  );
+  assertEqual(
+    fileBrowserEntryOpenIntent({ kind: "symlink", targetKind: "directory" }),
+    "navigate",
+    "symlink directories still navigate",
+  );
+  assertEqual(
+    fileBrowserEntryOpenIntent(unsupported),
+    "unsupported",
+    "unsupported entries keep existing error behavior",
+  );
 }
 
 function testOperationValidationAndClipboard() {
@@ -242,6 +446,24 @@ function testRenameValidationAndResourceRoutingRequest() {
   const textRequest = resourceRequestForFile("/tmp/readme.md", "readme.md");
   assertEqual(textRequest.preferredModuleId, "core", "text files route to Core");
   assertEqual(textRequest.preferredPanelType, "text-viewer", "text files route to text viewer");
+
+  const readmeRequest = resourceRequestForFile("/tmp/README", "README");
+  assertEqual(readmeRequest.preferredModuleId, "core", "extensionless README routes to Core");
+  assertEqual(
+    readmeRequest.preferredPanelType,
+    "text-viewer",
+    "extensionless README routes to text viewer",
+  );
+
+  const unknownRequest = resourceRequestForFile(
+    "/tmp/arbitrary-extensionless-file",
+    "arbitrary-extensionless-file",
+  );
+  assertEqual(
+    unknownRequest.preferredPanelType,
+    undefined,
+    "arbitrary extensionless files remain unclassified",
+  );
 
   const imageRequest = resourceRequestForFile("/tmp/image.png", "image.png");
   assertEqual(imageRequest.preferredModuleId, "core", "images route to Core");
@@ -354,6 +576,42 @@ function testSearchRuntimeSummarySeparatesStopReasons() {
   );
 }
 
+function testSearchCompletenessSummarySurfacesResultTruth() {
+  assertEqual(
+    formatSearchCompletenessSummary({
+      matches: 12,
+      complete: true,
+    }),
+    "Search complete.",
+    "complete search is explicitly surfaced",
+  );
+  assertEqual(
+    formatSearchCompletenessSummary({
+      matches: 200,
+      resultLimitReached: true,
+    }),
+    "Search incomplete: result limit reached at 200 matches. Refine the query or root to find later matches.",
+    "result-limit completeness message is explicit",
+  );
+  assertEqual(
+    formatSearchCompletenessSummary({
+      matches: 0,
+      entriesScanned: 100000,
+      traversalLimitReached: true,
+    }),
+    "Search incomplete: traversal stopped after 100000 scanned entries. Results may omit matching paths.",
+    "traversal-limit completeness message is explicit",
+  );
+  assertEqual(
+    formatSearchCompletenessSummary({
+      matches: 4,
+      cancelled: true,
+    }),
+    "Search cancelled; displayed results may be incomplete.",
+    "cancelled search message is explicit",
+  );
+}
+
 function testSearchStalenessGuard() {
   assertEqual(
     searchResultIsCurrent("search-2", "search-2"),
@@ -380,6 +638,10 @@ async function main() {
   testFileTypeIconClassification();
   testDirectoriesFirstSortingAndHiddenFiltering();
   testSearchFilteringAndOrdering();
+  testSearchOriginFollowsCurrentDirectoryWithinBrowserRoot();
+  testSearchRequestKeyIsStableAcrossNormalizedStateObjects();
+  testSelectedSearchResultResolutionDoesNotRequireDirectoryCache();
+  testSelectedCachedAndRootEntriesKeepExistingBehavior();
   testOperationValidationAndClipboard();
   testDirectoryLikeSymlinkBehavior();
   testRenameValidationAndResourceRoutingRequest();
@@ -388,6 +650,7 @@ async function main() {
   testDirectoryAncestorExpansionIsStable();
   testSearchSkipDiagnosticProjection();
   testSearchRuntimeSummarySeparatesStopReasons();
+  testSearchCompletenessSummarySurfacesResultTruth();
   testSearchStalenessGuard();
   console.log("File Browser Copy Path tests passed");
 }
