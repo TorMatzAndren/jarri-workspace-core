@@ -1,5 +1,6 @@
 import { filePathToResourceUri, isTextFilePath, type OpenResourceRequest } from "./resources";
 import {
+  classifyWorkspaceFile,
   classifyWorkspaceFileIcon,
   type WorkspaceFileIconKind,
 } from "./fileIcons";
@@ -80,6 +81,16 @@ export function extensionOf(path: string) {
   const name = fileNameFromPath(path).toLowerCase();
   const index = name.lastIndexOf(".");
   return index > 0 ? name.slice(index) : "";
+}
+
+export function describeFileType(
+  entry: Pick<GenericFileEntry, "path" | "kind" | "targetKind">,
+) {
+  return classifyWorkspaceFile({
+    name: entry.path,
+    nodeKind: entry.kind,
+    targetKind: entry.targetKind ?? null,
+  }).displayType;
 }
 
 export function classifyFileIcon(entry: Pick<GenericFileEntry, "path" | "kind" | "targetKind">, expanded = false): FileIconKind {

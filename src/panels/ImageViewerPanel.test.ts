@@ -4,6 +4,8 @@ import {
   clampImageViewerZoom,
   IMAGE_VIEWER_MAX_ZOOM,
   IMAGE_VIEWER_MIN_ZOOM,
+  imageBinaryToDataUrl,
+  imageMimeTypeForPath,
   nextImageViewerViewportFromWheel,
   normalizeImageViewerState,
 } from "./ImageViewerPanel";
@@ -65,6 +67,40 @@ function testNormalizeImageViewerState() {
     normalizeImageViewerState(null).resourceUri,
     "",
     "missing state normalizes to no image",
+  );
+}
+
+function testNativeImageTransportSemantics() {
+  assertEqual(
+    imageMimeTypeForPath("/tmp/image.png"),
+    "image/png",
+    "PNG receives image/png MIME",
+  );
+  assertEqual(
+    imageMimeTypeForPath("/tmp/PHOTO.JPEG"),
+    "image/jpeg",
+    "JPEG MIME classification is case-insensitive",
+  );
+  assertEqual(
+    imageMimeTypeForPath("/tmp/vector.svg"),
+    "image/svg+xml",
+    "SVG receives SVG image MIME",
+  );
+  assertEqual(
+    imageMimeTypeForPath("/tmp/readme.md"),
+    null,
+    "non-image path is rejected by Image Viewer transport",
+  );
+
+  assertEqual(
+    imageBinaryToDataUrl("/tmp/image.png", "iVBORw0KGgo="),
+    "data:image/png;base64,iVBORw0KGgo=",
+    "native PNG bytes become an in-memory data URL",
+  );
+  assertEqual(
+    imageBinaryToDataUrl("/tmp/not-image.txt", "YWJj"),
+    null,
+    "unsupported binary content does not become an image URL",
   );
 }
 
@@ -164,6 +200,7 @@ function testLocalWheelOwnershipShape() {
 }
 
 testNormalizeImageViewerState();
+testNativeImageTransportSemantics();
 testZoomBoundsAndPointerAnchoring();
 testCoreRegistration();
 testLocalWheelOwnershipShape();

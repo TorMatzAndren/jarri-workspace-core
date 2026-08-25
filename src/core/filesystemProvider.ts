@@ -74,6 +74,14 @@ export type WorkspaceFilesystemTextPayload = {
   byteLimit: number;
 };
 
+export type WorkspaceFilesystemBinaryPayload = {
+  path: string;
+  contentBase64: string;
+  truncated: boolean;
+  bytesRead: number;
+  byteLimit: number;
+};
+
 type TauriEnvelope<T> =
   | { ok: true; data: T }
   | {
@@ -218,6 +226,16 @@ export const workspaceFilesystemProvider = {
     byteLimit = 1_000_000,
   ): Promise<ProviderResult<WorkspaceFilesystemTextPayload>> {
     return invokeWorkspaceFilesystem("workspace_fs_read_text", {
+      path,
+      byteLimit,
+    });
+  },
+
+  readBinary(
+    path: string,
+    byteLimit = 10_000_000,
+  ): Promise<ProviderResult<WorkspaceFilesystemBinaryPayload>> {
+    return invokeWorkspaceFilesystem("workspace_fs_read_binary", {
       path,
       byteLimit,
     });

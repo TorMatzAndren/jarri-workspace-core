@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use base64::Engine;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
@@ -132,6 +133,13 @@ struct WorkspaceFsDeleteRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkspaceFsReadTextRequest {
+    path: String,
+    byte_limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceFsReadBinaryRequest {
     path: String,
     byte_limit: Option<usize>,
 }
@@ -313,6 +321,8 @@ const MAX_WORKSPACE_FS_SEARCH_RESULT_LIMIT: usize = 1000;
 const MAX_WORKSPACE_FS_SEARCH_TRAVERSAL_LIMIT: usize = 100_000;
 const DEFAULT_WORKSPACE_FS_TEXT_BYTE_LIMIT: usize = 1_000_000;
 const MAX_WORKSPACE_FS_TEXT_BYTE_LIMIT: usize = 5_000_000;
+const DEFAULT_WORKSPACE_FS_BINARY_BYTE_LIMIT: usize = 10_000_000;
+const MAX_WORKSPACE_FS_BINARY_BYTE_LIMIT: usize = 50_000_000;
 
 #[derive(Debug, Clone, Copy)]
 struct WorkspaceFsSearchLimits {
@@ -1127,6 +1137,46 @@ fn workspace_fs_read_text(request: WorkspaceFsReadTextRequest) -> Result<Value, 
     }))
 }
 
+#[tauri::command]
+fn workspace_fs_read_binary(request: WorkspaceFsReadBinaryRequest) -> Result<Value, Value> {
+    let path = clean_absolute_path(&request.path)?;
+    let mut file = fs::File::open(&path).map_err(|error| {
+        workspace_fs_error(
+            "open_failed",
+            format!("failed to open {}: {}", path.display(), error),
+        )
+    })?;
+    let byte_limit = request
+        .byte_limit
+        .unwrap_or(DEFAULT_WORKSPACE_FS_BINARY_BYTE_LIMIT)
+        .clamp(1, MAX_WORKSPACE_FS_BINARY_BYTE_LIMIT);
+    let mut buffer = Vec::new();
+    let mut limited = file.by_ref().take(byte_limit as u64 + 1);
+    limited.read_to_end(&mut buffer).map_err(|error| {
+        workspace_fs_error(
+            "read_failed",
+            format!("failed to read {}: {}", path.display(), error),
+        )
+    })?;
+    let truncated = buffer.len() > byte_limit;
+    if truncated {
+        buffer.truncate(byte_limit);
+    }
+    let bytes_read = buffer.len();
+    let content_base64 = base64::engine::general_purpose::STANDARD.encode(&buffer);
+
+    Ok(json!({
+        "ok": true,
+        "data": {
+            "path": path.display().to_string(),
+            "contentBase64": content_base64,
+            "truncated": truncated,
+            "bytesRead": bytes_read,
+            "byteLimit": byte_limit,
+        }
+    }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1143,6 +1193,7 @@ pub fn run() {
             workspace_fs_create_directory,
             workspace_fs_delete,
             workspace_fs_read_text,
+            workspace_fs_read_binary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Jarri Workspace Core");
@@ -1514,6 +1565,28 @@ mod workspace_fs_tests {
         })
         .expect("delete succeeds");
         assert!(!source.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn workspace_fs_read_binary_is_bounded_and_lossless() {
+        let root = temp_root("read-binary");
+        let file = root.join("file.bin");
+        fs::write(&file, [0_u8, 1, 2, 127, 128, 255]).expect("write file");
+        let data = ok_data(
+            workspace_fs_read_binary(WorkspaceFsReadBinaryRequest {
+                path: file.display().to_string(),
+                byte_limit: Some(4),
+            })
+            .expect("read succeeds"),
+        );
+        assert_eq!(
+            data.get("contentBase64").and_then(Value::as_str),
+            Some("AAECfw==")
+        );
+        assert_eq!(data.get("bytesRead").and_then(Value::as_u64), Some(4));
+        assert_eq!(data.get("truncated").and_then(Value::as_bool), Some(true));
+        assert_eq!(data.get("byteLimit").and_then(Value::as_u64), Some(4));
         let _ = fs::remove_dir_all(root);
     }
 

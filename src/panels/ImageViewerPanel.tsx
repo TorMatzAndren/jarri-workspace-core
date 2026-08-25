@@ -1,4 +1,3 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   useEffect,
   useMemo,
@@ -7,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
+import { workspaceFilesystemProvider } from "../core/filesystemProvider";
 import type { PanelBodyProps } from "../core/types";
 import {
   filePathToResourceUri,
@@ -101,14 +101,30 @@ export function nextImageViewerViewportFromWheel(
   };
 }
 
-export function imageResourceUriToImageSource(uri: ResourceUri | string): string {
-  const path = resourceUriToFilePath(uri);
+export function imageMimeTypeForPath(path: string): string | null {
+  const lower = path.toLowerCase();
 
-  if (!path) {
-    return String(uri);
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".bmp")) return "image/bmp";
+  if (lower.endsWith(".avif")) return "image/avif";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+
+  return null;
+}
+
+export function imageBinaryToDataUrl(
+  path: string,
+  contentBase64: string,
+): string | null {
+  const mimeType = imageMimeTypeForPath(path);
+  if (!mimeType) {
+    return null;
   }
 
-  return convertFileSrc(path);
+  return `data:${mimeType};base64,${contentBase64}`;
 }
 
 export function ImageViewerPanel({ panel }: PanelBodyProps) {
@@ -121,6 +137,8 @@ export function ImageViewerPanel({ panel }: PanelBodyProps) {
   const dragRef = useRef<DragState | null>(null);
 
   const [loadError, setLoadError] = useState("");
+  const [imageSource, setImageSource] = useState("");
+  const [loading, setLoading] = useState(false);
   const [viewport, setViewport] = useState<ImageViewportState>({
     zoom: 1,
     panX: 0,
@@ -131,8 +149,71 @@ export function ImageViewerPanel({ panel }: PanelBodyProps) {
   useEffect(() => {
     setViewport({ zoom: 1, panX: 0, panY: 0 });
     setLoadError("");
+    setImageSource("");
+    setLoading(false);
     dragRef.current = null;
     setDragging(false);
+
+    if (!state.resourceUri) {
+      return;
+    }
+
+    const path = resourceUriToFilePath(state.resourceUri);
+    if (!path) {
+      setLoadError(`Unable to resolve image resource: ${state.resourceUri}`);
+      return;
+    }
+
+    const mimeType = imageMimeTypeForPath(path);
+    if (!mimeType) {
+      setLoadError(`Unsupported image type: ${path}`);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+
+    void workspaceFilesystemProvider
+      .readBinary(path, 25_000_000)
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        setLoading(false);
+
+        if (!result.ok) {
+          setLoadError(
+            result.detail
+              ? `${result.error} (${result.detail})`
+              : result.error,
+          );
+          return;
+        }
+
+        if (result.data.truncated) {
+          setLoadError(
+            `Image exceeds the ${result.data.byteLimit}-byte viewer limit: ${path}`,
+          );
+          return;
+        }
+
+        const source = imageBinaryToDataUrl(
+          path,
+          result.data.contentBase64,
+        );
+
+        if (!source) {
+          setLoadError(`Unsupported image type: ${path}`);
+          return;
+        }
+
+        setImageSource(source);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [state.resourceUri]);
 
   function handleWheel(event: ReactWheelEvent<HTMLDivElement>) {
@@ -234,6 +315,16 @@ export function ImageViewerPanel({ panel }: PanelBodyProps) {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="workspace-image-viewer">
+        <div className="workspace-image-viewer__status">
+          Loading image...
+        </div>
+      </div>
+    );
+  }
+
   if (loadError) {
     return (
       <div className="workspace-image-viewer">
@@ -244,8 +335,17 @@ export function ImageViewerPanel({ panel }: PanelBodyProps) {
     );
   }
 
-  const imageSrc = imageResourceUriToImageSource(state.resourceUri);
   const imagePath = resourceUriToFilePath(state.resourceUri) ?? state.resourceUri;
+
+  if (!imageSource) {
+    return (
+      <div className="workspace-image-viewer">
+        <div className="workspace-image-viewer__status">
+          Preparing image...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -261,7 +361,7 @@ export function ImageViewerPanel({ panel }: PanelBodyProps) {
     >
       <img
         className="workspace-image-viewer__image"
-        src={imageSrc}
+        src={imageSource}
         alt={imagePath}
         draggable={false}
         onError={() => setLoadError(`Unable to load image: ${imagePath}`)}

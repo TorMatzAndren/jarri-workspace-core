@@ -1,4 +1,5 @@
 import {
+  classifyWorkspaceFile,
   classifyWorkspaceFileIcon,
   workspaceFileExtension,
 } from "./fileIcons";
@@ -134,3 +135,63 @@ assertEqual(
 );
 
 console.log("workspace file icon classification tests passed");
+
+
+function assertDisplayType(
+  name: string,
+  expected: string,
+  executable = false,
+) {
+  const actual = classifyWorkspaceFile({
+    name,
+    nodeKind: "file",
+    executable,
+  }).displayType;
+
+  if (actual !== expected) {
+    throw new Error(
+      `Expected ${name} to display as "${expected}", got "${actual}".`,
+    );
+  }
+}
+
+assertDisplayType("README.md", "Markdown");
+assertDisplayType("image.png", "PNG picture");
+assertDisplayType("diagram.svg", "SVG picture");
+assertDisplayType("document.pdf", "PDF");
+assertDisplayType("config.xml", "XML");
+assertDisplayType("data.json", "JSON");
+assertDisplayType("settings.yaml", "YAML");
+assertDisplayType("Cargo.toml", "Rust manifest");
+assertDisplayType("package.json", "Node package manifest");
+assertDisplayType("main.rs", "Rust");
+assertDisplayType("WorkspaceCanvas.tsx", "TypeScript React");
+assertDisplayType("archive.zip", "ZIP archive");
+assertDisplayType("discord.deb", "Debian package");
+assertDisplayType("EQ_setup.exe", "Windows executable");
+assertDisplayType("unknown.weirdextension", "File");
+
+const folderClassification = classifyWorkspaceFile({
+  name: "/tmp/example",
+  nodeKind: "directory",
+});
+
+if (folderClassification.displayType !== "Folder") {
+  throw new Error(
+    `Expected directory display type Folder, got ${folderClassification.displayType}.`,
+  );
+}
+
+const symlinkClassification = classifyWorkspaceFile({
+  name: "/tmp/link",
+  nodeKind: "symlink",
+  targetKind: "directory",
+});
+
+if (symlinkClassification.displayType !== "Folder symlink") {
+  throw new Error(
+    `Expected directory symlink display type Folder symlink, got ${symlinkClassification.displayType}.`,
+  );
+}
+
+console.log("workspace file semantic classification tests passed");
