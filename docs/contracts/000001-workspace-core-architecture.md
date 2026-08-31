@@ -43,6 +43,7 @@ Workspace Core owns generic workspace behavior:
 - panel geometry, focus order, and layout persistence
 - dirty-state and close/save coordination
 - standard primitive contracts
+- Workspace-owned screenshot capability and clipboard-image publication
 - migration and repair rules for persisted state
 
 Workspace Core may ship standard panels such as Browser, Editor, Audit, Log, Truth Strip, Preflight, and Timeline, but those panels must still consume truth through service contracts instead of embedding domain state in layout state.
@@ -339,13 +340,128 @@ Workspace Core components should follow these ownership boundaries:
 - Shell: global status, module actions, preferences, tabs, command entry points.
 - TabBar: tab create/select/rename/close.
 - Canvas: panel placement surface and add-panel entry point.
-- PanelFrame: chrome, focus, drag, resize, close, dirty coordination, toolbar slots.
+- PanelFrame: chrome, focus, drag, resize, close, dirty coordination, toolbar slots,
+  and the individual-frame screenshot presentation boundary.
 - PanelBody: domain or standard panel rendering.
 - Registry: panel discovery and construction metadata.
 - Persistence: serialize, migrate, repair, and store layout state.
 - Domain Adapter: truth/action/preflight/temporal service calls.
 
 No component should own both long-lived domain truth and layout persistence.
+
+## Workspace Screenshot Ownership
+
+Screenshot is generic Workspace presentation capability.
+
+It is not domain behavior and does not belong inside individual panel modules.
+
+Workspace Core supports two screenshot targets:
+
+    workspace
+    frame
+
+Their ownership boundaries are:
+
+    WorkspaceCanvas
+        owns complete logical Workspace capture
+
+    PanelFrame
+        owns complete individual-frame capture
+
+    panel
+        owns only its rendered body presentation
+
+    Workspace
+        owns rasterization orchestration and image clipboard publication
+
+Screenshot is distinct from semantic panel Copy.
+
+The clipboard contracts are:
+
+    Panel Copy
+        -> semantic Workspace Projection text
+
+    Frame Screenshot
+        -> one complete Workspace frame image
+
+    Workspace Screenshot
+        -> complete logical Workspace-tab image
+
+### Logical Workspace screenshot
+
+Logical Workspace capture represents the complete active tab canvas rather
+than the currently visible native viewport.
+
+It must remain independent of:
+
+- current physical viewport extent;
+- current Workspace camera position;
+- current Workspace camera zoom.
+
+The current implementation uses DOM reconstruction through
+`modern-screenshot`, rendering at logical Workspace scale.
+
+This renderer is appropriate because the requested image may intentionally
+extend beyond the native WebView viewport.
+
+### Individual-frame screenshot
+
+Frame capture represents the complete configured PanelFrame presentation
+boundary, including:
+
+- Workspace frame chrome;
+- frame header;
+- enabled generic frame controls;
+- panel body;
+- configured frame width and height.
+
+Individual panels do not implement screenshot code.
+
+On Linux, the current frame renderer uses the native WebKitGTK presentation
+stack rather than browser foreignObject reconstruction.
+
+The production path is:
+
+    PanelFrame
+        ->
+    temporary off-screen presentation replica
+        ->
+    Workspace semantic theme inheritance
+        ->
+    WebKitGTK FullDocument snapshot
+        ->
+    Cairo crop and PNG encoding
+        ->
+    native image clipboard
+
+The live React-managed PanelFrame must not be reparented or visibly restaged
+for capture.
+
+The temporary replica exists only for one screenshot transaction and must not
+participate in:
+
+- Workspace runtime state;
+- panel lifecycle;
+- persistence;
+- focus ownership;
+- semantic publication;
+- module registration.
+
+### Renderer separation
+
+Logical Workspace capture and frame capture intentionally use different
+renderers.
+
+This is architectural, not accidental.
+
+Large logical Workspace capture requires reconstruction outside the physical
+viewport.
+
+Individual-frame capture represents presented pixels and therefore benefits
+from the native WebView renderer already responsible for displaying Workspace.
+
+Renderer implementations may evolve beneath these boundaries without moving
+screenshot ownership into domain modules or panel implementations.
 
 ## Initial Non-Goals
 
