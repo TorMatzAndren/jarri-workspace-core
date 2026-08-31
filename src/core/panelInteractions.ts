@@ -24,22 +24,47 @@ function closest(target: unknown, selector: string): unknown {
   return (target as ClosestCapableTarget).closest!(selector);
 }
 
-export function shouldReserveLocalWheel(
+export type LocalWheelReservation = "none" | "custom" | "native";
+
+export function localWheelReservation(
   event: Pick<WheelEvent, "ctrlKey" | "target">,
-): boolean {
+): LocalWheelReservation {
   if (event.ctrlKey) {
-    return false;
+    return "none";
   }
 
   const surfaceSelector =
-    `[${WORKSPACE_LOCAL_WHEEL_SURFACE_ATTRIBUTE}="true"]`;
-  const panelSelector =
-    `[${WORKSPACE_LOCAL_WHEEL_PANEL_ATTRIBUTE}="true"]`;
+    `[${WORKSPACE_LOCAL_WHEEL_SURFACE_ATTRIBUTE}]`;
 
   const surface = closest(event.target, surfaceSelector);
   if (!surface) {
-    return false;
+    return "none";
   }
 
-  return Boolean(closest(surface, panelSelector));
+  const mode =
+    typeof surface === "object" &&
+    surface !== null &&
+    "getAttribute" in surface &&
+    typeof (surface as Element).getAttribute === "function"
+      ? (surface as Element).getAttribute(
+          WORKSPACE_LOCAL_WHEEL_SURFACE_ATTRIBUTE,
+        )
+      : null;
+
+  if (mode === "native") {
+    return "native";
+  }
+
+  const panelSelector =
+    `[${WORKSPACE_LOCAL_WHEEL_PANEL_ATTRIBUTE}="true"]`;
+
+  return closest(surface, panelSelector)
+    ? "custom"
+    : "none";
+}
+
+export function shouldReserveLocalWheel(
+  event: Pick<WheelEvent, "ctrlKey" | "target">,
+): boolean {
+  return localWheelReservation(event) !== "none";
 }

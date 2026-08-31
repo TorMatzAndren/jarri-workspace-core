@@ -200,7 +200,10 @@ export function PanelProjectionHost({
   }
 
   return (
-    <div className="panel-frame__body">
+    <div
+      className="panel-frame__body"
+      data-workspace-local-wheel-surface="native"
+    >
       <PanelBodyErrorBoundary
         panelTitle={panel.title}
         onBodyError={handleBodyError}

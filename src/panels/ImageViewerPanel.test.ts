@@ -166,7 +166,7 @@ function testCoreRegistration() {
 function testLocalWheelOwnershipShape() {
   const panelSelector = "[data-workspace-local-wheel=\"true\"]";
   const surfaceSelector =
-    "[data-workspace-local-wheel-surface=\"true\"]";
+    "[data-workspace-local-wheel-surface]";
 
   const imageViewerSurface = {
     closest(selector: string) {

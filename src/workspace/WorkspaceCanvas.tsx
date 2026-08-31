@@ -24,7 +24,7 @@ import {
   zoomAnchorForMode,
   type WorkspaceViewportAnchor,
 } from "../core/cameraMath";
-import { shouldReserveLocalWheel } from "../core/panelInteractions";
+import { localWheelReservation } from "../core/panelInteractions";
 import { PanelFrame } from "./PanelFrame";
 
 const CANVAS_GRID_SIZE = 24;
@@ -373,8 +373,27 @@ export function WorkspaceCanvas({
         return;
       }
 
-      if (shouldReserveLocalWheel(event)) {
+      const localWheel = localWheelReservation(event);
+
+      if (localWheel === "native") {
+        /*
+         * Browser-native overflow scrolling owns this wheel event.
+         * Do not preventDefault(): the local surface must be allowed
+         * to perform its normal scroll.
+         *
+         * Ctrl+wheel never reaches this branch because local wheel
+         * reservation deliberately yields that gesture to Workspace.
+         */
+        return;
+      }
+
+      if (localWheel === "custom") {
+        /*
+         * A panel-local wheel handler owns this event. Suppress native
+         * scrolling while allowing propagation to the local handler.
+         */
         event.preventDefault();
+        return;
       }
     }
 
