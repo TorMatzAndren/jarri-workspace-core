@@ -1,4 +1,5 @@
 export const SEMANTIC_COPY_CONTROL_ID = "semantic-copy";
+export const SCREENSHOT_CONTROL_ID = "screenshot";
 export const FONT_DECREASE_CONTROL_ID = "font-decrease";
 export const FONT_INCREASE_CONTROL_ID = "font-increase";
 
@@ -15,6 +16,7 @@ export const PANEL_FONT_SCALE_STEPS = [
 
 export type PanelFrameControlKind =
   | "copy"
+  | "screenshot"
   | "font-decrease"
   | "font-increase";
 
@@ -72,6 +74,12 @@ export const WORKSPACE_FRAME_CONTROL_CATALOG:
       controlId: SEMANTIC_COPY_CONTROL_ID,
       label: "Copy",
       kind: "copy",
+      defaultEnabled: true,
+    },
+    {
+      controlId: SCREENSHOT_CONTROL_ID,
+      label: "Screenshot",
+      kind: "screenshot",
       defaultEnabled: true,
     },
     {

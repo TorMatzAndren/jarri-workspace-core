@@ -43,6 +43,7 @@ import type {
 } from "../core/types";
 import { panelTypePreferenceKey } from "../core/types";
 import { PanelProjectionHost } from "./PanelProjectionHost";
+import { copyWorkspaceScreenshot } from "./screenshot";
 
 const DEFAULT_PANEL_VIEW_PREFERENCES: PanelViewPreferences = {
   fontScale: 1,
@@ -106,6 +107,9 @@ export function PanelFrame({
   const [copyFeedback, setCopyFeedback] = useState<"copied" | "error" | null>(
     null,
   );
+  const [screenshotFeedback, setScreenshotFeedback] = useState<
+    "copied" | "error" | null
+  >(null);
   const previewGeometryRef = useRef<PanelGeometry | null>(null);
   const dragViewportRef = useRef<{
     startScrollLeft: number;
@@ -384,6 +388,50 @@ export function PanelFrame({
         return;
       }
 
+      case "screenshot": {
+        const frame = panelRef.current;
+
+        if (!frame) {
+          setScreenshotFeedback("error");
+          return;
+        }
+
+        try {
+          await copyWorkspaceScreenshot({
+            kind: "frame",
+            element: frame,
+          });
+
+          setScreenshotFeedback("copied");
+          window.setTimeout(() => {
+            setScreenshotFeedback((current) =>
+              current === "copied" ? null : current
+            );
+          }, 1600);
+        } catch (error) {
+          console.error("Workspace frame screenshot failed", {
+            panelId: panel.id,
+            moduleId: panel.moduleId,
+            panelType: panel.panelType,
+            error,
+            errorType: typeof error,
+            errorText:
+              error instanceof Error
+                ? `${error.name}: ${error.message}`
+                : String(error),
+          });
+
+          setScreenshotFeedback("error");
+          window.setTimeout(() => {
+            setScreenshotFeedback((current) =>
+              current === "error" ? null : current
+            );
+          }, 2400);
+        }
+
+        return;
+      }
+
       case "copy": {
         if (!control.payload) {
           showCopyFeedback("error");
@@ -437,7 +485,9 @@ export function PanelFrame({
                   className={`panel-frame__projection-copy ${
                     control.definition.kind === "copy" && copyFeedback
                       ? `panel-frame__projection-copy--${copyFeedback}`
-                      : ""
+                      : control.definition.kind === "screenshot" && screenshotFeedback
+                        ? `panel-frame__projection-copy--${screenshotFeedback}`
+                        : ""
                   }`}
                   aria-label={control.definition.label}
                   title={
@@ -456,7 +506,13 @@ export function PanelFrame({
                     ? "Copied"
                     : control.definition.kind === "copy" && copyFeedback === "error"
                       ? "Copy failed"
-                      : control.definition.label}
+                      : control.definition.kind === "screenshot" &&
+                          screenshotFeedback === "copied"
+                        ? "Copied"
+                        : control.definition.kind === "screenshot" &&
+                            screenshotFeedback === "error"
+                          ? "Copy failed"
+                          : control.definition.label}
                 </button>
               ))
             : null}

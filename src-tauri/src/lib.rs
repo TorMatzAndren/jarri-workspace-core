@@ -1,6 +1,6 @@
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use base64::Engine;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
@@ -70,6 +70,15 @@ struct WorkspaceFsSearchPayload {
     result_limit: usize,
     traversal_limit: usize,
     status_text: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceFrameScreenshotRequest {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1177,12 +1186,126 @@ fn workspace_fs_read_binary(request: WorkspaceFsReadBinaryRequest) -> Result<Val
     }))
 }
 
+#[cfg(target_os = "linux")]
+#[tauri::command]
+async fn workspace_capture_frame_screenshot(
+    webview: tauri::WebviewWindow,
+    request: WorkspaceFrameScreenshotRequest,
+) -> Result<Vec<u8>, String> {
+    use cairo::{Context, Format, ImageSurface};
+    use std::sync::mpsc;
+    use webkit2gtk::{SnapshotOptions, SnapshotRegion, WebViewExt};
+
+    if !request.x.is_finite()
+        || !request.y.is_finite()
+        || !request.width.is_finite()
+        || !request.height.is_finite()
+        || request.width <= 0.0
+        || request.height <= 0.0
+    {
+        return Err("Invalid frame screenshot rectangle.".to_string());
+    }
+
+    let (sender, receiver) = mpsc::sync_channel::<Result<Vec<u8>, String>>(1);
+
+    webview
+        .with_webview(move |platform_webview| {
+            let webkit_webview = platform_webview.inner().clone();
+            let sender = sender.clone();
+
+            webkit_webview.snapshot(
+                SnapshotRegion::FullDocument,
+                SnapshotOptions::NONE,
+                None::<&webkit2gtk::gio::Cancellable>,
+                move |snapshot_result| {
+                    let result = (|| -> Result<Vec<u8>, String> {
+                        let source = snapshot_result
+                            .map_err(|error| format!("WebKit snapshot failed: {error}"))?;
+
+                        let source_width = source
+                            .map_to_image(None)
+                            .map_err(|error| format!("Could not inspect WebKit snapshot: {error}"))?
+                            .width();
+
+                        let source_height = source
+                            .map_to_image(None)
+                            .map_err(|error| format!("Could not inspect WebKit snapshot: {error}"))?
+                            .height();
+
+                        let x = request.x.floor() as i32;
+                        let y = request.y.floor() as i32;
+                        let width = request.width.ceil() as i32;
+                        let height = request.height.ceil() as i32;
+
+                        if x < 0
+                            || y < 0
+                            || width <= 0
+                            || height <= 0
+                            || x + width > source_width
+                            || y + height > source_height
+                        {
+                            return Err(format!(
+                                "Frame screenshot rectangle is outside visible WebView: \
+                                 rect=({}, {}, {}, {}), snapshot={}x{}",
+                                x, y, width, height, source_width, source_height,
+                            ));
+                        }
+
+                        let target = ImageSurface::create(Format::ARgb32, width, height).map_err(
+                            |error| format!("Could not allocate frame screenshot surface: {error}"),
+                        )?;
+
+                        let context = Context::new(&target).map_err(|error| {
+                            format!("Could not create frame screenshot context: {error}")
+                        })?;
+
+                        context
+                            .set_source_surface(&source, -(x as f64), -(y as f64))
+                            .map_err(|error| {
+                                format!("Could not position WebKit snapshot: {error}")
+                            })?;
+
+                        context.paint().map_err(|error| {
+                            format!("Could not paint frame screenshot: {error}")
+                        })?;
+
+                        target.flush();
+
+                        let mut png = Vec::new();
+                        target.write_to_png(&mut png).map_err(|error| {
+                            format!("Could not encode frame screenshot PNG: {error}")
+                        })?;
+
+                        Ok(png)
+                    })();
+
+                    let _ = sender.send(result);
+                },
+            );
+        })
+        .map_err(|error| format!("Could not access Workspace WebView: {error}"))?;
+
+    receiver
+        .recv()
+        .map_err(|error| format!("Native screenshot channel failed: {error}"))?
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn workspace_capture_frame_screenshot(
+    _webview: tauri::WebviewWindow,
+    _request: WorkspaceFrameScreenshotRequest,
+) -> Result<Vec<u8>, String> {
+    Err("Native frame screenshot is currently implemented for Linux only.".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(WorkspaceFsSearchRegistry::default())
         .invoke_handler(tauri::generate_handler![
+            workspace_capture_frame_screenshot,
             workspace_fs_stat,
             workspace_fs_list,
             workspace_fs_search,

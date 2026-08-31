@@ -6,6 +6,7 @@ import {
   normalizeFrameControlPreferences,
   panelFrameControlKey,
   panelFrameControlViewStates,
+  SCREENSHOT_CONTROL_ID,
   SEMANTIC_COPY_CONTROL_ID,
   WORKSPACE_FRAME_CONTROL_CATALOG,
 } from "./frameControls";
@@ -38,8 +39,8 @@ function copyPayload(text: string) {
 function testWorkspaceOwnsControlCatalog() {
   assertEqual(
     WORKSPACE_FRAME_CONTROL_CATALOG.length,
-    3,
-    "Workspace catalog contains Copy and Font controls",
+    4,
+    "Workspace catalog contains Copy, Screenshot, and Font controls",
   );
 
   const copy = WORKSPACE_FRAME_CONTROL_CATALOG.find(
@@ -47,6 +48,21 @@ function testWorkspaceOwnsControlCatalog() {
   );
   assert(copy, "Workspace semantic Copy control exists");
   assertEqual(copy.label, "Copy", "Workspace owns the frame-control label");
+
+  const screenshot = WORKSPACE_FRAME_CONTROL_CATALOG.find(
+    (candidate) => candidate.controlId === SCREENSHOT_CONTROL_ID,
+  );
+  assert(screenshot, "Workspace Screenshot control exists");
+  assertEqual(
+    screenshot.kind,
+    "screenshot",
+    "Screenshot is a Workspace-owned frame capability",
+  );
+  assertEqual(
+    screenshot.defaultEnabled,
+    true,
+    "Screenshot is enabled by default",
+  );
 }
 
 function testStablePreferenceKeysAndDefaults() {
@@ -248,8 +264,8 @@ function testIndependentFontControlsAndDeterministicStepping() {
 
   assertEqual(
     enabledHeaderPanelFrameControls(states).length,
-    2,
-    "disabling Copy does not disable Font controls",
+    3,
+    "disabling Copy does not disable Screenshot or Font controls",
   );
 }
 

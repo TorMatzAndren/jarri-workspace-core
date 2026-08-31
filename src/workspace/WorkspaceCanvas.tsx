@@ -1,7 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Image } from "@tauri-apps/api/image";
-import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
-import { domToBlob } from "modern-screenshot";
 import type {
   PanelGeometry,
   PanelInstance,
@@ -26,6 +23,7 @@ import {
 } from "../core/cameraMath";
 import { localWheelReservation } from "../core/panelInteractions";
 import { PanelFrame } from "./PanelFrame";
+import { copyWorkspaceScreenshot } from "./screenshot";
 
 const CANVAS_GRID_SIZE = 24;
 const MIN_CANVAS_WIDTH = 900;
@@ -690,48 +688,20 @@ export function WorkspaceCanvas({
       return;
     }
 
-    const width = effectiveBounds.width;
-    const height = effectiveBounds.height;
-
     setScreenshotState("copying");
 
     try {
-      const captured = await domToBlob(logical, {
-        width,
-        height,
-        scale: 1,
-        style: {
-          transform: "none",
-          transformOrigin: "top left",
-        },
-        filter: (node) =>
-          !(node instanceof Element) ||
-          !node.classList.contains("workspace-canvas__resize-handle"),
-        features: {
-          copyScrollbar: true,
-          removeAbnormalAttributes: true,
-          removeControlCharacter: true,
-          fixSvgXmlDecode: true,
-          restoreScrollPosition: false,
-        },
+      await copyWorkspaceScreenshot({
+        kind: "workspace",
+        element: logical,
+        width: effectiveBounds.width,
+        height: effectiveBounds.height,
       });
-
-      if (!captured) {
-        throw new Error("Workspace screenshot produced no image data.");
-      }
-
-      const image = await Image.fromBytes(await captured.arrayBuffer());
-
-      try {
-        await writeImage(image);
-      } finally {
-        await image.close();
-      }
 
       setScreenshotState("copied");
       window.setTimeout(() => {
         setScreenshotState((current) =>
-          current === "copied" ? "idle" : current,
+          current === "copied" ? "idle" : current
         );
       }, 1600);
     } catch (error) {
@@ -740,7 +710,7 @@ export function WorkspaceCanvas({
 
       window.setTimeout(() => {
         setScreenshotState((current) =>
-          current === "failed" ? "idle" : current,
+          current === "failed" ? "idle" : current
         );
       }, 2400);
     }
