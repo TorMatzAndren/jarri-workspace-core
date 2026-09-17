@@ -67,6 +67,7 @@ function createDefaultWorkspace(): WorkspaceState {
         enabled: true,
         timeFormat: "24h",
         dateFormat: "text",
+        showWeekNumber: true,
       },
       density: "compact",
       themeMode: "system",

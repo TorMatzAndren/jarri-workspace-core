@@ -473,7 +473,24 @@ export function SettingsPanel({
               })
             }
           />
-          </label>
+        </label>
+
+        <label>
+          <span>Week number</span>
+          <input
+            type="checkbox"
+            checked={preferences.clock.showWeekNumber}
+            disabled={!preferences.clock.enabled}
+            onChange={(event) =>
+              updatePreferences({
+                clock: {
+                  ...preferences.clock,
+                  showWeekNumber: event.target.checked,
+                },
+              })
+            }
+          />
+        </label>
         </div>
       </section>
 

@@ -35,6 +35,7 @@ export type WorkspaceClockPreferences = {
   enabled: boolean;
   timeFormat: "12h" | "24h";
   dateFormat: "none" | "text" | "numeric";
+  showWeekNumber: boolean;
 };
 
 export type WorkspaceSurfacePosition = {

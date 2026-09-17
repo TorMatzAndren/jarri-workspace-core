@@ -20,6 +20,23 @@ function numericDate(now: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function isoWeekNumber(date: Date): number {
+  const working = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  );
+
+  const isoDay = working.getUTCDay() || 7;
+  working.setUTCDate(working.getUTCDate() + 4 - isoDay);
+
+  const isoYearStart = new Date(
+    Date.UTC(working.getUTCFullYear(), 0, 1),
+  );
+
+  return Math.ceil(
+    ((working.getTime() - isoYearStart.getTime()) / 86_400_000 + 1) / 7,
+  );
+}
+
 export function WorkspaceClock({
   preferences,
 }: WorkspaceClockProps) {
@@ -72,6 +89,14 @@ export function WorkspaceClock({
     }).format(now);
   }, [now, preferences.dateFormat]);
 
+  const weekNumber = useMemo(
+    () => isoWeekNumber(now),
+    [now],
+  );
+
+  const week =
+    preferences.showWeekNumber ? `v. ${weekNumber}` : null;
+
   if (!preferences.enabled) {
     return null;
   }
@@ -84,6 +109,7 @@ export function WorkspaceClock({
     >
       <strong>{time}</strong>
       {date ? <span>{date}</span> : null}
+      {week ? <span>{week}</span> : null}
     </time>
   );
 }

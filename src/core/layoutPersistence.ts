@@ -342,6 +342,8 @@ function normalizeClockPreferences(
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : true,
     timeFormat: raw.timeFormat === "12h" ? "12h" : "24h",
     dateFormat,
+    showWeekNumber:
+      typeof raw.showWeekNumber === "boolean" ? raw.showWeekNumber : true,
   };
 }
 

@@ -67,6 +67,7 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
         enabled: true,
         timeFormat: "24h",
         dateFormat: "text",
+        showWeekNumber: true,
       },
       density: "compact",
       themeMode: "system",
