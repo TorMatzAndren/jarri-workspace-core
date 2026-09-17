@@ -534,7 +534,7 @@ export function CalendarPanel({
               key={dateKey(monday)}
             >
               <div className="calendar-panel__week-number">
-                v. {isoWeekNumber(monday)}
+                Week {isoWeekNumber(monday)}
               </div>
 
               {week.map((day) => {
@@ -811,7 +811,7 @@ export function CalendarPanel({
                   key={dateKey(week[0])}
                 >
                   <span className="calendar-panel__date-picker-week-number">
-                    v. {isoWeekNumber(week[0])}
+                    Week {isoWeekNumber(week[0])}
                   </span>
 
                   {week.map((day) => {
