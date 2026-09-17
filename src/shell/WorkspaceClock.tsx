@@ -97,7 +97,7 @@ export function WorkspaceClock({
   );
 
   const week =
-    preferences.showWeekNumber ? `v. ${weekNumber}` : null;
+    preferences.showWeekNumber !== false ? `v. ${weekNumber}` : null;
 
   if (!preferences.enabled) {
     return null;
