@@ -5328,3 +5328,9 @@ code {
   outline: 1px solid var(--color-border);
   outline-offset: 4px;
 }
+
+.workspace-shell button.workspace-shell__logo-link:hover:not(:disabled),
+.workspace-shell button.workspace-shell__logo-link:active:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+}
