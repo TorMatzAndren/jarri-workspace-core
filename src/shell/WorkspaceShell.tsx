@@ -383,11 +383,7 @@ export function WorkspaceShell() {
               );
 
               if (existing) {
-                if (existing.display?.mode === "minimized") {
-                  controller.togglePanelMinimized(existing.id);
-                }
-
-                controller.focusPanel(existing.id);
+                controller.closePanel(existing.id);
                 return;
               }
 
