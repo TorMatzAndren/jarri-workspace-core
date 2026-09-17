@@ -29,7 +29,10 @@ import {
   type OpenResourceResult,
 } from "../core/resources";
 import jarriWorkspaceLogo from "../assets/jarri-workspace.png";
+import { openExternalUrl } from "../core/platform/openExternalUrl";
 import { WorkspaceClock } from "./WorkspaceClock";
+
+const JARRI_SYSTEMS_URL = "http://jarri.systems/";
 
 export function WorkspaceShell() {
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
@@ -328,11 +331,23 @@ export function WorkspaceShell() {
       style={colorStyle}
     >
       <header className="workspace-shell__header">
-        <img
-          className="workspace-shell__logo"
-          src={jarriWorkspaceLogo}
-          alt="Jarri Workspace"
-        />
+        <button
+          type="button"
+          className="workspace-shell__logo-link"
+          title="Visit jarri.systems"
+          aria-label="Visit jarri.systems in your web browser"
+          onClick={() => {
+            void openExternalUrl(JARRI_SYSTEMS_URL).catch((error) => {
+              console.error("Failed to open jarri.systems", error);
+            });
+          }}
+        >
+          <img
+            className="workspace-shell__logo"
+            src={jarriWorkspaceLogo}
+            alt="Jarri Workspace"
+          />
+        </button>
 
         <div className="workspace-shell__actions">
           <button

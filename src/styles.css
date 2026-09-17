@@ -5306,3 +5306,25 @@ code {
   outline: 1px solid var(--color-border);
   outline-offset: 3px;
 }
+
+/* Workspace Core external Jarri identity link */
+
+.workspace-shell__logo-link {
+  display: block;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.workspace-shell__logo-link:hover .workspace-shell__logo {
+  opacity: 0.9;
+}
+
+.workspace-shell__logo-link:focus-visible {
+  outline: 1px solid var(--color-border);
+  outline-offset: 4px;
+}
