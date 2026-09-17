@@ -5,6 +5,7 @@ import {
 } from "../core/panelSemantics";
 import { MissingPanel } from "./MissingPanel";
 import { SettingsPanel } from "./SettingsPanel";
+import { CalendarPanel } from "./CalendarPanel";
 import { ThemeColorsPanel } from "./ThemeColorsPanel";
 import {
   ColorPickerPanel,
@@ -76,6 +77,36 @@ const settingsPanelDefinition: PanelDefinition = {
   ),
   surfacePresentationMemory: {},
   Component: SettingsPanel,
+};
+
+const calendarPanelDefinition: PanelDefinition = {
+  moduleId: "core",
+  panelType: "calendar",
+  title: "Calendar",
+  description: "Workspace-local calendar and scheduled events.",
+  category: "core",
+  defaultGeometry: { x: 260, y: 120, width: 1080, height: 760 },
+  minGeometry: { width: 720, height: 520 },
+  stateVersion: 1,
+  capabilities: {
+    closable: true,
+    resizable: true,
+    movable: true,
+    renameable: false,
+    canBeDirty: false,
+  },
+  createInitialState: () => ({}),
+  normalizeState: () => ({
+    state: {},
+    repaired: false,
+    warnings: [],
+  }),
+  semanticStrategy: panelSummarySemantic(
+    "Ready",
+    "Workspace Calendar is available for local scheduling.",
+  ),
+  surfacePresentationMemory: {},
+  Component: CalendarPanel,
 };
 
 const themeColorsPanelDefinition: PanelDefinition = {
@@ -265,6 +296,7 @@ export const coreModule: WorkspaceModuleDefinition = {
   panels: [
     missingPanelDefinition,
     settingsPanelDefinition,
+    calendarPanelDefinition,
     themeColorsPanelDefinition,
     colorPickerPanelDefinition,
     imageViewerPanelDefinition,

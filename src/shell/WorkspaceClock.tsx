@@ -3,6 +3,7 @@ import type { WorkspaceClockPreferences } from "../core/types";
 
 type WorkspaceClockProps = {
   preferences: WorkspaceClockPreferences;
+  onOpenCalendar: () => void;
 };
 
 function millisecondsUntilNextMinute(now: Date): number {
@@ -39,6 +40,7 @@ function isoWeekNumber(date: Date): number {
 
 export function WorkspaceClock({
   preferences,
+  onOpenCalendar,
 }: WorkspaceClockProps) {
   const [now, setNow] = useState(() => new Date());
 
@@ -102,14 +104,16 @@ export function WorkspaceClock({
   }
 
   return (
-    <time
-      className="workspace-shell__clock"
-      dateTime={now.toISOString()}
-      title={now.toLocaleString()}
+    <button
+      type="button"
+      className="workspace-shell__clock workspace-shell__clock--button"
+      title={`${now.toLocaleString()} · Open Calendar`}
+      aria-label="Open Calendar"
+      onClick={onOpenCalendar}
     >
       <strong>{time}</strong>
       {date ? <span>{date}</span> : null}
       {week ? <span>{week}</span> : null}
-    </time>
+    </button>
   );
 }

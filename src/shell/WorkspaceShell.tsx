@@ -373,7 +373,27 @@ export function WorkspaceShell() {
             Settings
           </button>
 
-          <WorkspaceClock preferences={preferences.clock} />
+          <WorkspaceClock
+            preferences={preferences.clock}
+            onOpenCalendar={() => {
+              const existing = controller.activeTab.panels.find(
+                (panel) =>
+                  panel.moduleId === "core" &&
+                  panel.panelType === "calendar",
+              );
+
+              if (existing) {
+                if (existing.display?.mode === "minimized") {
+                  controller.togglePanelMinimized(existing.id);
+                }
+
+                controller.focusPanel(existing.id);
+                return;
+              }
+
+              controller.createPanel("core", "calendar");
+            }}
+          />
         </div>
       </header>
 
