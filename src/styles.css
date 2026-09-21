@@ -1725,6 +1725,7 @@ button:disabled {
   color: var(--color-muted);
   font-size: 0.78rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .jarri-degraded,
@@ -4806,21 +4807,23 @@ code {
 .calendar-panel__weekday-row,
 .calendar-panel__week-row {
   display: grid;
-  grid-template-columns: 52px repeat(7, minmax(0, 1fr));
+  grid-template-columns: 3.5em repeat(7, minmax(0, 1fr));
 }
 
 .calendar-panel__weekday-row {
   color: var(--color-muted);
-  font-size: calc(0.76rem * var(--calendar-font-scale));
+  font-size: inherit;
   font-weight: 700;
   text-align: center;
 }
 
 .calendar-panel__weekday-row > span {
   padding: 4px;
+  font-size: 0.76em;
 }
 
 .calendar-panel__week-heading {
+  padding-inline: 0.25em;
   text-align: left;
 }
 
@@ -4839,8 +4842,9 @@ code {
 .calendar-panel__week-number {
   display: flex;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: flex-start;
   padding-top: 8px;
+  padding-inline: 0.25em;
   border-right: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-muted);
@@ -5030,7 +5034,7 @@ code {
 
   .calendar-panel__weekday-row,
   .calendar-panel__week-row {
-    grid-template-columns: 42px repeat(7, minmax(86px, 1fr));
+    grid-template-columns: 3.5em repeat(7, minmax(86px, 1fr));
     min-width: 650px;
   }
 
