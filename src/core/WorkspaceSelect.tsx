@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
@@ -218,6 +219,12 @@ export function WorkspaceSelect<T extends string>({
     open && triggerRef.current
       ? triggerRef.current.closest(".workspace-shell")
       : null;
+  const panelFrame =
+    open && triggerRef.current
+      ? (triggerRef.current.closest(".panel-frame") as HTMLElement | null)
+      : null;
+  const panelFontScale =
+    panelFrame?.style.getPropertyValue("--panel-font-scale").trim() || "1";
 
   const popup =
     open && shell && popupGeometry
@@ -231,7 +238,8 @@ export function WorkspaceSelect<T extends string>({
               left: `${popupGeometry.left}px`,
               top: `${popupGeometry.top}px`,
               minWidth: `${popupGeometry.minWidth}px`,
-            }}
+              "--panel-font-scale": panelFontScale,
+            } as CSSProperties}
           >
             {options.map((option, index) => {
               const selected = option.value === value;

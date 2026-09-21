@@ -1276,7 +1276,7 @@ button:disabled {
 
 .panel-frame__title span {
   color: var(--color-muted);
-  font-size: 0.74rem;
+  font-size: 0.74em;
 }
 
 .panel-kind {
@@ -1321,7 +1321,7 @@ button:disabled {
   width: auto;
   min-width: 42px;
   padding: 0 8px;
-  font-size: 0.76rem;
+  font-size: 0.87em;
 }
 
 .panel-frame__projection-copy[data-frame-control-status="unavailable"] {
@@ -1351,6 +1351,8 @@ button:disabled {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  container-type: inline-size;
+  /* Panel text starts at this frame-scaled root; descendants should inherit or use em. */
   font-size: calc(1rem * var(--panel-font-scale, 1));
 }
 
@@ -1377,8 +1379,8 @@ button:disabled {
 
 .panel-body {
   display: grid;
-  gap: 14px;
-  padding: var(--density-pad, 14px);
+  gap: 0.875em;
+  padding: calc(var(--density-pad, 14px) * var(--panel-font-scale, 1));
 }
 
 .panel-body--loading-boundary,
@@ -1390,7 +1392,7 @@ button:disabled {
 
 .panel-body--loading-boundary span,
 .panel-body--failure-boundary span {
-  font-size: 0.74rem;
+  font-size: 0.74em;
   text-transform: uppercase;
 }
 
@@ -1417,8 +1419,8 @@ button:disabled {
 .truth-tile {
   display: grid;
   gap: 7px;
-  min-height: 82px;
-  padding: 12px;
+  min-height: 5.125em;
+  padding: 0.75em;
 }
 
 .truth-tile span,
@@ -1426,7 +1428,7 @@ button:disabled {
 .advisory-toolbar span,
 .advisory-entry span {
   color: var(--color-muted);
-  font-size: 0.76rem;
+  font-size: 0.76em;
   font-weight: 750;
   text-transform: uppercase;
 }
@@ -1438,7 +1440,7 @@ button:disabled {
 
 .doctrine-strip,
 .timeline-detail {
-  padding: 12px;
+  padding: 0.75em;
 }
 
 .doctrine-strip p,
@@ -1451,7 +1453,7 @@ button:disabled {
 }
 
 .timeline-demo {
-  grid-template-columns: 190px minmax(0, 1fr);
+  grid-template-columns: minmax(8em, 0.7fr) minmax(0, 1.3fr);
   height: 100%;
 }
 
@@ -1464,13 +1466,13 @@ button:disabled {
 .timeline-entry {
   display: grid;
   gap: 4px;
-  padding: 10px;
+  padding: 0.625em;
   text-align: left;
 }
 
 .timeline-entry span {
   color: var(--color-muted);
-  font-size: 0.76rem;
+  font-size: 0.76em;
   font-weight: 800;
 }
 
@@ -1496,8 +1498,8 @@ button:disabled {
 }
 
 .advisory-toolbar button {
-  min-height: 32px;
-  padding: 5px 10px;
+  min-height: 2em;
+  padding: 0.3125em 0.625em;
 }
 
 .advisory-list {
@@ -1506,7 +1508,13 @@ button:disabled {
 }
 
 .advisory-entry {
-  padding: 10px;
+  padding: 0.625em;
+}
+
+@container (max-width: 700px) {
+  .timeline-demo {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .advisory-entry div {
@@ -3078,7 +3086,9 @@ code {
 }
 
 .settings-panel {
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(min(17.5em, 40%), min(21.25em, 45%));
   grid-auto-flow: row;
   align-content: start;
   align-items: start;
@@ -3096,7 +3106,7 @@ code {
 
 .settings-panel label {
   display: grid;
-  grid-template-columns: 116px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(4.5em, 0.65fr) minmax(0, 1.35fr) auto;
   align-items: center;
   gap: 10px;
 }
@@ -3112,14 +3122,14 @@ code {
 
 .settings-panel label span {
   color: var(--color-muted);
-  font-size: calc(0.8rem * var(--panel-font-scale, 1));
+  font-size: 0.8em;
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .settings-panel select,
 .settings-panel input[type="range"] {
-  min-height: 34px;
+  min-height: 2.125em;
   min-width: 0;
 }
 
@@ -3129,8 +3139,8 @@ code {
 }
 
 .settings-stepper button {
-  width: 36px;
-  min-height: 34px;
+  width: 2.25em;
+  min-height: 2.125em;
 }
 
 .settings-panel select {
@@ -3170,7 +3180,7 @@ code {
 .settings-panel__section h3 {
   margin: 0;
   color: var(--color-text);
-  font-size: calc(0.9rem * var(--panel-font-scale, 1));
+  font-size: 0.9em;
 }
 
 .settings-panel__section-header {
@@ -3182,13 +3192,13 @@ code {
 
 .settings-color-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(7em, 1fr));
   gap: 8px;
 }
 
 .settings-color-token {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px 22px;
+  grid-template-columns: minmax(0, 1fr) 28px 1.4em;
   align-items: center;
   gap: 5px;
   min-width: 0;
@@ -3202,7 +3212,7 @@ code {
   min-width: 0;
   overflow: hidden;
   color: var(--color-muted);
-  font-size: calc(0.78rem * var(--panel-font-scale, 1));
+  font-size: 0.78em;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3228,16 +3238,16 @@ code {
 }
 
 .settings-color-token__clear {
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
+  width: 1.4em;
+  height: 1.4em;
+  min-width: 1.4em;
   padding: 0;
   line-height: 1;
 }
 
-@media (max-width: 900px) {
+@container (max-width: 600px) {
   .settings-color-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(7em, 1fr));
   }
 }
 
@@ -3275,7 +3285,7 @@ code {
 }
 
 .settings-module-row button {
-  min-height: 30px;
+  min-height: 1.875em;
   padding: 4px 8px;
 }
 
@@ -3545,7 +3555,7 @@ code {
   background: transparent;
   color: #8fd0ff;
   font-family: var(--font-family-mono);
-  font-size: 0.78rem;
+  font-size: 0.78em;
   line-height: 1.35;
   text-align: left;
   text-decoration: none;
@@ -3566,7 +3576,7 @@ code {
   min-height: 0;
   overflow: auto;
   font-family: var(--font-family-mono);
-  font-size: 0.82rem;
+  font-size: 0.82em;
   line-height: 1.45;
   white-space: pre-wrap;
 }
@@ -3913,7 +3923,7 @@ code {
 
 /* Settings dashboard */
 .settings-panel__section--interface {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12em), 1fr));
   align-items: start;
   gap: 12px;
 }
@@ -3935,29 +3945,31 @@ code {
 .settings-panel__group h4 {
   margin: 0 0 4px;
   color: var(--color-text);
-  font-size: calc(0.78rem * var(--panel-font-scale, 1));
+  font-size: 0.78em;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .settings-panel__group label {
-  grid-template-columns: 92px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(4em, 0.65fr) minmax(0, 1fr) auto;
 }
 
 .settings-panel__group--surfaces {
-  grid-row: span 2;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .settings-surface-grid {
   display: grid;
-  grid-template-columns: minmax(100px, 1fr) 76px 76px;
+  grid-template-columns: minmax(6.25em, 1fr) 4.75em 4.75em;
+  min-width: max-content;
   align-items: center;
   gap: 7px;
 }
 
 .settings-surface-grid > strong {
   color: var(--color-muted);
-  font-size: calc(0.72rem * var(--panel-font-scale, 1));
+  font-size: 0.72em;
   text-transform: uppercase;
 }
 
@@ -3994,65 +4006,13 @@ code {
   }
 
   .settings-panel__section--interface {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12em), 1fr));
   }
 }
 
 @container (max-width: 560px) {
   .settings-panel__section--interface {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .settings-panel__group--surfaces {
-    grid-row: auto;
-  }
-}
-
-/*
- * Settings Interface card composition:
- *
- *   Display | Layout | System Surfaces
- *           | Clock  |
- *
- * Display and System Surfaces span the two-row height. Layout and Clock
- * deliberately share the middle column.
- */
-.settings-panel__group--display {
-  grid-column: 1;
-  grid-row: 2 / span 2;
-  align-self: stretch;
-}
-
-.settings-panel__group--layout {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.settings-panel__section--interface > .settings-panel__group--surfaces {
-  grid-column: 3;
-  grid-row: 2 / span 2;
-  align-self: stretch;
-}
-
-.settings-panel__group--clock {
-  grid-column: 2;
-  grid-row: 3;
-}
-
-/* The two middle cards determine their own natural heights. */
-.settings-panel__section--interface {
-  grid-template-rows: auto auto auto;
-}
-
-/* Narrow layouts return ownership to normal document flow. */
-@container (max-width: 780px) {
-  .settings-panel__group--display,
-  .settings-panel__group--layout,
-  .settings-panel__section--interface > .settings-panel__group--surfaces,
-  .settings-panel__group--clock {
-    grid-column: auto;
-    grid-row: auto;
-    align-self: start;
   }
 }
 
@@ -4093,7 +4053,7 @@ code {
 
 .color-picker-panel__heading span {
   color: var(--color-muted);
-  font-size: calc(0.8rem * var(--panel-font-scale, 1));
+  font-size: 0.8em;
 }
 
 .color-picker-panel__preview {
@@ -4132,7 +4092,7 @@ code {
 
 .color-picker-panel__hue {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-columns: 3em minmax(0, 1fr);
   align-items: center;
   gap: 10px;
 }
@@ -4196,12 +4156,12 @@ code {
 
 .workspace-select__trigger {
   width: 100%;
-  min-height: 34px;
+  min-height: 2.125em;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 4px 9px;
+  gap: 0.625em;
+  padding: 0.25em 0.5625em;
   border: 1px solid var(--color-border-strong);
   border-radius: 6px;
   background: var(--color-control);
@@ -4240,18 +4200,20 @@ code {
   border-radius: 7px;
   background: var(--color-menu);
   color: var(--color-text);
+  /* This portal receives its owning frame scale because it leaves the frame subtree. */
+  font-size: calc(1rem * var(--panel-font-scale, 1));
   box-shadow: 0 14px 32px rgb(0 0 0 / 0.34);
 }
 
 .workspace-select__option {
   width: 100%;
   min-width: max-content;
-  min-height: 30px;
+  min-height: 1.875em;
   display: grid;
-  grid-template-columns: max-content 18px;
+  grid-template-columns: max-content 1.125em;
   align-items: center;
-  gap: 8px;
-  padding: 5px 7px;
+  gap: 0.5em;
+  padding: 0.3125em 0.4375em;
   border: 0;
   border-radius: 4px;
   background: transparent;
@@ -4285,7 +4247,7 @@ code {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
   min-width: 0;
-  min-height: 34px;
+  min-height: 2.125em;
   border: 1px solid var(--color-border-strong);
   border-radius: 6px;
   background: var(--color-control);
@@ -4316,7 +4278,7 @@ code {
 
 .workspace-number-input__buttons {
   display: grid;
-  grid-template-columns: repeat(2, 28px);
+  grid-template-columns: repeat(2, 1.75em);
   border-left: 1px solid var(--color-border-strong);
 }
 
@@ -4380,8 +4342,8 @@ code {
 }
 
 .workspace-image-viewer__status {
-  max-width: min(32rem, calc(100% - 32px));
-  padding: 10px 12px;
+  max-width: min(32em, calc(100% - 32px));
+  padding: 0.625em 0.75em;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-panel);
@@ -4403,12 +4365,12 @@ code {
   position: absolute;
   right: 8px;
   bottom: 6px;
-  padding: 2px 6px;
+  padding: 0.125em 0.375em;
   border: 1px solid rgb(255 255 255 / 0.16);
   border-radius: 3px;
   background: rgb(0 0 0 / 0.68);
   color: rgb(255 255 255 / 0.78);
-  font-size: 10px;
+  font-size: 0.625em;
   line-height: 1.4;
   pointer-events: none;
 }
@@ -4417,7 +4379,7 @@ code {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5em;
   overflow: hidden;
 }
 
@@ -4442,7 +4404,7 @@ code {
 .workspace-file-browser-toolbar > div:first-child,
 .workspace-file-browser-selection__value {
   display: grid;
-  min-width: 120px;
+  min-width: 7.5em;
   gap: 2px;
 }
 
@@ -4451,7 +4413,7 @@ code {
 .workspace-file-browser-controls span,
 .workspace-file-browser-inline-edit span {
   color: var(--color-muted);
-  font-size: 0.78rem;
+  font-size: 0.78em;
   text-transform: uppercase;
 }
 
@@ -4485,8 +4447,8 @@ code {
 .workspace-file-browser-controls input[type="text"],
 .workspace-file-browser-controls input:not([type]),
 .workspace-file-browser-inline-edit input {
-  min-width: 110px;
-  max-width: 260px;
+  min-width: 6.875em;
+  max-width: 16.25em;
 }
 
 .workspace-file-browser-toggle {
@@ -4499,8 +4461,9 @@ code {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(180px, 0.34fr) minmax(260px, 1fr);
+  grid-template-columns: minmax(11.25em, 0.34fr) minmax(16.25em, 1fr);
   gap: 8px;
+  overflow: auto;
 }
 
 .workspace-file-browser-tree,
@@ -4514,7 +4477,7 @@ code {
 .workspace-file-browser-row {
   display: grid;
   width: 100%;
-  min-height: 28px;
+  min-height: 1.75em;
   grid-template-columns: 18px 22px minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px;
@@ -4547,7 +4510,7 @@ code {
 .workspace-file-browser-selection em,
 .workspace-file-browser-selection small {
   color: var(--color-muted);
-  font-size: 0.76rem;
+  font-size: 0.76em;
 }
 
 .workspace-file-browser-empty,
@@ -4555,7 +4518,7 @@ code {
 .workspace-file-browser-search-diagnostic,
 .workspace-degraded--inline,
 .workspace-text-viewer__error {
-  padding: 8px;
+  padding: 0.5em;
   color: var(--color-muted);
 }
 
@@ -4588,7 +4551,7 @@ code {
 
 .workspace-file-browser-breadcrumb button {
   min-width: 0;
-  max-width: 140px;
+  max-width: 8.75em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4596,7 +4559,7 @@ code {
 
 .workspace-file-browser-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(6em, 1fr));
   gap: 8px;
   padding: 8px;
 }
@@ -4605,7 +4568,7 @@ code {
   display: grid;
   min-width: 0;
   aspect-ratio: 1 / 1.08;
-  grid-template-rows: 40px auto 16px;
+  grid-template-rows: 40px auto minmax(1em, auto);
   align-items: center;
   justify-items: center;
   gap: 4px;
@@ -4632,7 +4595,7 @@ code {
 }
 
 .workspace-file-browser-selection {
-  min-height: 52px;
+  min-height: 3.25em;
 }
 
 .workspace-file-browser-selection__value {
@@ -4716,7 +4679,7 @@ code {
 
 .workspace-text-viewer__header span {
   color: var(--color-muted);
-  font-size: 0.78rem;
+  font-size: 0.78em;
 }
 
 .workspace-text-viewer__content {
@@ -4729,7 +4692,7 @@ code {
   background: color-mix(in srgb, var(--color-canvas) 55%, var(--color-panel));
   color: var(--color-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.84rem;
+  font-size: 0.84em;
   line-height: 1.45;
 }
 
@@ -4766,26 +4729,24 @@ code {
 }
 
 .calendar-panel {
-  --calendar-font-scale: var(--panel-font-scale, 1);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  gap: 10px;
+  gap: 0.625em;
   height: 100%;
   min-height: 0;
-  padding: 12px;
+  padding: 0.75em;
   position: relative;
-  font-size: calc(1rem * var(--calendar-font-scale));
 }
 
 .calendar-panel__toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5em;
 }
 
 .calendar-panel__toolbar > strong {
   min-width: 0;
-  font-size: calc(1.05rem * var(--calendar-font-scale));
+  font-size: 1.05em;
   text-transform: capitalize;
 }
 
@@ -4818,7 +4779,7 @@ code {
 }
 
 .calendar-panel__weekday-row > span {
-  padding: 4px;
+  padding: 0.25em;
   font-size: 0.76em;
 }
 
@@ -4829,7 +4790,7 @@ code {
 
 .calendar-panel__month {
   display: grid;
-  grid-template-rows: repeat(6, minmax(72px, 1fr));
+  grid-template-rows: repeat(6, minmax(4.5em, 1fr));
   min-height: 0;
   border-top: 1px solid var(--color-border);
   border-left: 1px solid var(--color-border);
@@ -4843,12 +4804,12 @@ code {
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
-  padding-top: 8px;
+  padding-top: 0.5em;
   padding-inline: 0.25em;
   border-right: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-muted);
-  font-size: calc(0.72rem * var(--calendar-font-scale));
+  font-size: 0.72em;
   font-weight: 700;
 }
 
@@ -4909,7 +4870,7 @@ code {
   border: 0;
   background: transparent;
   color: var(--color-text);
-  padding: 4px 5px 2px;
+  padding: 0.25em 0.3125em 0.125em;
   cursor: pointer;
 }
 
@@ -4920,7 +4881,7 @@ code {
   min-width: 1.8em;
   min-height: 1.8em;
   padding: 0 0.35em;
-  font-size: calc(0.78rem * var(--calendar-font-scale));
+  font-size: 0.78em;
 }
 
 .calendar-panel__events {
@@ -4935,13 +4896,13 @@ code {
 .calendar-panel__event {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 0.1875em;
   min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: 3px;
-  padding-left: 5px;
+  padding-left: 0.3125em;
   background: var(--color-panel-header);
-  font-size: calc(0.76rem * var(--calendar-font-scale));
+  font-size: 0.76em;
   cursor: pointer;
 }
 
@@ -4983,9 +4944,9 @@ code {
 
 .calendar-panel__event-form {
   display: grid;
-  grid-template-columns: auto 110px minmax(180px, 1fr) auto;
+  grid-template-columns: auto 6.875em minmax(11.25em, 1fr) auto;
   align-items: end;
-  gap: 8px;
+  gap: 0.5em;
   padding-top: 2px;
 }
 
@@ -4998,15 +4959,15 @@ code {
 
 .calendar-panel__event-form-heading span {
   color: var(--color-muted);
-  font-size: calc(0.75rem * var(--calendar-font-scale));
+  font-size: 0.75em;
 }
 
 .calendar-panel__event-form label {
   display: grid;
-  gap: 3px;
+  gap: 0.1875em;
   min-width: 0;
   color: var(--color-muted);
-  font-size: calc(0.72rem * var(--calendar-font-scale));
+  font-size: 0.72em;
   font-weight: 700;
 }
 
@@ -5018,7 +4979,7 @@ code {
   border-radius: 4px;
   background: var(--color-panel);
   color: var(--color-text);
-  padding: 4px 7px;
+  padding: 0.25em 0.4375em;
   font: inherit;
 }
 
@@ -5034,7 +4995,7 @@ code {
 
   .calendar-panel__weekday-row,
   .calendar-panel__week-row {
-    grid-template-columns: 3.5em repeat(7, minmax(86px, 1fr));
+    grid-template-columns: 3.5em repeat(7, minmax(5.375em, 1fr));
     min-width: 650px;
   }
 
@@ -5042,6 +5003,12 @@ code {
     min-width: 650px;
   }
 
+  .calendar-panel__event-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 760px) {
   .calendar-panel__event-form {
     grid-template-columns: 1fr;
   }
@@ -5072,16 +5039,16 @@ code {
 
 .calendar-panel__field-error {
   color: var(--color-danger, #ef6b73);
-  font-size: calc(0.68rem * var(--calendar-font-scale));
+  font-size: 0.68em;
   font-weight: 600;
 }
 
 .calendar-panel__copy-mode {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) auto;
+  grid-template-columns: minmax(10em, 1fr) auto;
   align-items: center;
-  gap: 6px 12px;
-  padding-top: 8px;
+  gap: 0.375em 0.75em;
+  padding-top: 0.5em;
   border-top: 1px solid var(--color-border);
 }
 
@@ -5095,7 +5062,7 @@ code {
 .calendar-panel__copy-heading span {
   overflow: hidden;
   color: var(--color-muted);
-  font-size: calc(0.75rem * var(--calendar-font-scale));
+  font-size: 0.75em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -5103,7 +5070,7 @@ code {
 .calendar-panel__copy-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 0.3125em;
 }
 
 .calendar-panel__copy-controls button {
