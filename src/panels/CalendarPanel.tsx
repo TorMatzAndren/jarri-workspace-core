@@ -147,7 +147,56 @@ function eventSort(a: CalendarEvent, b: CalendarEvent): number {
 
 type CalendarTimeFormat = PanelBodyProps["preferences"]["clock"]["timeFormat"];
 
-type CopyCadence = "once" | "daily" | "weekly";
+type CopyMode = "off" | "copyDate" | "copyWeekly" | "copyWorkWeek";
+type ActiveCopyMode = Exclude<CopyMode, "off">;
+
+type FrozenCopyEvent = {
+  title: string;
+  time: string;
+};
+
+type FrozenEventSourceEvent = CalendarEvent & {
+  weekdayOffset: number;
+};
+
+type FrozenWorkWeekEvent = {
+  weekdayOffset: number;
+  title: string;
+  time: string;
+};
+
+type FrozenWorkWeek = {
+  monday: string;
+  events: FrozenWorkWeekEvent[];
+};
+
+export type CopySource =
+  | {
+      kind: "event";
+      sourceDate: string;
+      weekdayOffset: number;
+      event: FrozenEventSourceEvent;
+      workWeek: FrozenWorkWeek;
+    }
+  | {
+      kind: "date";
+      sourceDate: string;
+      weekdayOffset: number;
+      events: FrozenCopyEvent[];
+      workWeek: FrozenWorkWeek;
+    };
+
+type CopySourceSelection =
+  | { kind: "event"; event: CalendarEvent }
+  | { kind: "date"; date: string };
+
+export function removeEventsByIds<T extends { id: string }>(
+  events: readonly T[],
+  ids: readonly string[],
+): T[] {
+  const idsToRemove = new Set(ids);
+  return events.filter((event) => !idsToRemove.has(event.id));
+}
 
 function parseTimeDraft(
   value: string,
@@ -243,20 +292,196 @@ function formatEventTime(
   return `${displayHour}:${minute} ${meridiem}`;
 }
 
-function addCalendarDays(date: string, days: number): string {
-  const [year, month, day] = date.split("-").map(Number);
+export function addCalendarDays(date: string, days: number): string {
+  const working = parseCalendarDate(date);
 
-  const working = new Date(
-    Date.UTC(year, month - 1, day),
+  if (!working) {
+    return date;
+  }
+
+  working.setDate(working.getDate() + days);
+  return dateKey(working);
+}
+
+export function parseCalendarDate(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(0);
+  parsed.setHours(12, 0, 0, 0);
+  parsed.setFullYear(year, month - 1, day);
+
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+export function weekdayOffset(date: string): number | null {
+  const parsed = parseCalendarDate(date);
+
+  return parsed ? (parsed.getDay() + 6) % 7 : null;
+}
+
+export function mondayOfCalendarWeek(date: string): string | null {
+  const offset = weekdayOffset(date);
+
+  return offset === null ? null : addCalendarDays(date, -offset);
+}
+
+export function freezeCopySource(
+  calendarEvents: readonly CalendarEvent[],
+  selection: CopySourceSelection,
+): CopySource | null {
+  const sourceDate =
+    selection.kind === "event" ? selection.event.date : selection.date;
+  const sourceWeekday = weekdayOffset(sourceDate);
+  const sourceMonday = mondayOfCalendarWeek(sourceDate);
+
+  if (sourceWeekday === null || !sourceMonday) {
+    return null;
+  }
+
+  const workWeekDates = new Set(
+    Array.from({ length: 5 }, (_, offset) =>
+      addCalendarDays(sourceMonday, offset),
+    ),
+  );
+  const workWeek: FrozenWorkWeek = {
+    monday: sourceMonday,
+    events: calendarEvents.flatMap((event): FrozenWorkWeekEvent[] => {
+      if (!workWeekDates.has(event.date)) {
+        return [];
+      }
+
+      const offset = weekdayOffset(event.date);
+      return offset === null
+        ? []
+        : [{ weekdayOffset: offset, title: event.title, time: event.time }];
+    }),
+  };
+
+  if (selection.kind === "event") {
+    return {
+      kind: "event",
+      sourceDate,
+      weekdayOffset: sourceWeekday,
+      event: { ...selection.event, weekdayOffset: sourceWeekday },
+      workWeek,
+    };
+  }
+
+  return {
+    kind: "date",
+    sourceDate,
+    weekdayOffset: sourceWeekday,
+    events: calendarEvents
+      .filter((event) => event.date === sourceDate)
+      .map(({ title, time }) => ({ title, time })),
+    workWeek,
+  };
+}
+
+export function sourceSupportsCopyMode(
+  source: CopySource | null,
+  mode: ActiveCopyMode,
+): boolean {
+  if (!source) {
+    return false;
+  }
+
+  if (mode === "copyWorkWeek") {
+    return source.workWeek.events.length > 0;
+  }
+
+  return source.kind === "event" || source.events.length > 0;
+}
+
+export function createCopiesForDestination(
+  source: CopySource,
+  mode: ActiveCopyMode,
+  destinationDate: string,
+  createId: () => string,
+): CalendarEvent[] {
+  if (!sourceSupportsCopyMode(source, mode)) {
+    return [];
+  }
+
+  const makeCopy = (
+    date: string,
+    event: FrozenCopyEvent,
+  ): CalendarEvent => ({
+    id: createId(),
+    date,
+    title: event.title,
+    time: event.time,
+  });
+
+  if (mode === "copyDate") {
+    return source.kind === "event"
+      ? [makeCopy(destinationDate, source.event)]
+      : source.events.map((event) => makeCopy(destinationDate, event));
+  }
+
+  const targetMonday = mondayOfCalendarWeek(destinationDate);
+
+  if (!targetMonday) {
+    return [];
+  }
+
+  if (mode === "copyWeekly") {
+    const targetDate = addCalendarDays(targetMonday, source.weekdayOffset);
+
+    return source.kind === "event"
+      ? [makeCopy(targetDate, source.event)]
+      : source.events.map((event) => makeCopy(targetDate, event));
+  }
+
+  return source.workWeek.events.map((event) =>
+    makeCopy(
+      addCalendarDays(targetMonday, event.weekdayOffset),
+      event,
+    ),
+  );
+}
+
+export function createCopyDestinationTransaction(
+  existingEvents: readonly CalendarEvent[],
+  source: CopySource | null,
+  mode: CopyMode,
+  destinationDate: string,
+  createId: () => string,
+): { events: CalendarEvent[]; generatedIds: string[] } | null {
+  if (mode === "off" || !source || !sourceSupportsCopyMode(source, mode)) {
+    return null;
+  }
+
+  const copies = createCopiesForDestination(
+    source,
+    mode,
+    destinationDate,
+    createId,
   );
 
-  working.setUTCDate(working.getUTCDate() + days);
+  if (copies.length === 0) {
+    return null;
+  }
 
-  return [
-    working.getUTCFullYear(),
-    pad(working.getUTCMonth() + 1),
-    pad(working.getUTCDate()),
-  ].join("-");
+  return {
+    events: [...existingEvents, ...copies],
+    generatedIds: copies.map((event) => event.id),
+  };
 }
 
 function createEventId(): string {
@@ -276,29 +501,15 @@ export function CalendarPanel({
   const [timeDraft, setTimeDraft] = useState("");
   const [timeError, setTimeError] = useState("");
 
-  const [copySourceId, setCopySourceId] =
-    useState<string | null>(null);
-  const [copyTargetDate, setCopyTargetDate] =
-    useState(todayKey());
-  const [copyDatePickerOpen, setCopyDatePickerOpen] =
-    useState(false);
-  const [copyPickerYear, setCopyPickerYear] =
-    useState(now.getFullYear());
-  const [copyPickerMonth, setCopyPickerMonth] =
-    useState(now.getMonth());
-  const [copyCadence, setCopyCadence] =
-    useState<CopyCadence>("once");
-  const [copyCountDraft, setCopyCountDraft] =
-    useState("1");
+  const [copySource, setCopySource] =
+    useState<CopySource | null>(null);
+  const [copyMode, setCopyMode] = useState<CopyMode>("off");
+  const [copyUndoEventIds, setCopyUndoEventIds] =
+    useState<string[] | null>(null);
 
   const weeks = useMemo(
     () => monthGrid(displayYear, displayMonth),
     [displayYear, displayMonth],
-  );
-
-  const copyPickerWeeks = useMemo(
-    () => monthGrid(copyPickerYear, copyPickerMonth),
-    [copyPickerYear, copyPickerMonth],
   );
 
   const eventsByDate = useMemo(() => {
@@ -378,113 +589,86 @@ export function CalendarPanel({
 
   function removeEvent(eventId: string) {
     commitEvents(events.filter((event) => event.id !== eventId));
+  }
 
-    if (copySourceId === eventId) {
-      setCopySourceId(null);
+  function selectCopySource(source: CopySource) {
+    setCopySource(source);
+    setSelectedDate(source.sourceDate);
+
+    if (
+      copyMode !== "off" &&
+      !sourceSupportsCopyMode(source, copyMode)
+    ) {
+      const fallbackMode = (
+        ["copyDate", "copyWeekly", "copyWorkWeek"] as const
+      ).find((mode) => sourceSupportsCopyMode(source, mode));
+
+      setCopyMode(fallbackMode ?? "off");
     }
   }
 
-  function beginCopy(source: CalendarEvent) {
-    const [year, month] = source.date
-      .split("-")
-      .map(Number);
+  function selectEventSource(event: CalendarEvent) {
+    const source = freezeCopySource(events, { kind: "event", event });
 
-    setCopySourceId(source.id);
-    setCopyTargetDate(source.date);
-    setCopyPickerYear(year);
-    setCopyPickerMonth(month - 1);
-    setCopyDatePickerOpen(false);
-    setCopyCadence("once");
-    setCopyCountDraft("1");
+    if (source) {
+      selectCopySource(source);
+    }
   }
 
-  function openCopyDatePicker() {
-    const [year, month] = copyTargetDate
-      .split("-")
-      .map(Number);
-
-    setCopyPickerYear(year);
-    setCopyPickerMonth(month - 1);
-    setCopyDatePickerOpen(true);
+  function chooseCopyMode(mode: ActiveCopyMode) {
+    if (sourceSupportsCopyMode(copySource, mode)) {
+      setCopyMode(mode);
+    }
   }
 
-  function changeCopyPickerMonth(delta: number) {
-    const target = new Date(
-      copyPickerYear,
-      copyPickerMonth + delta,
-      1,
-    );
+  function handleCalendarDayClick(date: string) {
+    if (copyMode === "off") {
+      setSelectedDate(date);
+      const source = freezeCopySource(events, { kind: "date", date });
 
-    setCopyPickerYear(target.getFullYear());
-    setCopyPickerMonth(target.getMonth());
-  }
-
-  function chooseCopyDate(date: Date) {
-    setCopyTargetDate(dateKey(date));
-    setCopyDatePickerOpen(false);
-  }
-
-  function copyPickerToday() {
-    const today = new Date();
-
-    setCopyPickerYear(today.getFullYear());
-    setCopyPickerMonth(today.getMonth());
-    setCopyTargetDate(dateKey(today));
-  }
-
-  function copyEvent(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const source = events.find(
-      (candidate) => candidate.id === copySourceId,
-    );
-
-    if (!source) {
-      setCopySourceId(null);
+      if (source) {
+        setCopySource(source);
+      }
       return;
     }
 
-    const parsedCount = Number.parseInt(copyCountDraft, 10);
-
-    const count =
-      copyCadence === "once"
-        ? 1
-        : Math.max(
-            1,
-            Math.min(
-              104,
-              Number.isFinite(parsedCount) ? parsedCount : 1,
-            ),
-          );
-
-    const intervalDays =
-      copyCadence === "weekly"
-        ? 7
-        : copyCadence === "daily"
-          ? 1
-          : 0;
-
-    const copies = Array.from(
-      { length: count },
-      (_, index): CalendarEvent => ({
-        id: createEventId(),
-        date:
-          intervalDays === 0
-            ? copyTargetDate
-            : addCalendarDays(
-                copyTargetDate,
-                intervalDays * (index + 1),
-              ),
-        title: source.title,
-        time: source.time,
-      }),
+    const transaction = createCopyDestinationTransaction(
+      events,
+      copySource,
+      copyMode,
+      date,
+      createEventId,
     );
 
-    commitEvents([...events, ...copies]);
-    setSelectedDate(copyTargetDate);
-    setCopySourceId(null);
-    setCopyCadence("once");
-    setCopyCountDraft("1");
+    if (transaction) {
+      commitEvents(transaction.events);
+      setCopyUndoEventIds(transaction.generatedIds);
+    }
+  }
+
+  function undoCopy() {
+    if (!copyUndoEventIds) {
+      return;
+    }
+
+    commitEvents(removeEventsByIds(events, copyUndoEventIds));
+    setCopyUndoEventIds(null);
+  }
+
+  function handleCalendarCellClick(
+    event: React.MouseEvent<HTMLDivElement>,
+    date: string,
+  ) {
+    const target = event.target;
+
+    if (
+      target instanceof Element &&
+      target.closest("button, a, input, select, textarea, [role='button']")
+    ) {
+      return;
+    }
+
+    handleCalendarDayClick(date);
   }
 
   return (
@@ -552,15 +736,29 @@ export function CalendarPanel({
                       inMonth ? "" : "calendar-panel__day--outside",
                       isToday ? "calendar-panel__day--today" : "",
                       selected ? "calendar-panel__day--selected" : "",
+                      copySource?.kind === "date" &&
+                      copySource.sourceDate === key
+                        ? "calendar-panel__day--source"
+                        : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
+                    onClick={(event) =>
+                      handleCalendarCellClick(event, key)
+                    }
                   >
                     <button
                       type="button"
                       className="calendar-panel__day-select"
-                      onClick={() => setSelectedDate(key)}
-                      aria-label={`Select ${key}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleCalendarDayClick(key);
+                      }}
+                      aria-label={
+                        copyMode !== "off"
+                          ? `Copy to ${key}`
+                          : `Select ${key}`
+                      }
                     >
                       <span>{day.getDate()}</span>
                     </button>
@@ -569,32 +767,50 @@ export function CalendarPanel({
                       {dayEvents.map((event) => (
                         <div
                           key={event.id}
-                          className="calendar-panel__event"
+                          className={[
+                            "calendar-panel__event",
+                            copySource?.kind === "event" &&
+                            copySource.event.id === event.id
+                              ? "calendar-panel__event--source"
+                              : "",
+                          ].filter(Boolean).join(" ")}
                           title={`${event.time ? `${event.time} · ` : ""}${event.title}`}
+                          onClick={(clickEvent) => {
+                            clickEvent.stopPropagation();
+                            selectEventSource(event);
+                          }}
                         >
-                          <span>
-                            {event.time
-                              ? `${formatEventTime(
-                                  event.time,
-                                  preferences.clock.timeFormat,
-                                )} `
-                              : ""}
-                            {event.title}
-                          </span>
+                          <button
+                            type="button"
+                            className="calendar-panel__event-source"
+                            aria-label={`Select ${event.title} as copy source`}
+                            aria-pressed={
+                              copySource?.kind === "event" &&
+                              copySource.event.id === event.id
+                            }
+                            onClick={(clickEvent) => {
+                              clickEvent.stopPropagation();
+                              selectEventSource(event);
+                            }}
+                          >
+                            <span>
+                              {event.time
+                                ? `${formatEventTime(
+                                    event.time,
+                                    preferences.clock.timeFormat,
+                                  )} `
+                                : ""}
+                              {event.title}
+                            </span>
+                          </button>
 
                           <div className="calendar-panel__event-actions">
                             <button
                               type="button"
-                              onClick={() => beginCopy(event)}
-                              aria-label={`Copy ${event.title}`}
-                              title="Copy event"
-                            >
-                              ⧉
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => removeEvent(event.id)}
+                              onClick={(clickEvent) => {
+                                clickEvent.stopPropagation();
+                                removeEvent(event.id);
+                              }}
                               aria-label={`Delete ${event.title}`}
                               title="Delete event"
                             >
@@ -671,199 +887,102 @@ export function CalendarPanel({
         </button>
       </form>
 
-      {copySourceId ? (
-        <form
-          className="calendar-panel__copy-form"
-          onSubmit={copyEvent}
-        >
-          <div className="calendar-panel__copy-heading">
-            <strong>Copy event</strong>
-            <span>
-              {events.find(
-                (event) => event.id === copySourceId,
-              )?.title ?? "Event"}
-            </span>
-          </div>
-
-          <label>
-            <span>Start date</span>
-            <button
-              type="button"
-              className="calendar-panel__date-picker-button"
-              onClick={openCopyDatePicker}
-            >
-              {copyTargetDate}
-            </button>
-          </label>
-
-          <label>
-            <span>Copy</span>
-            <select
-              value={copyCadence}
-              onChange={(event) =>
-                setCopyCadence(
-                  event.target.value as CopyCadence,
-                )
-              }
-            >
-              <option value="once">Once</option>
-              <option value="daily">Every day</option>
-              <option value="weekly">Every week</option>
-            </select>
-          </label>
-
-          <label>
-            <span>Copies</span>
-            <input
-              type="number"
-              min="1"
-              max="104"
-              value={
-                copyCadence === "once"
-                  ? "1"
-                  : copyCountDraft
-              }
-              disabled={copyCadence === "once"}
-              onChange={(event) =>
-                setCopyCountDraft(event.target.value)
-              }
-            />
-          </label>
-
-          <div className="calendar-panel__copy-actions">
-            <button type="submit">
-              Copy
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setCopyDatePickerOpen(false);
-                setCopySourceId(null);
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      ) : null}
-
-      {copyDatePickerOpen ? (
-        <div
-          className="calendar-panel__modal-backdrop"
-          onMouseDown={() => setCopyDatePickerOpen(false)}
-        >
-          <section
-            className="calendar-panel__date-picker-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Choose copy start date"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="calendar-panel__date-picker-toolbar">
-              <button
-                type="button"
-                onClick={() => changeCopyPickerMonth(-1)}
-                aria-label="Previous month"
-              >
-                ←
-              </button>
-
-              <strong>
-                {monthTitle(
-                  copyPickerYear,
-                  copyPickerMonth,
-                )}
-              </strong>
-
-              <button
-                type="button"
-                onClick={() => changeCopyPickerMonth(1)}
-                aria-label="Next month"
-              >
-                →
-              </button>
-
-              <button
-                type="button"
-                className="calendar-panel__date-picker-today"
-                onClick={copyPickerToday}
-              >
-                Today
-              </button>
-            </div>
-
-            <div
-              className="calendar-panel__date-picker-weekdays"
-              aria-hidden="true"
-            >
-              <span>Week</span>
-
-              {WEEKDAY_LABELS.map((label) => (
-                <span key={label}>{label}</span>
-              ))}
-            </div>
-
-            <div className="calendar-panel__date-picker-grid">
-              {copyPickerWeeks.map((week) => (
-                <div
-                  className="calendar-panel__date-picker-week"
-                  key={dateKey(week[0])}
-                >
-                  <span className="calendar-panel__date-picker-week-number">
-                    Week {isoWeekNumber(week[0])}
-                  </span>
-
-                  {week.map((day) => {
-                    const key = dateKey(day);
-                    const outside =
-                      day.getMonth() !== copyPickerMonth;
-                    const selected =
-                      key === copyTargetDate;
-                    const today =
-                      key === todayKey();
-
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        className={[
-                          "calendar-panel__date-picker-day",
-                          outside
-                            ? "calendar-panel__date-picker-day--outside"
-                            : "",
-                          selected
-                            ? "calendar-panel__date-picker-day--selected"
-                            : "",
-                          today
-                            ? "calendar-panel__date-picker-day--today"
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        onClick={() => chooseCopyDate(day)}
-                      >
-                        {day.getDate()}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-
-            <div className="calendar-panel__date-picker-footer">
-              <span>Selected: {copyTargetDate}</span>
-
-              <button
-                type="button"
-                onClick={() => setCopyDatePickerOpen(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </section>
+      <section
+        className="calendar-panel__copy-mode"
+        aria-label="Calendar copy mode"
+      >
+        <div className="calendar-panel__copy-heading">
+          <strong>Copy source</strong>
+          <span>
+            {!copySource ? (
+              "No copy source selected"
+            ) : copySource.kind === "event" ? (
+              <>Source: {WEEKDAY_LABELS[copySource.weekdayOffset]} {copySource.event.time
+                ? formatEventTime(
+                    copySource.event.time,
+                    preferences.clock.timeFormat,
+                  )
+                : "No time"} · {copySource.event.title}</>
+            ) : (
+              <>Source: {WEEKDAY_LABELS[copySource.weekdayOffset]} {copySource.sourceDate} · {copySource.events.length > 0
+                ? `${copySource.events.length} events`
+                : "No events on selected date"}</>
+            )}
+          </span>
+          {copySource ? (
+            <small>
+              Week {isoWeekNumber(
+                parseCalendarDate(copySource.workWeek.monday) ?? now,
+              )} · {copySource.workWeek.events.length} work-week events
+            </small>
+          ) : null}
         </div>
-      ) : null}
+
+        <div
+          className="calendar-panel__copy-controls"
+          role="group"
+          aria-label="Choose copy mode"
+        >
+          <button
+            type="button"
+            className={
+              copyMode === "off"
+                ? "calendar-panel__copy-control--active"
+                : ""
+            }
+            aria-pressed={copyMode === "off"}
+            onClick={() => setCopyMode("off")}
+          >
+            Off
+          </button>
+          <button
+            type="button"
+            className={
+              copyMode === "copyDate"
+                ? "calendar-panel__copy-control--active"
+                : ""
+            }
+            aria-pressed={copyMode === "copyDate"}
+            disabled={!sourceSupportsCopyMode(copySource, "copyDate")}
+            onClick={() => chooseCopyMode("copyDate")}
+          >
+            Copy Date
+          </button>
+          <button
+            type="button"
+            className={
+              copyMode === "copyWeekly"
+                ? "calendar-panel__copy-control--active"
+                : ""
+            }
+            aria-pressed={copyMode === "copyWeekly"}
+            disabled={!sourceSupportsCopyMode(copySource, "copyWeekly")}
+            onClick={() => chooseCopyMode("copyWeekly")}
+          >
+            Copy Weekly
+          </button>
+          <button
+            type="button"
+            className={
+              copyMode === "copyWorkWeek"
+                ? "calendar-panel__copy-control--active"
+                : ""
+            }
+            aria-pressed={copyMode === "copyWorkWeek"}
+            disabled={!sourceSupportsCopyMode(copySource, "copyWorkWeek")}
+            onClick={() => chooseCopyMode("copyWorkWeek")}
+          >
+            Copy Work Week
+          </button>
+          <button
+            type="button"
+            disabled={!copyUndoEventIds}
+            onClick={undoCopy}
+          >
+            Undo
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
