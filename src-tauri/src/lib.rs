@@ -1290,6 +1290,182 @@ async fn workspace_capture_frame_screenshot(
         .map_err(|error| format!("Native screenshot channel failed: {error}"))?
 }
 
+const WORKSPACE_SCREENSHOT_NATIVE_MAX_DIMENSION: u32 = 32_767;
+const WORKSPACE_SCREENSHOT_NATIVE_MAX_PIXELS: u64 = 268_000_000;
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceScreenshotTileRequest {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    png: Vec<u8>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceScreenshotCompositionRequest {
+    width: u32,
+    height: u32,
+    canvas_width: u32,
+    canvas_height: u32,
+    canvas_x: u32,
+    canvas_y: u32,
+    background_rgba: [u8; 4],
+    shell_png: Vec<u8>,
+    tiles: Vec<WorkspaceScreenshotTileRequest>,
+}
+
+fn validate_workspace_screenshot_native_size(width: u32, height: u32) -> Result<(), String> {
+    let pixels = u64::from(width)
+        .checked_mul(u64::from(height))
+        .ok_or_else(|| "Workspace screenshot pixel count overflowed.".to_string())?;
+    if width == 0 || height == 0 {
+        return Err("Workspace screenshot dimensions must be positive.".to_string());
+    }
+    if width > WORKSPACE_SCREENSHOT_NATIVE_MAX_DIMENSION
+        || height > WORKSPACE_SCREENSHOT_NATIVE_MAX_DIMENSION
+        || pixels > WORKSPACE_SCREENSHOT_NATIVE_MAX_PIXELS
+    {
+        return Err(format!(
+            "Workspace screenshot exceeds native limits: {}x{} ({} pixels).",
+            width, height, pixels
+        ));
+    }
+    Ok(())
+}
+
+
+#[cfg(test)]
+mod workspace_screenshot_tests {
+    use super::*;
+
+    #[test]
+    fn native_screenshot_size_validation_accepts_workspace_scale() {
+        assert!(validate_workspace_screenshot_native_size(10_000, 10_000).is_ok());
+    }
+
+    #[test]
+    fn native_screenshot_size_validation_rejects_oversized_pixel_area() {
+        assert!(validate_workspace_screenshot_native_size(20_000, 20_000).is_err());
+    }
+
+    #[test]
+    fn native_screenshot_size_validation_rejects_zero_dimensions() {
+        assert!(validate_workspace_screenshot_native_size(0, 100).is_err());
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+async fn workspace_compose_entire_workspace_screenshot(
+    request: WorkspaceScreenshotCompositionRequest,
+) -> Result<Vec<u8>, String> {
+    use cairo::{Context, Format, ImageSurface};
+    use std::io::Cursor;
+
+    validate_workspace_screenshot_native_size(request.width, request.height)?;
+    if request.canvas_x.checked_add(request.canvas_width).is_none()
+        || request.canvas_y.checked_add(request.canvas_height).is_none()
+        || request.canvas_x + request.canvas_width > request.width
+        || request.canvas_y + request.canvas_height > request.height
+    {
+        return Err("Workspace canvas does not fit the final screenshot.".to_string());
+    }
+
+    let target_width = i32::try_from(request.width)
+        .map_err(|_| "Workspace screenshot width is not representable.".to_string())?;
+    let target_height = i32::try_from(request.height)
+        .map_err(|_| "Workspace screenshot height is not representable.".to_string())?;
+    let target = ImageSurface::create(Format::ARgb32, target_width, target_height)
+        .map_err(|error| format!("Could not allocate native screenshot surface: {error}"))?;
+    let context = Context::new(&target)
+        .map_err(|error| format!("Could not create native screenshot context: {error}"))?;
+
+    context.set_source_rgba(
+        f64::from(request.background_rgba[0]) / 255.0,
+        f64::from(request.background_rgba[1]) / 255.0,
+        f64::from(request.background_rgba[2]) / 255.0,
+        f64::from(request.background_rgba[3]) / 255.0,
+    );
+    context
+        .paint()
+        .map_err(|error| format!("Could not paint screenshot background: {error}"))?;
+
+    let shell = ImageSurface::create_from_png(&mut Cursor::new(request.shell_png.as_slice()))
+        .map_err(|error| format!("Could not decode shell screenshot PNG: {error}"))?;
+    if shell.width() > i32::try_from(request.width).unwrap_or(-1)
+        || shell.height() > i32::try_from(request.canvas_y).unwrap_or(-1)
+    {
+        return Err(format!(
+            "Shell screenshot does not fit composition: shell={}x{}, output={}x{}.",
+            shell.width(), shell.height(), request.width, request.height
+        ));
+    }
+    context
+        .set_source_surface(&shell, 0.0, 0.0)
+        .map_err(|error| format!("Could not position shell screenshot: {error}"))?;
+    context
+        .paint()
+        .map_err(|error| format!("Could not paint shell screenshot: {error}"))?;
+
+    for tile in request.tiles {
+        if tile.width == 0 || tile.height == 0 {
+            return Err("Workspace screenshot tile dimensions must be positive.".to_string());
+        }
+        let tile_right = tile
+            .x
+            .checked_add(tile.width)
+            .ok_or_else(|| "Workspace screenshot tile x overflowed.".to_string())?;
+        let tile_bottom = tile
+            .y
+            .checked_add(tile.height)
+            .ok_or_else(|| "Workspace screenshot tile y overflowed.".to_string())?;
+        if tile_right > request.canvas_width || tile_bottom > request.canvas_height {
+            return Err(format!(
+                "Workspace screenshot tile lies outside canvas: ({}, {}, {}, {}).",
+                tile.x, tile.y, tile.width, tile.height
+            ));
+        }
+
+        let surface = ImageSurface::create_from_png(&mut Cursor::new(tile.png.as_slice()))
+            .map_err(|error| format!("Could not decode canvas tile PNG: {error}"))?;
+        if surface.width() != i32::try_from(tile.width).unwrap_or(-1)
+            || surface.height() != i32::try_from(tile.height).unwrap_or(-1)
+        {
+            return Err(format!(
+                "Canvas tile PNG size mismatch: metadata={}x{}, png={}x{}.",
+                tile.width, tile.height, surface.width(), surface.height()
+            ));
+        }
+        context
+            .set_source_surface(
+                &surface,
+                f64::from(request.canvas_x + tile.x),
+                f64::from(request.canvas_y + tile.y),
+            )
+            .map_err(|error| format!("Could not position canvas tile: {error}"))?;
+        context
+            .paint()
+            .map_err(|error| format!("Could not paint canvas tile: {error}"))?;
+    }
+
+    target.flush();
+    let mut png = Vec::new();
+    target
+        .write_to_png(&mut png)
+        .map_err(|error| format!("Could not encode composed screenshot PNG: {error}"))?;
+    Ok(png)
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn workspace_compose_entire_workspace_screenshot(
+    _request: WorkspaceScreenshotCompositionRequest,
+) -> Result<Vec<u8>, String> {
+    Err("Native screenshot composition is currently implemented for Linux only.".to_string())
+}
 #[cfg(not(target_os = "linux"))]
 #[tauri::command]
 async fn workspace_capture_frame_screenshot(
@@ -1307,6 +1483,7 @@ pub fn run() {
         .manage(WorkspaceFsSearchRegistry::default())
         .invoke_handler(tauri::generate_handler![
             workspace_capture_frame_screenshot,
+            workspace_compose_entire_workspace_screenshot,
             workspace_fs_stat,
             workspace_fs_list,
             workspace_fs_search,

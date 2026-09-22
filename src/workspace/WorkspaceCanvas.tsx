@@ -24,6 +24,7 @@ import {
 import { localWheelReservation } from "../core/panelInteractions";
 import { PanelFrame } from "./PanelFrame";
 import { copyWorkspaceScreenshot } from "./screenshot";
+import { normalizeWorkspaceCanvasOrigin, type WorkspaceCanvasScreenshotSource } from "./workspaceScreenshotComposition";
 
 const CANVAS_GRID_SIZE = 24;
 const MIN_CANVAS_WIDTH = 900;
@@ -59,6 +60,8 @@ type Props = {
   fileOperationClipboard: unknown;
   setFileOperationClipboard: (clipboard: unknown) => void;
   onOpenPanelsMenu: () => void;
+  screenshotToolbarRef?: (element: HTMLDivElement | null) => void;
+  onScreenshotSourceChange?: (source: WorkspaceCanvasScreenshotSource | null) => void;
   onFocusPanel: (panelId: string) => void;
   onClosePanel: (panelId: string) => void;
   onTogglePanelMinimized: (panelId: string) => void;
@@ -146,6 +149,8 @@ export function WorkspaceCanvas({
   fileOperationClipboard,
   setFileOperationClipboard,
   onOpenPanelsMenu,
+  screenshotToolbarRef,
+  onScreenshotSourceChange,
   onFocusPanel,
   onClosePanel,
   onTogglePanelMinimized,
@@ -185,6 +190,13 @@ export function WorkspaceCanvas({
     previewBounds ?? canvasBounds,
     panels,
   );
+  const normalizedContentsOrigin = normalizeWorkspaceCanvasOrigin(effectiveBounds);
+
+  useLayoutEffect(() => {
+    const element = logicalRef.current;
+    if (element) onScreenshotSourceChange?.({ element, bounds: effectiveBounds });
+    return () => onScreenshotSourceChange?.(null);
+  }, [effectiveBounds.height, effectiveBounds.width, effectiveBounds.x, effectiveBounds.y, onScreenshotSourceChange]);
 
   useLayoutEffect(() => {
     const surface = surfaceRef.current;
@@ -718,7 +730,7 @@ export function WorkspaceCanvas({
 
   return (
     <section className="workspace-canvas" aria-label="Workspace canvas">
-      <div className="workspace-canvas__toolbar">
+      <div className="workspace-canvas__toolbar" ref={screenshotToolbarRef}>
         <div className="workspace-canvas__toolbar-info">
           <strong>{title}</strong>
           <span>
@@ -816,8 +828,8 @@ export function WorkspaceCanvas({
           <div
             className="workspace-canvas__contents"
             style={{
-              "--workspace-canvas-origin-x": `${effectiveBounds.x}px`,
-              "--workspace-canvas-origin-y": `${effectiveBounds.y}px`,
+              left: `${normalizedContentsOrigin.x}px`,
+              top: `${normalizedContentsOrigin.y}px`,
             } as React.CSSProperties}
           >
           {panels.map((panel) => (

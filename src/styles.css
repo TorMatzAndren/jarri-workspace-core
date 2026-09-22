@@ -3708,6 +3708,48 @@ code {
   min-width: 0;
 }
 
+.workspace-shell__screenshot-cluster {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 0 0 32px;
+  align-items: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+}
+
+.workspace-shell__screenshot-cluster .workspace-shell__action {
+  display: grid;
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  place-items: center;
+}
+
+.workspace-shell__screenshot-status {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: min(240px, 30vw);
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-shell);
+  color: var(--color-muted);
+  font-size: 0.78em;
+  line-height: 1.2;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace-shell__action {
   min-height: 32px;
   padding: 5px 10px;

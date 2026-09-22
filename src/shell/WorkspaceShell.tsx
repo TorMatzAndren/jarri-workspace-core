@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useMemo,
   useRef,
   useState,
@@ -31,8 +32,12 @@ import {
 import jarriWorkspaceLogo from "../assets/jarri-workspace.png";
 import { openExternalUrl } from "../core/platform/openExternalUrl";
 import { WorkspaceClock } from "./WorkspaceClock";
+import { copyWorkspaceScreenshot } from "../workspace/screenshot";
+import type { WorkspaceCanvasScreenshotSource } from "../workspace/workspaceScreenshotComposition";
 
 const JARRI_SYSTEMS_URL = "http://jarri.systems/";
+
+type WorkspaceScreenshotState = "idle" | "copying" | "copied" | "failed";
 
 export function WorkspaceShell() {
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
@@ -43,6 +48,36 @@ export function WorkspaceShell() {
   const [fileOperationClipboard, setFileOperationClipboard] =
     useState<unknown>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const [workspaceScreenshotState, setWorkspaceScreenshotState] = useState<WorkspaceScreenshotState>("idle");
+  const [workspaceScreenshotProgress, setWorkspaceScreenshotProgress] = useState("");
+  const shellCaptureRef = useRef<HTMLElement | null>(null);
+  const headerCaptureRef = useRef<HTMLElement | null>(null);
+  const tabsCaptureRef = useRef<HTMLElement | null>(null);
+  const canvasToolbarCaptureRef = useRef<HTMLDivElement | null>(null);
+  const activeCanvasScreenshotSourceRef = useRef<WorkspaceCanvasScreenshotSource | null>(null);
+  const updateActiveCanvasScreenshotSource = useCallback((source: WorkspaceCanvasScreenshotSource | null) => { activeCanvasScreenshotSourceRef.current = source; }, []);
+  const tabsCaptureRefCallback = useCallback((element: HTMLElement | null) => { tabsCaptureRef.current = element; }, []);
+  const canvasToolbarCaptureRefCallback = useCallback((element: HTMLDivElement | null) => { canvasToolbarCaptureRef.current = element; }, []);
+
+  async function captureEntireWorkspaceScreenshot() {
+    if (workspaceScreenshotState === "copying") return;
+    const shellElement = shellCaptureRef.current;
+    const canvasSource = activeCanvasScreenshotSourceRef.current;
+    const chromeElements = [headerCaptureRef.current, tabsCaptureRef.current, canvasToolbarCaptureRef.current];
+    if (!shellElement || !canvasSource || chromeElements.some((element) => element == null)) {
+      setWorkspaceScreenshotState("failed"); setWorkspaceScreenshotProgress("Screenshot failed");
+      window.setTimeout(() => { setWorkspaceScreenshotState("idle"); setWorkspaceScreenshotProgress(""); }, 2400); return;
+    }
+    setWorkspaceScreenshotState("copying"); setWorkspaceScreenshotProgress("Preparing screenshot…");
+    try {
+      await copyWorkspaceScreenshot({ kind: "entire-workspace", shellElement, chromeElements: chromeElements.filter((element): element is HTMLElement => element != null), canvasElement: canvasSource.element, canvasBounds: canvasSource.bounds, onProgress: setWorkspaceScreenshotProgress });
+      setWorkspaceScreenshotProgress("Screenshot copied"); setWorkspaceScreenshotState("copied");
+      window.setTimeout(() => { setWorkspaceScreenshotState((state) => state === "copied" ? "idle" : state); setWorkspaceScreenshotProgress(""); }, 1600);
+    } catch (error) {
+      console.error("Entire Workspace screenshot failed", error); setWorkspaceScreenshotProgress("Screenshot failed"); setWorkspaceScreenshotState("failed");
+      window.setTimeout(() => { setWorkspaceScreenshotState((state) => state === "failed" ? "idle" : state); setWorkspaceScreenshotProgress(""); }, 2400);
+    }
+  }
   const systemSurfaceDragRef = useRef<{
     surface: "addPanel" | "frameSettings";
     pointerId: number;
@@ -312,6 +347,7 @@ export function WorkspaceShell() {
 
   return (
     <main
+      ref={shellCaptureRef}
       className="workspace-shell"
       data-density={preferences.density}
       data-font-family={preferences.fontFamily}
@@ -330,7 +366,7 @@ export function WorkspaceShell() {
       data-has-custom-menu={Boolean(preferences.colorOverrides.menu)}
       style={colorStyle}
     >
-      <header className="workspace-shell__header">
+      <header className="workspace-shell__header" ref={headerCaptureRef}>
         <button
           type="button"
           className="workspace-shell__logo-link"
@@ -350,6 +386,52 @@ export function WorkspaceShell() {
         </button>
 
         <div className="workspace-shell__actions">
+          <div
+            className="workspace-shell__screenshot-cluster"
+            data-workspace-screenshot-exclude
+          >
+            <button
+              type="button"
+              className={`workspace-shell__action ${
+                workspaceScreenshotState === "copied"
+                  ? "workspace-shell__action--ok"
+                  : workspaceScreenshotState === "failed"
+                    ? "workspace-shell__action--bad"
+                    : ""
+              }`}
+              data-workspace-screenshot-exclude
+              title="Screenshot entire Workspace"
+              aria-label="Screenshot entire Workspace"
+              disabled={workspaceScreenshotState === "copying"}
+              onClick={() => void captureEntireWorkspaceScreenshot()}
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4 7.5h3l1.4-2h7.2l1.4 2h3v11H4z" />
+                <circle cx="12" cy="13" r="3.5" />
+              </svg>
+            </button>
+            {workspaceScreenshotProgress ? (
+              <span
+                className="workspace-shell__screenshot-status"
+                data-workspace-screenshot-exclude
+                aria-live="polite"
+                role="status"
+              >
+                {workspaceScreenshotProgress}
+              </span>
+            ) : null}
+          </div>
+
           <button
             type="button"
             className="workspace-shell__action"
@@ -409,6 +491,7 @@ export function WorkspaceShell() {
       </header>
 
       <TabBar
+        captureRef={tabsCaptureRefCallback}
         tabs={controller.workspace.tabs}
         activeTabId={controller.workspace.activeTabId}
         onSelectTab={controller.selectTab}
@@ -675,6 +758,8 @@ export function WorkspaceShell() {
         modules={modules}
         fileOperationClipboard={fileOperationClipboard}
         setFileOperationClipboard={setFileOperationClipboard}
+        screenshotToolbarRef={canvasToolbarCaptureRefCallback}
+        onScreenshotSourceChange={updateActiveCanvasScreenshotSource}
         onOpenPanelsMenu={() => {
           setFrameControlsMenuOpen(false);
           setPanelMenuOpen((open) => !open);

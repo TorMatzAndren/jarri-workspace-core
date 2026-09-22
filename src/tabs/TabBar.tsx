@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { WorkspaceTab } from "../core/types";
 
 type Props = {
+  captureRef?: (element: HTMLElement | null) => void;
   tabs: WorkspaceTab[];
   activeTabId: string | null;
   onSelectTab: (tabId: string) => void;
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export function TabBar({
+  captureRef,
   tabs,
   activeTabId,
   onSelectTab,
@@ -49,7 +51,11 @@ export function TabBar({
   }
 
   return (
-    <nav className="tab-bar" aria-label="Workspace tabs">
+    <nav
+      ref={captureRef}
+      className="tab-bar"
+      aria-label="Workspace tabs"
+    >
       <div className="tab-bar__tabs">
         {tabs.map((tab) => (
           <div
