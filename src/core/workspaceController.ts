@@ -32,7 +32,6 @@ import type {
 import {
   DEFAULT_WORKSPACE_CANVAS_BOUNDS,
   panelSurfacePresentationKey,
-  panelTypePreferenceKey,
 } from "./types";
 
 const FOCUS_ORDER_COMPACT_THRESHOLD = 500;
@@ -307,8 +306,7 @@ export type WorkspaceController = {
   updatePanelGeometry: (panelId: string, geometry: PanelGeometry) => void;
   updatePanelState: (panelId: string, panelState: unknown) => void;
   updatePanelViewPreferences: (
-    moduleId: string,
-    panelType: string,
+    panelId: string,
     preferences: PanelViewPreferences,
   ) => void;
   updatePreferences: (preferences: Partial<WorkspacePreferences>) => void;
@@ -357,6 +355,28 @@ export function useWorkspaceController({
           ? { ...tab, panels: mutator(tab.panels), updatedAt: now }
           : tab,
       ),
+    }));
+  }
+
+  function closePanel(panelId: string) {
+    const now = nowIso();
+    setWorkspace((current) => ({
+      ...current,
+      tabs: current.tabs.map((tab) =>
+        tab.id === current.activeTabId
+          ? {
+              ...tab,
+              panels: repairFocusOrder(tab.panels.filter((panel) => panel.id !== panelId)),
+              updatedAt: now,
+            }
+          : tab,
+      ),
+      preferences: {
+        ...current.preferences,
+        panelViews: Object.fromEntries(
+          Object.entries(current.preferences.panelViews).filter(([id]) => id !== panelId),
+        ),
+      },
     }));
   }
 
@@ -491,9 +511,22 @@ export function useWorkspaceController({
       }
 
       const tabs = current.tabs.filter((tab) => tab.id !== tabId);
+      const removedPanelIds = new Set(
+        current.tabs
+          .find((tab) => tab.id === tabId)
+          ?.panels.map((panel) => panel.id) ?? [],
+      );
       return {
         ...current,
         tabs,
+        preferences: {
+          ...current.preferences,
+          panelViews: Object.fromEntries(
+            Object.entries(current.preferences.panelViews).filter(
+              ([id]) => !removedPanelIds.has(id),
+            ),
+          ),
+        },
         activeTabId:
           current.activeTabId === tabId ? tabs[0]?.id ?? null : current.activeTabId,
       };
@@ -745,18 +778,20 @@ export function useWorkspaceController({
   }
 
   function updatePanelViewPreferences(
-    moduleId: string,
-    panelType: string,
+    panelId: string,
     preferences: PanelViewPreferences,
   ) {
-    const key = panelTypePreferenceKey(moduleId, panelType);
     setWorkspace((current) => ({
       ...current,
       preferences: {
         ...current.preferences,
         panelViews: {
           ...current.preferences.panelViews,
-          [key]: preferences,
+          ...(current.tabs.some((tab) =>
+            tab.panels.some((panel) => panel.id === panelId),
+          )
+            ? { [panelId]: preferences }
+            : {}),
         },
       },
     }));
@@ -784,10 +819,7 @@ export function useWorkspaceController({
     exportTabsJson,
     importTabsJson,
     createPanel,
-    closePanel: (panelId) =>
-      updateActiveTab((panels) =>
-        repairFocusOrder(panels.filter((panel) => panel.id !== panelId)),
-      ),
+    closePanel,
     togglePanelMinimized,
     focusPanel,
     updatePanelGeometry,

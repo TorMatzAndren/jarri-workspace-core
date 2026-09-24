@@ -114,6 +114,7 @@ export function SettingsPanel({
         <label>
           <span>Font size</span>
           <input
+            className="workspace-range"
             max="18"
             min="12"
             step="1"

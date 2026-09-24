@@ -93,7 +93,7 @@ function createDefaultWorkspace(): WorkspaceState {
 function createStorage(
   workspace: Record<string, unknown>,
 ): LayoutStorageProvider {
-  const document = {
+  let document = {
     kind: "jarri.workspace.layout",
     schemaVersion: WORKSPACE_SCHEMA_VERSION,
     savedAt: "2026-08-19T00:00:00.000Z",
@@ -103,9 +103,48 @@ function createStorage(
 
   return {
     load: () => document,
-    save: () => {},
+    save: (_workspaceId, nextDocument) => {
+      document = nextDocument;
+    },
     remove: () => {},
   };
+}
+
+function testPanelInstanceFrameFontPreferenceRoundTrips() {
+  const workspace = basePersistedWorkspace();
+  const tab = (workspace.tabs as Array<Record<string, unknown>>)[0];
+  tab.panels = ["instance-a", "instance-b", "instance-new"].map((id, index) => ({
+    id,
+    moduleId: "core",
+    panelType: "settings",
+    title: `Settings ${index + 1}`,
+    geometry: { x: index * 420, y: 0, width: 420, height: 260 },
+    focusOrder: index + 1,
+    stateVersion: 1,
+    panelState: {},
+    createdAt: "2026-08-19T00:00:00.000Z",
+    updatedAt: "2026-08-19T00:00:00.000Z",
+  }));
+  const preferences = workspace.preferences as Record<string, unknown>;
+  preferences.panelViews = {
+    "instance-a": { fontScale: 0.9 },
+    "instance-b": { fontScale: 1.6 },
+  };
+  const storage = createStorage(workspace);
+  const persistence = createLayoutPersistence({
+    registry: createPanelRegistry(),
+    storageProvider: storage,
+    defaultWorkspaceFactory: createDefaultWorkspace,
+    getModuleRecords: () => [],
+  });
+
+  const initial = persistence.loadWorkspace().state;
+  persistence.saveWorkspace(initial);
+  const roundTrip = persistence.loadWorkspace().state.preferences.panelViews;
+
+  assertEqual(roundTrip["instance-a"]?.fontScale, 0.9, "first instance scale survives persistence round-trip");
+  assertEqual(roundTrip["instance-b"]?.fontScale, 1.6, "second instance scale survives persistence round-trip");
+  assert(roundTrip["instance-new"] === undefined, "new instance begins without inherited Frame Font preference");
 }
 
 function load(workspace: Record<string, unknown>) {
@@ -371,13 +410,34 @@ function testInvalidGenericCameraValuesRepairDeterministically() {
   preferences.workspaceZoomAnchorMode = "future-anchor";
   preferences.panelNavigationAlignment = "future-alignment";
   preferences.panelViews = {
-    "demo:truth": {
+    "instance-a": {
       fontScale: 1.5,
+    },
+    "instance-b": {
+      fontScale: 1.75,
+    },
+    "deleted-instance": {
+      fontScale: 1.25,
+    },
+    "demo:truth": {
+      fontScale: 1.1,
     },
     "bad key": {
       fontScale: 1.75,
     },
   };
+  tab.panels = ["instance-a", "instance-b"].map((id, index) => ({
+    id,
+    moduleId: "core",
+    panelType: "settings",
+    title: `Settings ${index + 1}`,
+    geometry: { x: 0, y: 0, width: 420, height: 260 },
+    focusOrder: index + 1,
+    stateVersion: 1,
+    panelState: {},
+    createdAt: "2026-08-19T00:00:00.000Z",
+    updatedAt: "2026-08-19T00:00:00.000Z",
+  }));
 
   const result = load(persisted);
   const normalizedTab = result.state.tabs[0];
@@ -414,9 +474,22 @@ function testInvalidGenericCameraValuesRepairDeterministically() {
     "unknown navigation alignment repairs",
   );
   assertEqual(
-    result.state.preferences.panelViews["demo:truth"]?.fontScale,
+    result.state.preferences.panelViews["instance-a"]?.fontScale,
     1.5,
-    "valid panelViews entry survives camera repairs",
+    "first same-type instance retains its semantic font scale",
+  );
+  assertEqual(
+    result.state.preferences.panelViews["instance-b"]?.fontScale,
+    1.75,
+    "second same-type instance retains an independent semantic font scale",
+  );
+  assert(
+    result.state.preferences.panelViews["deleted-instance"] === undefined,
+    "deleted panel instance preference is pruned",
+  );
+  assert(
+    result.state.preferences.panelViews["demo:truth"] === undefined,
+    "legacy type-scoped preference is no longer authoritative",
   );
   assert(
     result.state.preferences.panelViews["bad key"] === undefined,
@@ -569,6 +642,7 @@ function testPanelMenuExpandedModulesNormalizeDeterministically() {
 }
 
 function main() {
+  testPanelInstanceFrameFontPreferenceRoundTrips();
   testLegacyWorkspaceGetsEmptyPresentationMemory();
   testValidPresentationMemorySurvivesNormalization();
   testPinkSparkleThemePresetSurvivesNormalization();

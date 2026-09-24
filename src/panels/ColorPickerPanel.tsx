@@ -326,6 +326,7 @@ export function ColorPickerPanel({
       <label className="color-picker-panel__hue">
         <span>Hue</span>
         <input
+          className="workspace-range"
           min="0"
           max="360"
           step="1"

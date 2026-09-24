@@ -68,8 +68,7 @@ type Props = {
   onGeometryChange: (panelId: string, geometry: PanelGeometry) => void;
   onPanelStateChange: (panelId: string, panelState: unknown) => void;
   onPanelViewPreferencesChange: (
-    moduleId: string,
-    panelType: string,
+    panelId: string,
     preferences: PanelViewPreferences,
   ) => void;
   onCanvasBoundsChange: (bounds: WorkspaceCanvasBounds) => void;

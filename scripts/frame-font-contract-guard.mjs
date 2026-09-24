@@ -4,6 +4,10 @@ import { readFileSync } from "node:fs";
 const styles = readFileSync("src/styles.css", "utf8");
 const panelFrame = readFileSync("src/workspace/PanelFrame.tsx", "utf8");
 const workspaceSelect = readFileSync("src/core/WorkspaceSelect.tsx", "utf8");
+const types = readFileSync("src/core/types.ts", "utf8");
+const workspaceController = readFileSync("src/core/workspaceController.ts", "utf8");
+const colorPicker = readFileSync("src/panels/ColorPickerPanel.tsx", "utf8");
+const settings = readFileSync("src/panels/SettingsPanel.tsx", "utf8");
 
 const frameStylesStart = styles.indexOf(".panel-frame {");
 const panelBodyStart = styles.indexOf(".panel-frame__body {", frameStylesStart);
@@ -63,9 +67,47 @@ assert.match(
   "Portaled select options receive the owning frame scale",
 );
 assert.match(
+  types,
+  /panelInstancePreferenceKey\(panelId: string\)[\s\S]*?return panelId;/,
+  "Frame Font preference identity is the panel instance",
+);
+assert.match(
+  panelFrame,
+  /preferences\.panelViews\[panelInstancePreferenceKey\(panel\.id\)\]\s*\?\?\s*DEFAULT_PANEL_VIEW_PREFERENCES/,
+  "new panel instances start at the default Frame Font scale",
+);
+assert.match(
+  workspaceController,
+  /panelViews: Object\.fromEntries\([\s\S]*?filter\(\(\[id\]\) => id !== panelId\)/,
+  "closing a panel prunes its Frame Font preference",
+);
+assert.match(
   styles,
   /\.workspace-select__listbox\s*\{[^}]*font-size:\s*calc\(1rem\s*\*\s*var\(--panel-font-scale,\s*1\)\)/s,
   "Portaled select menu sizes text from its forwarded frame scale",
+);
+assert.match(
+  styles,
+  /\.workspace-range\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*min-height:\s*34px/s,
+  "physical horizontal ranges fill allocated width and keep a font-independent hit region",
+);
+assert.match(settings, /className="workspace-range"/, "Settings range uses allocated-width control contract");
+assert.match(colorPicker, /className="workspace-range"/, "Color Picker range uses allocated-width control contract");
+assert.match(
+  styles,
+  /\.color-picker-panel__sv\s*\{[^}]*width:\s*100%;[^}]*aspect-ratio:\s*1;[^}]*min-height:\s*0/s,
+  "Color Picker surface derives its square geometry from allocated width",
+);
+assert.doesNotMatch(styles, /\.color-picker-panel__sv\s*\{[^}]*min-height:\s*210px/s, "Color Picker has no legacy designer-height floor");
+assert.match(
+  styles,
+  /\.text-flow-ellipsis\s*\{[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap/s,
+  "single-line truncation is an explicit text-flow contract",
+);
+assert.match(
+  styles,
+  /\.text-flow-scroll\s*\{[^}]*overflow-x:\s*auto;[^}]*white-space:\s*nowrap/s,
+  "canonical single-line content can remain whole and scroll horizontally",
 );
 
 for (const [declaration, description] of [
@@ -73,7 +115,7 @@ for (const [declaration, description] of [
   ["grid-template-columns: 3.5em repeat(7, minmax(0, 1fr));", "Calendar week metadata column scales with its text"],
   ["min-height: 1.75em;", "File Browser text rows reserve font-relative height"],
   ["grid-template-columns: repeat(2, 1.75em);", "Numeric control buttons reserve font-relative width"],
-  ["grid-template-columns: repeat(auto-fit, minmax(min(100%, 12em), 1fr));", "Settings groups reflow as font-relative minimum widths grow"],
+  ["grid-template-columns: repeat(3, minmax(min-content, 1fr));", "Settings keeps three intrinsic tracks inside its authored topology"],
 ]) {
   assert.ok(styles.includes(declaration), description);
 }

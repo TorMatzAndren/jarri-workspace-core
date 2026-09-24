@@ -1011,7 +1011,7 @@ export function FileBrowserPanel({
           <span className="workspace-file-browser-row__icon">
             <FileTypeIcon kind={classifyFileIcon(entry, isExpanded)} />
           </span>
-          <span className="workspace-file-browser-row__name" title={entry.name}>{entry.name}</span>
+          <span className="workspace-file-browser-row__name text-flow-ellipsis" title={entry.name}>{entry.name}</span>
           <span className="workspace-file-browser-row__type">
             {entry.kind === "symlink" && entry.targetKind
               ? `symlink -> ${entry.targetKind}`
@@ -1267,7 +1267,7 @@ export function FileBrowserPanel({
                     <span className="workspace-file-browser-row__icon">
                       <FileTypeIcon kind={classifyFileIcon(entry)} />
                     </span>
-                    <span className="workspace-file-browser-row__name">{entry.path}</span>
+                    <span className="workspace-file-browser-row__name text-flow-scroll">{entry.path}</span>
                     <span className="workspace-file-browser-row__type">{describeFileType(entry)}</span>
                   </button>
                 ))}
@@ -1325,7 +1325,7 @@ export function FileBrowserPanel({
                     <span className="workspace-file-browser-grid-item__icon">
                       <FileTypeIcon kind={classifyFileIcon(entry)} />
                     </span>
-                    <span className="workspace-file-browser-grid-item__name" title={entry.name}>{entry.name}</span>
+                    <span className="workspace-file-browser-grid-item__name text-flow-ellipsis" title={entry.name}>{entry.name}</span>
                     <span className="workspace-file-browser-grid-item__type">
                       {describeFileType(entry)}
                     </span>

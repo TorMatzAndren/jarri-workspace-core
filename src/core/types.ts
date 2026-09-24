@@ -116,8 +116,8 @@ export type WorkspacePanelViewPreferences = {
   [panelKey: string]: PanelViewPreferences;
 };
 
-export function panelTypePreferenceKey(moduleId: string, panelType: string): string {
-  return `${moduleId}:${panelType}`;
+export function panelInstancePreferenceKey(panelId: string): string {
+  return panelId;
 }
 
 export function panelSurfacePresentationKey(

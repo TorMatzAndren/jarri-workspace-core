@@ -41,7 +41,7 @@ import type {
   WorkspaceModuleDefinition,
   WorkspacePreferences,
 } from "../core/types";
-import { panelTypePreferenceKey } from "../core/types";
+import { panelInstancePreferenceKey } from "../core/types";
 import { PanelProjectionHost } from "./PanelProjectionHost";
 import { copyWorkspaceScreenshot } from "./screenshot";
 
@@ -67,8 +67,7 @@ type Props = {
   onGeometryChange: (panelId: string, geometry: PanelGeometry) => void;
   onPanelStateChange: (panelId: string, panelState: unknown) => void;
   onPanelViewPreferencesChange: (
-    moduleId: string,
-    panelType: string,
+    panelId: string,
     preferences: PanelViewPreferences,
   ) => void;
   onPreferencesChange: (preferences: Partial<WorkspacePreferences>) => void;
@@ -137,7 +136,7 @@ export function PanelFrame({
   const effectiveGeometry = previewGeometry ?? baseGeometry;
   const semanticControllerKey = `${panel.id}:${panel.moduleId}:${panel.panelType}`;
   const panelViewPreferences =
-    preferences.panelViews[panelTypePreferenceKey(panel.moduleId, panel.panelType)] ??
+    preferences.panelViews[panelInstancePreferenceKey(panel.id)] ??
     DEFAULT_PANEL_VIEW_PREFERENCES;
   const semanticCopyAvailable = isPanelSemanticCopyAvailable(
     definition?.semanticStrategy,
@@ -381,7 +380,7 @@ export function PanelFrame({
         );
 
         if (nextScale !== currentScale) {
-          onPanelViewPreferencesChange(panel.moduleId, panel.panelType, {
+          onPanelViewPreferencesChange(panel.id, {
             fontScale: nextScale,
           });
         }

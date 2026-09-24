@@ -3086,41 +3086,41 @@ code {
 }
 
 .settings-panel {
-  grid-template-columns:
-    minmax(0, 1fr)
-    minmax(min(17.5em, 40%), min(21.25em, 45%));
-  grid-auto-flow: row;
+  grid-template-areas:
+    "interface"
+    "appearance"
+    "panel-menu";
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
   align-content: start;
-  align-items: start;
+  min-width: 0;
 }
 
-.settings-panel > .settings-panel__section:not(.settings-panel__section--panel-menu) {
-  grid-column: 1;
+.settings-panel__section--interface {
+  grid-area: interface;
+  min-width: 0;
+}
+
+.settings-panel__section--appearance {
+  grid-area: appearance;
+  min-width: 0;
 }
 
 .settings-panel__section--panel-menu {
-  grid-column: 2;
-  grid-row: 1 / span 999;
-  align-self: start;
+  grid-area: panel-menu;
+  min-width: 0;
 }
 
 .settings-panel label {
   display: grid;
-  grid-template-columns: minmax(4.5em, 0.65fr) minmax(0, 1.35fr) auto;
+  grid-template-columns: minmax(0, 0.65fr) minmax(0, 1.35fr) auto;
+  min-width: 0;
   align-items: center;
   gap: 10px;
 }
 
-.settings-panel__section--interface {
-  grid-column: 1;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.settings-panel__section--interface > h3 {
-  grid-column: 1 / -1;
-}
-
 .settings-panel label span {
+  min-width: 0;
   color: var(--color-muted);
   font-size: 0.8em;
   font-weight: 800;
@@ -3128,9 +3128,11 @@ code {
 }
 
 .settings-panel select,
-.settings-panel input[type="range"] {
-  min-height: 2.125em;
+.workspace-range {
+  width: 100%;
   min-width: 0;
+  min-height: 34px;
+  margin: 0;
 }
 
 .settings-stepper {
@@ -3156,25 +3158,11 @@ code {
 }
 
 .settings-panel__section {
+  min-width: 0;
   display: grid;
   gap: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--color-border);
-}
-
-@container (max-width: 700px) {
-  .settings-panel {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .settings-panel__section--interface {
-    grid-column: auto;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .settings-panel__section--interface > h3 {
-    grid-column: auto;
-  }
 }
 
 .settings-panel__section h3 {
@@ -3965,17 +3953,24 @@ code {
 
 /* Settings dashboard */
 .settings-panel__section--interface {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12em), 1fr));
+  grid-template-areas:
+    "heading heading heading"
+    "display layout surfaces"
+    "display clock surfaces";
+  grid-template-columns: repeat(3, minmax(min-content, 1fr));
+  grid-template-rows: auto auto auto;
+  overflow-x: auto;
   align-items: start;
   gap: 12px;
 }
 
 .settings-panel__section--interface > h3 {
-  grid-column: 1 / -1;
+  grid-area: heading;
 }
 
 .settings-panel__group {
   display: grid;
+  min-width: 0;
   align-content: start;
   gap: 8px;
   padding: 10px;
@@ -3993,12 +3988,23 @@ code {
 }
 
 .settings-panel__group label {
-  grid-template-columns: minmax(4em, 0.65fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 0.65fr) minmax(0, 1fr) auto;
 }
 
 .settings-panel__group--surfaces {
-  min-width: 0;
-  overflow-x: auto;
+  grid-area: surfaces;
+}
+
+.settings-panel__group--display {
+  grid-area: display;
+}
+
+.settings-panel__group--layout {
+  grid-area: layout;
+}
+
+.settings-panel__group--clock {
+  grid-area: clock;
 }
 
 .settings-surface-grid {
@@ -4034,28 +4040,6 @@ code {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-@container (max-width: 780px) {
-  .settings-panel {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .settings-panel > .settings-panel__section:not(.settings-panel__section--panel-menu),
-  .settings-panel__section--panel-menu {
-    grid-column: 1;
-    grid-row: auto;
-  }
-
-  .settings-panel__section--interface {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12em), 1fr));
-  }
-}
-
-@container (max-width: 560px) {
-  .settings-panel__section--interface {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .theme-colors-panel {
@@ -4109,7 +4093,8 @@ code {
 .color-picker-panel__sv {
   position: relative;
   width: 100%;
-  min-height: 210px;
+  aspect-ratio: 1;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--color-border-strong);
   border-radius: 8px;
@@ -4461,15 +4446,25 @@ code {
 
 .workspace-file-browser-toolbar strong,
 .workspace-file-browser-selection code,
-.workspace-file-browser-row__name,
 .workspace-file-browser-row__type,
-.workspace-file-browser-grid-item__name,
 .workspace-file-browser-search-diagnostic,
 .workspace-text-viewer__header strong,
 .workspace-text-viewer__header span {
   min-width: 0;
+}
+
+/* Text flow is explicit: constrain a label, or preserve its whole value for scrolling. */
+.text-flow-ellipsis {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-flow-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
   white-space: nowrap;
 }
 

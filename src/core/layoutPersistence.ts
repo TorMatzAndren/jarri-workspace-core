@@ -140,6 +140,12 @@ export function createLayoutPersistence({
       warnings.push("Repaired invalid active tab id.");
     }
 
+    const activePanelIds = new Set(tabs.flatMap((tab) => tab.panels.map((panel) => panel.id)));
+    const panelViews = normalizeWorkspacePanelViewPreferences(
+      rawPreferences.panelViews,
+      activePanelIds,
+    );
+
     return {
       state: {
         schemaVersion: WORKSPACE_SCHEMA_VERSION,
@@ -149,7 +155,7 @@ export function createLayoutPersistence({
             : workspaceId,
         activeTabId,
         tabs,
-        preferences: normalizePreferences(input.preferences),
+        preferences: normalizePreferences(input.preferences, panelViews),
         surfacePresentationMemory: normalizeSurfacePresentationMemory(
           input.surfacePresentationMemory,
           warnings,
@@ -213,7 +219,10 @@ export function createLayoutPersistence({
   };
 }
 
-function normalizePreferences(input: unknown): WorkspacePreferences {
+function normalizePreferences(
+  input: unknown,
+  panelViews: WorkspacePanelViewPreferences,
+): WorkspacePreferences {
   const raw = isRecord(input) ? input : {};
   const density = raw.density === "comfortable" ? "comfortable" : "compact";
   const themeMode =
@@ -272,7 +281,7 @@ function normalizePreferences(input: unknown): WorkspacePreferences {
     colorOverrides: normalizeColorOverrides(raw.colorOverrides),
     panelMenu: normalizePanelMenuPreferences(raw.panelMenu),
     frameControls: normalizeFrameControlPreferences(raw.frameControls),
-    panelViews: normalizeWorkspacePanelViewPreferences(raw.panelViews),
+    panelViews,
   };
 }
 
@@ -349,6 +358,7 @@ function normalizeClockPreferences(
 
 function normalizeWorkspacePanelViewPreferences(
   input: unknown,
+  activePanelIds: Set<string>,
 ): WorkspacePanelViewPreferences {
   if (!isRecord(input)) {
     return {};
@@ -356,7 +366,7 @@ function normalizeWorkspacePanelViewPreferences(
 
   const result: WorkspacePanelViewPreferences = {};
   for (const [key, value] of Object.entries(input)) {
-    if (!isValidPanelTypePreferenceKey(key) || !isRecord(value)) {
+    if (!activePanelIds.has(key) || !isRecord(value)) {
       continue;
     }
 
@@ -366,14 +376,6 @@ function normalizeWorkspacePanelViewPreferences(
   }
 
   return result;
-}
-
-function isValidPanelTypePreferenceKey(key: string): boolean {
-  const parts = key.split(":");
-  return (
-    parts.length === 2 &&
-    parts.every((part) => part.length > 0 && /^[A-Za-z0-9._-]+$/.test(part))
-  );
 }
 
 function normalizeGridSize(input: unknown): number {
