@@ -1880,6 +1880,7 @@ version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
  "cairo-rs",
+ "raw-window-handle",
  "serde",
  "serde_json",
  "tauri",
@@ -1887,6 +1888,7 @@ dependencies = [
  "tauri-plugin-clipboard-manager",
  "tauri-plugin-opener",
  "webkit2gtk",
+ "x11rb",
 ]
 
 [[package]]

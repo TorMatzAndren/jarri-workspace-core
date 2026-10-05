@@ -1,3 +1,20 @@
+mod native_surface;
+mod steam_client;
+
+use native_surface::{
+    workspace_native_surface_adopt_x11_window,
+    workspace_native_surface_create,
+    workspace_native_surface_destroy,
+    workspace_native_surface_ensure_for_panel,
+    workspace_native_surface_reconcile_panels,
+    workspace_native_surface_release_x11_window,
+    workspace_native_surface_set_visible,
+    workspace_native_surface_update,
+    workspace_native_window_identity,
+    WorkspaceNativeSurfaceState,
+};
+
+use steam_client::steam_client_find_or_launch;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -1481,7 +1498,18 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .manage(WorkspaceFsSearchRegistry::default())
+        .manage(WorkspaceNativeSurfaceState::default())
         .invoke_handler(tauri::generate_handler![
+            steam_client_find_or_launch,
+            workspace_native_window_identity,
+            workspace_native_surface_create,
+            workspace_native_surface_ensure_for_panel,
+            workspace_native_surface_update,
+            workspace_native_surface_set_visible,
+            workspace_native_surface_adopt_x11_window,
+            workspace_native_surface_release_x11_window,
+            workspace_native_surface_destroy,
+            workspace_native_surface_reconcile_panels,
             workspace_capture_frame_screenshot,
             workspace_compose_entire_workspace_screenshot,
             workspace_fs_stat,

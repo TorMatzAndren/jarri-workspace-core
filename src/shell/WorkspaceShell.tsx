@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -33,6 +34,7 @@ import jarriWorkspaceLogo from "../assets/jarri-workspace.png";
 import { openExternalUrl } from "../core/platform/openExternalUrl";
 import { WorkspaceClock } from "./WorkspaceClock";
 import { copyWorkspaceScreenshot } from "../workspace/screenshot";
+import { reconcileWorkspaceNativeSurfacePanels } from "../core/platform/nativeSurface";
 import type { WorkspaceCanvasScreenshotSource } from "../workspace/workspaceScreenshotComposition";
 
 const JARRI_SYSTEMS_URL = "http://jarri.systems/";
@@ -108,6 +110,34 @@ export function WorkspaceShell() {
     persistence,
     defaultWorkspaceFactory,
   });
+
+  const nativeSurfacePanelIds = controller.workspace.tabs
+    .flatMap((tab) => tab.panels)
+    .map((panel) => panel.id)
+    .sort();
+
+  const nativeSurfacePanelKey = nativeSurfacePanelIds.join("\n");
+
+  useEffect(() => {
+    void reconcileWorkspaceNativeSurfacePanels(
+      nativeSurfacePanelIds,
+    ).catch((error) => {
+      const message = String(error);
+
+      if (
+        message.includes(
+          "native surfaces are not available on this platform",
+        )
+      ) {
+        return;
+      }
+
+      console.error(
+        "Workspace native surface reconciliation failed",
+        error,
+      );
+    });
+  }, [nativeSurfacePanelKey]);
 
   const preferences = controller.workspace.preferences;
 
