@@ -17,7 +17,22 @@ export type WorkspaceNativeSurfaceGeometry = {
   y: number;
   width: number;
   height: number;
+
+  /*
+   * Legacy/single-region clip.
+   *
+   * Keep this field because the generic native-surface
+   * contract predates panel occlusion.
+   */
   visibleClip?: WorkspaceNativeSurfaceClip;
+
+  /*
+   * Zero or more absolute physical-pixel regions which
+   * remain visible after Workspace panel occlusion.
+   *
+   * When present, this is authoritative over visibleClip.
+   */
+  visibleClips?: WorkspaceNativeSurfaceClip[];
 };
 
 export type WorkspaceNativeSurface = {

@@ -15,18 +15,234 @@ import {
 } from "./nativeSurface";
 
 function geometryKey(geometry: WorkspaceNativeSurfaceGeometry): string {
-  const clip = geometry.visibleClip;
+  const clips =
+    geometry.visibleClips ??
+    (geometry.visibleClip ? [geometry.visibleClip] : []);
 
   return [
     geometry.x,
     geometry.y,
     geometry.width,
     geometry.height,
-    clip?.x ?? "",
-    clip?.y ?? "",
-    clip?.width ?? "",
-    clip?.height ?? "",
+    ...clips.flatMap((clip) => [clip.x, clip.y, clip.width, clip.height]),
   ].join(",");
+}
+
+type SurfaceRectangle = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
+function rectangleWidth(rectangle: SurfaceRectangle): number {
+  return Math.max(0, rectangle.right - rectangle.left);
+}
+
+function rectangleHeight(rectangle: SurfaceRectangle): number {
+  return Math.max(0, rectangle.bottom - rectangle.top);
+}
+
+function intersectRectangles(
+  left: SurfaceRectangle,
+  right: SurfaceRectangle,
+): SurfaceRectangle | null {
+  const intersection = {
+    left: Math.max(left.left, right.left),
+    top: Math.max(left.top, right.top),
+    right: Math.min(left.right, right.right),
+    bottom: Math.min(left.bottom, right.bottom),
+  };
+
+  if (rectangleWidth(intersection) <= 0 || rectangleHeight(intersection) <= 0) {
+    return null;
+  }
+
+  return intersection;
+}
+
+function subtractRectangle(
+  source: SurfaceRectangle,
+  occluder: SurfaceRectangle,
+): SurfaceRectangle[] {
+  const overlap = intersectRectangles(source, occluder);
+
+  if (!overlap) {
+    return [source];
+  }
+
+  const result: SurfaceRectangle[] = [];
+
+  if (overlap.top > source.top) {
+    result.push({
+      left: source.left,
+      top: source.top,
+      right: source.right,
+      bottom: overlap.top,
+    });
+  }
+
+  if (overlap.bottom < source.bottom) {
+    result.push({
+      left: source.left,
+      top: overlap.bottom,
+      right: source.right,
+      bottom: source.bottom,
+    });
+  }
+
+  if (overlap.left > source.left) {
+    result.push({
+      left: source.left,
+      top: overlap.top,
+      right: overlap.left,
+      bottom: overlap.bottom,
+    });
+  }
+
+  if (overlap.right < source.right) {
+    result.push({
+      left: overlap.right,
+      top: overlap.top,
+      right: source.right,
+      bottom: overlap.bottom,
+    });
+  }
+
+  return result.filter(
+    (rectangle) =>
+      rectangleWidth(rectangle) > 0 && rectangleHeight(rectangle) > 0,
+  );
+}
+
+function elementVisiblyOccupiesSpace(element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+
+  if (rect.width <= 0 || rect.height <= 0) {
+    return false;
+  }
+
+  const style = window.getComputedStyle(element);
+
+  return (
+    style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    Number(style.opacity || "1") !== 0
+  );
+}
+
+function panelFrameZIndex(frame: HTMLElement): number {
+  const inline = Number(frame.style.zIndex);
+
+  if (Number.isFinite(inline)) {
+    return inline;
+  }
+
+  const computed = Number(window.getComputedStyle(frame).zIndex);
+
+  return Number.isFinite(computed) ? computed : 0;
+}
+
+function domRectRectangle(rect: DOMRect): SurfaceRectangle {
+  return {
+    left: rect.left,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+  };
+}
+
+function workspaceNativeSurfaceVisibleRectangles(
+  element: HTMLElement,
+): SurfaceRectangle[] {
+  const ownFrame = element.closest<HTMLElement>(".panel-frame");
+
+  const canvasSurface = element.closest<HTMLElement>(
+    ".workspace-canvas__surface",
+  );
+
+  const elementRectangle = domRectRectangle(element.getBoundingClientRect());
+
+  if (!canvasSurface) {
+    return [elementRectangle];
+  }
+
+  const canvasRect = canvasSurface.getBoundingClientRect();
+
+  const canvasRectangle: SurfaceRectangle = {
+    left: canvasRect.left + canvasSurface.clientLeft,
+    top: canvasRect.top + canvasSurface.clientTop,
+    right:
+      canvasRect.left + canvasSurface.clientLeft + canvasSurface.clientWidth,
+    bottom:
+      canvasRect.top + canvasSurface.clientTop + canvasSurface.clientHeight,
+  };
+
+  const canvasVisible = intersectRectangles(elementRectangle, canvasRectangle);
+
+  if (!canvasVisible) {
+    return [];
+  }
+
+  if (!ownFrame) {
+    return [canvasVisible];
+  }
+
+  const ownZ = panelFrameZIndex(ownFrame);
+
+  let visible = [canvasVisible];
+
+  const frames = canvasSurface.querySelectorAll<HTMLElement>(".panel-frame");
+
+  const higherFrames = [...frames]
+    .filter((frame) => frame !== ownFrame && panelFrameZIndex(frame) > ownZ)
+    .sort((left, right) => panelFrameZIndex(left) - panelFrameZIndex(right));
+
+  for (const frame of higherFrames) {
+    const frameRect = frame.getBoundingClientRect();
+
+    if (frameRect.width <= 0 || frameRect.height <= 0) {
+      continue;
+    }
+
+    const occluder = domRectRectangle(frameRect);
+
+    visible = visible.flatMap((rectangle) =>
+      subtractRectangle(rectangle, occluder),
+    );
+
+    if (visible.length === 0) {
+      break;
+    }
+  }
+
+  /*
+   * Workspace-owned shell surfaces can live outside the canvas
+   * panel hierarchy while still visually dominating native
+   * content. Those surfaces opt in explicitly through this
+   * generic marker.
+   */
+  const shellOccluders = document.querySelectorAll<HTMLElement>(
+    "[data-workspace-native-occluder]",
+  );
+
+  for (const shellOccluder of shellOccluders) {
+    if (!elementVisiblyOccupiesSpace(shellOccluder)) {
+      continue;
+    }
+
+    const occluder = domRectRectangle(shellOccluder.getBoundingClientRect());
+
+    visible = visible.flatMap((rectangle) =>
+      subtractRectangle(rectangle, occluder),
+    );
+
+    if (visible.length === 0) {
+      break;
+    }
+  }
+
+  return visible;
 }
 
 export function readWorkspaceNativeSurfaceGeometry(
@@ -35,36 +251,21 @@ export function readWorkspaceNativeSurfaceGeometry(
 ): WorkspaceNativeSurfaceGeometry {
   const rect = element.getBoundingClientRect();
 
-  const canvasSurface = element.closest<HTMLElement>(
-    ".workspace-canvas__surface",
-  );
+  const visibleRectangles = workspaceNativeSurfaceVisibleRectangles(element);
 
-  const canvasRect = canvasSurface?.getBoundingClientRect() ?? rect;
-
-  const canvasLeft = canvasRect.left + (canvasSurface?.clientLeft ?? 0);
-
-  const canvasTop = canvasRect.top + (canvasSurface?.clientTop ?? 0);
-
-  const canvasRight = canvasLeft + (canvasSurface?.clientWidth ?? rect.width);
-
-  const canvasBottom = canvasTop + (canvasSurface?.clientHeight ?? rect.height);
-
-  const left = Math.max(rect.left, canvasLeft);
-  const top = Math.max(rect.top, canvasTop);
-  const right = Math.min(rect.right, canvasRight);
-  const bottom = Math.min(rect.bottom, canvasBottom);
+  const visibleClips = visibleRectangles.map((rectangle) => ({
+    x: Math.round(rectangle.left * scaleFactor),
+    y: Math.round(rectangle.top * scaleFactor),
+    width: Math.max(0, Math.round(rectangleWidth(rectangle) * scaleFactor)),
+    height: Math.max(0, Math.round(rectangleHeight(rectangle) * scaleFactor)),
+  }));
 
   return {
     x: Math.round(rect.left * scaleFactor),
     y: Math.round(rect.top * scaleFactor),
     width: Math.max(1, Math.round(rect.width * scaleFactor)),
     height: Math.max(1, Math.round(rect.height * scaleFactor)),
-    visibleClip: {
-      x: Math.round(left * scaleFactor),
-      y: Math.round(top * scaleFactor),
-      width: Math.max(0, Math.round(Math.max(0, right - left) * scaleFactor)),
-      height: Math.max(0, Math.round(Math.max(0, bottom - top) * scaleFactor)),
-    },
+    visibleClips,
   };
 }
 
@@ -84,6 +285,7 @@ export function useWorkspaceNativeSurfaceMount(
 
   const scaleFactorRef = useRef(1);
   const lastGeometryRef = useRef("");
+  const lastVisibleRef = useRef<boolean | null>(null);
   const animationFrameRef = useRef(0);
   const disposedRef = useRef(false);
 
@@ -105,9 +307,7 @@ export function useWorkspaceNativeSurfaceMount(
 
     const nextGeometryKey = geometryKey(geometry);
 
-    if (surfaceRef.current && lastGeometryRef.current === nextGeometryKey) {
-      return;
-    }
+    const nextVisible = (geometry.visibleClips?.length ?? 0) > 0;
 
     try {
       if (!surfaceRef.current) {
@@ -126,14 +326,26 @@ export function useWorkspaceNativeSurfaceMount(
 
         surfaceRef.current = created;
         setSurface(created);
-      } else {
+        lastGeometryRef.current = nextGeometryKey;
+      } else if (lastGeometryRef.current !== nextGeometryKey) {
         await updateWorkspaceNativeSurface(
           surfaceRef.current.surfaceId,
           geometry,
         );
+
+        lastGeometryRef.current = nextGeometryKey;
       }
 
-      lastGeometryRef.current = nextGeometryKey;
+      const currentSurface = surfaceRef.current;
+
+      if (currentSurface && lastVisibleRef.current !== nextVisible) {
+        await setWorkspaceNativeSurfaceVisible(
+          currentSurface.surfaceId,
+          nextVisible,
+        );
+
+        lastVisibleRef.current = nextVisible;
+      }
 
       setError(null);
     } catch (cause) {
@@ -171,8 +383,10 @@ export function useWorkspaceNativeSurfaceMount(
     let resizeObserver: ResizeObserver | null = null;
 
     let mutationObserver: MutationObserver | null = null;
+    let shellMutationObserver: MutationObserver | null = null;
 
     let canvasSurface: HTMLElement | null = null;
+    let workspaceShell: HTMLElement | null = null;
 
     let currentWindowUnlisten: (() => void) | undefined;
 
@@ -201,6 +415,8 @@ export function useWorkspaceNativeSurfaceMount(
         ".workspace-canvas__surface",
       );
 
+      workspaceShell = element.closest<HTMLElement>(".workspace-shell");
+
       if (typeof ResizeObserver !== "undefined") {
         resizeObserver = new ResizeObserver(scheduleGeometry);
 
@@ -216,6 +432,18 @@ export function useWorkspaceNativeSurfaceMount(
 
         mutationObserver.observe(canvasSurface, {
           attributes: true,
+          childList: true,
+          subtree: true,
+          attributeFilter: ["style", "class"],
+        });
+      }
+
+      if (typeof MutationObserver !== "undefined" && workspaceShell) {
+        shellMutationObserver = new MutationObserver(scheduleGeometry);
+
+        shellMutationObserver.observe(workspaceShell, {
+          attributes: true,
+          childList: true,
           subtree: true,
           attributeFilter: ["style", "class"],
         });
@@ -259,6 +487,7 @@ export function useWorkspaceNativeSurfaceMount(
 
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
+      shellMutationObserver?.disconnect();
 
       canvasSurface?.removeEventListener("scroll", scheduleGeometry);
 
@@ -269,6 +498,8 @@ export function useWorkspaceNativeSurfaceMount(
       const currentSurface = surfaceRef.current;
 
       if (currentSurface) {
+        lastVisibleRef.current = false;
+
         void setWorkspaceNativeSurfaceVisible(
           currentSurface.surfaceId,
           false,
@@ -276,22 +507,6 @@ export function useWorkspaceNativeSurfaceMount(
       }
     };
   }, [panelId, scheduleGeometry, synchronizeGeometry]);
-
-  useEffect(() => {
-    const currentSurface = surfaceRef.current;
-
-    if (!currentSurface) {
-      return;
-    }
-
-    void setWorkspaceNativeSurfaceVisible(currentSurface.surfaceId, true).catch(
-      (cause) => {
-        if (!disposedRef.current) {
-          setError(String(cause));
-        }
-      },
-    );
-  }, [surface]);
 
   return {
     mountRef,

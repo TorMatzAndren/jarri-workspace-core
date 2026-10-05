@@ -18,6 +18,8 @@ pub(crate) struct WorkspaceNativeSurfaceGeometry {
     pub(crate) height: u32,
     #[serde(default)]
     pub(crate) visible_clip: Option<WorkspaceNativeSurfaceClip>,
+    #[serde(default)]
+    pub(crate) visible_clips: Option<Vec<WorkspaceNativeSurfaceClip>>,
 }
 
 #[derive(Serialize)]
@@ -51,7 +53,8 @@ mod linux {
     use x11rb::connection::Connection;
     use x11rb::protocol::shape::{ConnectionExt as ShapeConnectionExt, SK, SO};
     use x11rb::protocol::xproto::{
-        ClipOrdering, ConfigureWindowAux, ConnectionExt, CreateWindowAux, Rectangle, WindowClass,
+        ClipOrdering, ConfigureWindowAux, ConnectionExt, CreateWindowAux, Rectangle, SetMode,
+        WindowClass,
     };
 
     #[derive(Clone, Debug)]
@@ -75,6 +78,7 @@ mod linux {
         owner_panel_id: Option<String>,
         container_window_id: u32,
         visible_clip: Option<WorkspaceNativeSurfaceClip>,
+        visible_clips: Option<Vec<WorkspaceNativeSurfaceClip>>,
         content: NativeSurfaceContent,
     }
 
@@ -171,37 +175,47 @@ mod linux {
         Ok(())
     }
 
-    fn clip_rectangles(
+    fn clip_rectangle(
         geometry: &WorkspaceNativeSurfaceGeometry,
-        clip: Option<&WorkspaceNativeSurfaceClip>,
-    ) -> Vec<Rectangle> {
-        match clip {
-            None => vec![Rectangle {
-                x: 0,
-                y: 0,
-                width: geometry.width.min(u32::from(u16::MAX)) as u16,
-                height: geometry.height.min(u32::from(u16::MAX)) as u16,
-            }],
-            Some(clip) => {
-                let left = i64::from(clip.x).max(i64::from(geometry.x));
-                let top = i64::from(clip.y).max(i64::from(geometry.y));
-                let right = (i64::from(clip.x) + i64::from(clip.width))
-                    .min(i64::from(geometry.x) + i64::from(geometry.width));
-                let bottom = (i64::from(clip.y) + i64::from(clip.height))
-                    .min(i64::from(geometry.y) + i64::from(geometry.height));
+        clip: &WorkspaceNativeSurfaceClip,
+    ) -> Option<Rectangle> {
+        let left = i64::from(clip.x).max(i64::from(geometry.x));
+        let top = i64::from(clip.y).max(i64::from(geometry.y));
+        let right = (i64::from(clip.x) + i64::from(clip.width))
+            .min(i64::from(geometry.x) + i64::from(geometry.width));
+        let bottom = (i64::from(clip.y) + i64::from(clip.height))
+            .min(i64::from(geometry.y) + i64::from(geometry.height));
 
-                if right <= left || bottom <= top {
-                    return Vec::new();
-                }
-
-                vec![Rectangle {
-                    x: (left - i64::from(geometry.x)) as i16,
-                    y: (top - i64::from(geometry.y)) as i16,
-                    width: (right - left).min(i64::from(u16::MAX)) as u16,
-                    height: (bottom - top).min(i64::from(u16::MAX)) as u16,
-                }]
-            }
+        if right <= left || bottom <= top {
+            return None;
         }
+
+        Some(Rectangle {
+            x: (left - i64::from(geometry.x)) as i16,
+            y: (top - i64::from(geometry.y)) as i16,
+            width: (right - left).min(i64::from(u16::MAX)) as u16,
+            height: (bottom - top).min(i64::from(u16::MAX)) as u16,
+        })
+    }
+
+    fn clip_rectangles(geometry: &WorkspaceNativeSurfaceGeometry) -> Vec<Rectangle> {
+        if let Some(clips) = geometry.visible_clips.as_ref() {
+            return clips
+                .iter()
+                .filter_map(|clip| clip_rectangle(geometry, clip))
+                .collect();
+        }
+
+        if let Some(clip) = geometry.visible_clip.as_ref() {
+            return clip_rectangle(geometry, clip).into_iter().collect();
+        }
+
+        vec![Rectangle {
+            x: 0,
+            y: 0,
+            width: geometry.width.min(u32::from(u16::MAX)) as u16,
+            height: geometry.height.min(u32::from(u16::MAX)) as u16,
+        }]
     }
 
     fn apply_clip(
@@ -209,22 +223,33 @@ mod linux {
         window_id: u32,
         geometry: &WorkspaceNativeSurfaceGeometry,
     ) -> Result<(), String> {
-        registry
-            .connection
-            .shape_rectangles(
-                SO::SET,
-                SK::BOUNDING,
-                ClipOrdering::UNSORTED,
-                window_id,
-                0,
-                0,
-                &clip_rectangles(geometry, geometry.visible_clip.as_ref()),
-            )
-            .map_err(|error| format!("failed to set native surface clip: {error}"))?
-            .check()
-            .map_err(|error| format!("native surface clip rejected: {error}"))?;
+        let rectangles = clip_rectangles(geometry);
+
+        for kind in [SK::BOUNDING, SK::INPUT] {
+            registry
+                .connection
+                .shape_rectangles(
+                    SO::SET,
+                    kind,
+                    ClipOrdering::UNSORTED,
+                    window_id,
+                    0,
+                    0,
+                    &rectangles,
+                )
+                .map_err(|error| format!("failed to set native surface {kind:?} shape: {error}"))?
+                .check()
+                .map_err(|error| format!("native surface {kind:?} shape rejected: {error}"))?;
+        }
 
         Ok(())
+    }
+
+    fn x11_window_exists(registry: &NativeSurfaceRegistry, window_id: u32) -> bool {
+        match registry.connection.get_geometry(window_id) {
+            Ok(cookie) => cookie.reply().is_ok(),
+            Err(_) => false,
+        }
     }
 
     fn configure_adopted_child(
@@ -256,7 +281,7 @@ mod linux {
     ) -> Result<(), String> {
         validate_geometry(geometry)?;
 
-        let (container_window_id, previous_clip, adopted_window_id) = {
+        let (container_window_id, previous_clip, previous_clips, adopted_window_id) = {
             let entry = registry
                 .surfaces
                 .get(surface_id)
@@ -270,6 +295,7 @@ mod linux {
             (
                 entry.container_window_id,
                 entry.visible_clip.clone(),
+                entry.visible_clips.clone(),
                 adopted_window_id,
             )
         };
@@ -288,16 +314,30 @@ mod linux {
             .check()
             .map_err(|error| format!("native surface update rejected for {surface_id}: {error}"))?;
 
-        if previous_clip.is_some() || geometry.visible_clip.is_some() {
+        if previous_clip.is_some()
+            || previous_clips.is_some()
+            || geometry.visible_clip.is_some()
+            || geometry.visible_clips.is_some()
+        {
             apply_clip(registry, container_window_id, geometry)?;
         }
 
         if let Some(window_id) = adopted_window_id {
-            configure_adopted_child(registry, window_id, geometry)?;
+            if x11_window_exists(registry, window_id) {
+                configure_adopted_child(registry, window_id, geometry)?;
+            } else if let Some(entry) = registry.surfaces.get_mut(surface_id) {
+                /*
+                 * Foreign applications are allowed to destroy and
+                 * recreate their own top-level windows. A stale XID
+                 * must not poison the Workspace-owned container.
+                 */
+                entry.content = NativeSurfaceContent::Empty;
+            }
         }
 
         if let Some(entry) = registry.surfaces.get_mut(surface_id) {
             entry.visible_clip = geometry.visible_clip.clone();
+            entry.visible_clips = geometry.visible_clips.clone();
         }
 
         registry
@@ -369,6 +409,7 @@ mod linux {
                 owner_panel_id,
                 container_window_id: window_id,
                 visible_clip: geometry.visible_clip.clone(),
+                visible_clips: geometry.visible_clips.clone(),
                 content: NativeSurfaceContent::Empty,
             },
         );
@@ -416,6 +457,28 @@ mod linux {
             .map_err(|error| format!("failed to release adopted X11 window to root: {error}"))?
             .check()
             .map_err(|error| format!("adopted X11 window release rejected: {error}"))?;
+
+        /*
+         * The foreign window is safely back under the X root.
+         * Explicit release therefore ends this host's crash-
+         * rescue responsibility for it.
+         */
+        registry
+            .connection
+            .change_save_set(SetMode::DELETE, adopted.window_id)
+            .map_err(|error| {
+                format!(
+                    "failed to remove released X11 window 0x{:x} from save-set: {error}",
+                    adopted.window_id
+                )
+            })?
+            .check()
+            .map_err(|error| {
+                format!(
+                    "released X11 window 0x{:x} save-set delete rejected: {error}",
+                    adopted.window_id
+                )
+            })?;
 
         registry
             .connection
@@ -600,15 +663,23 @@ mod linux {
 
             if let Some(adopted_window_id) = adopted_window_id {
                 if adopted_window_id == numeric {
-                    return Ok(WorkspaceNativeSurfaceAdoptionResult {
-                        surface_id,
-                        window_id: format!("0x{numeric:x}"),
-                    });
-                }
+                    if x11_window_exists(registry, adopted_window_id) {
+                        return Ok(WorkspaceNativeSurfaceAdoptionResult {
+                            surface_id,
+                            window_id: format!("0x{numeric:x}"),
+                        });
+                    }
 
-                return Err(format!(
-                    "native surface already contains X11 window 0x{adopted_window_id:x}"
-                ));
+                    if let Some(entry) = registry.surfaces.get_mut(&surface_id) {
+                        entry.content = NativeSurfaceContent::Empty;
+                    }
+                } else if x11_window_exists(registry, adopted_window_id) {
+                    return Err(format!(
+                        "native surface already contains X11 window 0x{adopted_window_id:x}"
+                    ));
+                } else if let Some(entry) = registry.surfaces.get_mut(&surface_id) {
+                    entry.content = NativeSurfaceContent::Empty;
+                }
             }
 
             if numeric == container_window_id {
@@ -649,6 +720,26 @@ mod linux {
                 .map_err(|error| format!("failed to unmap external X11 window: {error}"))?
                 .check()
                 .map_err(|error| format!("external X11 window unmap rejected: {error}"))?;
+
+            /*
+             * This window belongs to another X11 client.
+             * Put it in this host connection's save-set before
+             * reparenting it beneath a Workspace-owned window.
+             *
+             * If Workspace dies or hot-restarts unexpectedly,
+             * the X server can rescue the foreign window from
+             * our dying hierarchy.
+             */
+            registry
+                .connection
+                .change_save_set(SetMode::INSERT, numeric)
+                .map_err(|error| {
+                    format!("failed to add adopted X11 window 0x{numeric:x} to save-set: {error}")
+                })?
+                .check()
+                .map_err(|error| {
+                    format!("adopted X11 window 0x{numeric:x} save-set insert rejected: {error}")
+                })?;
 
             registry
                 .connection

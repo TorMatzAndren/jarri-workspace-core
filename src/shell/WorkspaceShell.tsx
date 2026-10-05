@@ -44,40 +44,90 @@ type WorkspaceScreenshotState = "idle" | "copying" | "copied" | "failed";
 export function WorkspaceShell() {
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
   const [frameControlsMenuOpen, setFrameControlsMenuOpen] = useState(false);
-  const [collapsedFrameControlGroups, setCollapsedFrameControlGroups] = useState<
-    Record<string, boolean>
-  >({});
+  const [collapsedFrameControlGroups, setCollapsedFrameControlGroups] =
+    useState<Record<string, boolean>>({});
   const [fileOperationClipboard, setFileOperationClipboard] =
     useState<unknown>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const [workspaceScreenshotState, setWorkspaceScreenshotState] = useState<WorkspaceScreenshotState>("idle");
-  const [workspaceScreenshotProgress, setWorkspaceScreenshotProgress] = useState("");
+  const [workspaceScreenshotState, setWorkspaceScreenshotState] =
+    useState<WorkspaceScreenshotState>("idle");
+  const [workspaceScreenshotProgress, setWorkspaceScreenshotProgress] =
+    useState("");
   const shellCaptureRef = useRef<HTMLElement | null>(null);
   const headerCaptureRef = useRef<HTMLElement | null>(null);
   const tabsCaptureRef = useRef<HTMLElement | null>(null);
   const canvasToolbarCaptureRef = useRef<HTMLDivElement | null>(null);
-  const activeCanvasScreenshotSourceRef = useRef<WorkspaceCanvasScreenshotSource | null>(null);
-  const updateActiveCanvasScreenshotSource = useCallback((source: WorkspaceCanvasScreenshotSource | null) => { activeCanvasScreenshotSourceRef.current = source; }, []);
-  const tabsCaptureRefCallback = useCallback((element: HTMLElement | null) => { tabsCaptureRef.current = element; }, []);
-  const canvasToolbarCaptureRefCallback = useCallback((element: HTMLDivElement | null) => { canvasToolbarCaptureRef.current = element; }, []);
+  const activeCanvasScreenshotSourceRef =
+    useRef<WorkspaceCanvasScreenshotSource | null>(null);
+  const updateActiveCanvasScreenshotSource = useCallback(
+    (source: WorkspaceCanvasScreenshotSource | null) => {
+      activeCanvasScreenshotSourceRef.current = source;
+    },
+    [],
+  );
+  const tabsCaptureRefCallback = useCallback((element: HTMLElement | null) => {
+    tabsCaptureRef.current = element;
+  }, []);
+  const canvasToolbarCaptureRefCallback = useCallback(
+    (element: HTMLDivElement | null) => {
+      canvasToolbarCaptureRef.current = element;
+    },
+    [],
+  );
 
   async function captureEntireWorkspaceScreenshot() {
     if (workspaceScreenshotState === "copying") return;
     const shellElement = shellCaptureRef.current;
     const canvasSource = activeCanvasScreenshotSourceRef.current;
-    const chromeElements = [headerCaptureRef.current, tabsCaptureRef.current, canvasToolbarCaptureRef.current];
-    if (!shellElement || !canvasSource || chromeElements.some((element) => element == null)) {
-      setWorkspaceScreenshotState("failed"); setWorkspaceScreenshotProgress("Screenshot failed");
-      window.setTimeout(() => { setWorkspaceScreenshotState("idle"); setWorkspaceScreenshotProgress(""); }, 2400); return;
+    const chromeElements = [
+      headerCaptureRef.current,
+      tabsCaptureRef.current,
+      canvasToolbarCaptureRef.current,
+    ];
+    if (
+      !shellElement ||
+      !canvasSource ||
+      chromeElements.some((element) => element == null)
+    ) {
+      setWorkspaceScreenshotState("failed");
+      setWorkspaceScreenshotProgress("Screenshot failed");
+      window.setTimeout(() => {
+        setWorkspaceScreenshotState("idle");
+        setWorkspaceScreenshotProgress("");
+      }, 2400);
+      return;
     }
-    setWorkspaceScreenshotState("copying"); setWorkspaceScreenshotProgress("Preparing screenshot…");
+    setWorkspaceScreenshotState("copying");
+    setWorkspaceScreenshotProgress("Preparing screenshot…");
     try {
-      await copyWorkspaceScreenshot({ kind: "entire-workspace", shellElement, chromeElements: chromeElements.filter((element): element is HTMLElement => element != null), canvasElement: canvasSource.element, canvasBounds: canvasSource.bounds, onProgress: setWorkspaceScreenshotProgress });
-      setWorkspaceScreenshotProgress("Screenshot copied"); setWorkspaceScreenshotState("copied");
-      window.setTimeout(() => { setWorkspaceScreenshotState((state) => state === "copied" ? "idle" : state); setWorkspaceScreenshotProgress(""); }, 1600);
+      await copyWorkspaceScreenshot({
+        kind: "entire-workspace",
+        shellElement,
+        chromeElements: chromeElements.filter(
+          (element): element is HTMLElement => element != null,
+        ),
+        canvasElement: canvasSource.element,
+        canvasBounds: canvasSource.bounds,
+        onProgress: setWorkspaceScreenshotProgress,
+      });
+      setWorkspaceScreenshotProgress("Screenshot copied");
+      setWorkspaceScreenshotState("copied");
+      window.setTimeout(() => {
+        setWorkspaceScreenshotState((state) =>
+          state === "copied" ? "idle" : state,
+        );
+        setWorkspaceScreenshotProgress("");
+      }, 1600);
     } catch (error) {
-      console.error("Entire Workspace screenshot failed", error); setWorkspaceScreenshotProgress("Screenshot failed"); setWorkspaceScreenshotState("failed");
-      window.setTimeout(() => { setWorkspaceScreenshotState((state) => state === "failed" ? "idle" : state); setWorkspaceScreenshotProgress(""); }, 2400);
+      console.error("Entire Workspace screenshot failed", error);
+      setWorkspaceScreenshotProgress("Screenshot failed");
+      setWorkspaceScreenshotState("failed");
+      window.setTimeout(() => {
+        setWorkspaceScreenshotState((state) =>
+          state === "failed" ? "idle" : state,
+        );
+        setWorkspaceScreenshotProgress("");
+      }, 2400);
     }
   }
   const systemSurfaceDragRef = useRef<{
@@ -119,24 +169,19 @@ export function WorkspaceShell() {
   const nativeSurfacePanelKey = nativeSurfacePanelIds.join("\n");
 
   useEffect(() => {
-    void reconcileWorkspaceNativeSurfacePanels(
-      nativeSurfacePanelIds,
-    ).catch((error) => {
-      const message = String(error);
+    void reconcileWorkspaceNativeSurfacePanels(nativeSurfacePanelIds).catch(
+      (error) => {
+        const message = String(error);
 
-      if (
-        message.includes(
-          "native surfaces are not available on this platform",
-        )
-      ) {
-        return;
-      }
+        if (
+          message.includes("native surfaces are not available on this platform")
+        ) {
+          return;
+        }
 
-      console.error(
-        "Workspace native surface reconciliation failed",
-        error,
-      );
-    });
+        console.error("Workspace native surface reconciliation failed", error);
+      },
+    );
   }, [nativeSurfacePanelKey]);
 
   const preferences = controller.workspace.preferences;
@@ -164,9 +209,7 @@ export function WorkspaceShell() {
     event.preventDefault();
   }
 
-  function moveSystemSurfaceDrag(
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) {
+  function moveSystemSurfaceDrag(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = systemSurfaceDragRef.current;
 
     if (!drag || drag.pointerId !== event.pointerId) {
@@ -179,26 +222,18 @@ export function WorkspaceShell() {
         [drag.surface]: {
           x: Math.max(
             0,
-            Math.round(
-              drag.startX +
-                (event.clientX - drag.startPointerX),
-            ),
+            Math.round(drag.startX + (event.clientX - drag.startPointerX)),
           ),
           y: Math.max(
             0,
-            Math.round(
-              drag.startY +
-                (event.clientY - drag.startPointerY),
-            ),
+            Math.round(drag.startY + (event.clientY - drag.startPointerY)),
           ),
         },
       },
     });
   }
 
-  function endSystemSurfaceDrag(
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) {
+  function endSystemSurfaceDrag(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = systemSurfaceDragRef.current;
 
     if (!drag || drag.pointerId !== event.pointerId) {
@@ -275,16 +310,36 @@ export function WorkspaceShell() {
   const colorStyle = {
     "--workspace-scale": preferences.scale,
     "--workspace-font-size": `${preferences.fontSize}px`,
-    ...(preferences.colorOverrides.page ? { "--override-page": preferences.colorOverrides.page } : {}),
-    ...(preferences.colorOverrides.canvas ? { "--override-canvas": preferences.colorOverrides.canvas } : {}),
-    ...(preferences.colorOverrides.panel ? { "--override-panel": preferences.colorOverrides.panel } : {}),
-    ...(preferences.colorOverrides.panelHeader ? { "--override-panel-header": preferences.colorOverrides.panelHeader } : {}),
-    ...(preferences.colorOverrides.text ? { "--override-text": preferences.colorOverrides.text } : {}),
-    ...(preferences.colorOverrides.muted ? { "--override-muted": preferences.colorOverrides.muted } : {}),
-    ...(preferences.colorOverrides.border ? { "--override-border": preferences.colorOverrides.border } : {}),
-    ...(preferences.colorOverrides.button ? { "--override-button": preferences.colorOverrides.button } : {}),
-    ...(preferences.colorOverrides.control ? { "--override-control": preferences.colorOverrides.control } : {}),
-    ...(preferences.colorOverrides.menu ? { "--override-menu": preferences.colorOverrides.menu } : {}),
+    ...(preferences.colorOverrides.page
+      ? { "--override-page": preferences.colorOverrides.page }
+      : {}),
+    ...(preferences.colorOverrides.canvas
+      ? { "--override-canvas": preferences.colorOverrides.canvas }
+      : {}),
+    ...(preferences.colorOverrides.panel
+      ? { "--override-panel": preferences.colorOverrides.panel }
+      : {}),
+    ...(preferences.colorOverrides.panelHeader
+      ? { "--override-panel-header": preferences.colorOverrides.panelHeader }
+      : {}),
+    ...(preferences.colorOverrides.text
+      ? { "--override-text": preferences.colorOverrides.text }
+      : {}),
+    ...(preferences.colorOverrides.muted
+      ? { "--override-muted": preferences.colorOverrides.muted }
+      : {}),
+    ...(preferences.colorOverrides.border
+      ? { "--override-border": preferences.colorOverrides.border }
+      : {}),
+    ...(preferences.colorOverrides.button
+      ? { "--override-button": preferences.colorOverrides.button }
+      : {}),
+    ...(preferences.colorOverrides.control
+      ? { "--override-control": preferences.colorOverrides.control }
+      : {}),
+    ...(preferences.colorOverrides.menu
+      ? { "--override-menu": preferences.colorOverrides.menu }
+      : {}),
   } as CSSProperties;
 
   function exportTabs() {
@@ -308,7 +363,8 @@ export function WorkspaceShell() {
     if (imagePath || textPath) {
       const moduleId = request.preferredModuleId ?? "core";
       const panelType =
-        request.preferredPanelType ?? (imagePath ? "image-viewer" : "text-viewer");
+        request.preferredPanelType ??
+        (imagePath ? "image-viewer" : "text-viewer");
       const expectedPanelType = imagePath ? "image-viewer" : "text-viewer";
       const resourcePath = imagePath ?? textPath ?? "";
 
@@ -387,7 +443,9 @@ export function WorkspaceShell() {
       data-has-custom-page={Boolean(preferences.colorOverrides.page)}
       data-has-custom-canvas={Boolean(preferences.colorOverrides.canvas)}
       data-has-custom-panel={Boolean(preferences.colorOverrides.panel)}
-      data-has-custom-panel-header={Boolean(preferences.colorOverrides.panelHeader)}
+      data-has-custom-panel-header={Boolean(
+        preferences.colorOverrides.panelHeader,
+      )}
       data-has-custom-text={Boolean(preferences.colorOverrides.text)}
       data-has-custom-muted={Boolean(preferences.colorOverrides.muted)}
       data-has-custom-border={Boolean(preferences.colorOverrides.border)}
@@ -482,8 +540,7 @@ export function WorkspaceShell() {
 
               const settingsPanel = controller.activeTab.panels.find(
                 (panel) =>
-                  panel.moduleId === "core" &&
-                  panel.panelType === "settings",
+                  panel.moduleId === "core" && panel.panelType === "settings",
               );
 
               if (settingsPanel) {
@@ -492,8 +549,7 @@ export function WorkspaceShell() {
               }
 
               controller.createPanel("core", "settings", {
-                initialPosition:
-                  preferences.systemSurfacePositions.settings,
+                initialPosition: preferences.systemSurfacePositions.settings,
               });
             }}
           >
@@ -505,8 +561,7 @@ export function WorkspaceShell() {
             onOpenCalendar={() => {
               const existing = controller.activeTab.panels.find(
                 (panel) =>
-                  panel.moduleId === "core" &&
-                  panel.panelType === "calendar",
+                  panel.moduleId === "core" && panel.panelType === "calendar",
               );
 
               if (existing) {
@@ -551,7 +606,7 @@ export function WorkspaceShell() {
       >
         <div className="panel-menu">
           {panelMenuOpen ? (
-            <div className="panel-menu__content">
+            <div className="panel-menu__content" data-workspace-native-occluder>
               <div
                 className="panel-menu__header panel-menu__header--draggable"
                 onPointerDown={(event) =>
@@ -603,11 +658,16 @@ export function WorkspaceShell() {
                 );
 
                 return (
-                  <section className="panel-menu__group" key={group.module.moduleId}>
+                  <section
+                    className="panel-menu__group"
+                    key={group.module.moduleId}
+                  >
                     <button
                       type="button"
                       className="panel-menu__group-toggle"
-                      onClick={() => togglePanelMenuModule(group.module.moduleId)}
+                      onClick={() =>
+                        togglePanelMenuModule(group.module.moduleId)
+                      }
                       aria-expanded={expanded}
                     >
                       <h2>{group.module.title}</h2>
@@ -622,7 +682,10 @@ export function WorkspaceShell() {
                             type="button"
                             className="panel-menu__panel-button"
                             onClick={() => {
-                              controller.createPanel(panel.moduleId, panel.panelType);
+                              controller.createPanel(
+                                panel.moduleId,
+                                panel.panelType,
+                              );
                               setPanelMenuOpen(false);
                             }}
                           >
