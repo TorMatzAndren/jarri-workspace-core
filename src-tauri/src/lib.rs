@@ -1,18 +1,7 @@
 mod native_surface;
 mod steam_client;
 
-use native_surface::{
-    workspace_native_surface_adopt_x11_window,
-    workspace_native_surface_create,
-    workspace_native_surface_destroy,
-    workspace_native_surface_ensure_for_panel,
-    workspace_native_surface_reconcile_panels,
-    workspace_native_surface_release_x11_window,
-    workspace_native_surface_set_visible,
-    workspace_native_surface_update,
-    workspace_native_window_identity,
-    WorkspaceNativeSurfaceState,
-};
+use native_surface::WorkspaceNativeSurfaceState;
 
 use steam_client::steam_client_find_or_launch;
 use base64::Engine;
@@ -1490,6 +1479,113 @@ async fn workspace_capture_frame_screenshot(
     _request: WorkspaceFrameScreenshotRequest,
 ) -> Result<Vec<u8>, String> {
     Err("Native frame screenshot is currently implemented for Linux only.".to_string())
+}
+
+#[tauri::command]
+fn workspace_native_window_identity(
+    window: tauri::WebviewWindow,
+) -> Result<native_surface::WorkspaceNativeWindowIdentity, String> {
+    native_surface::workspace_native_window_identity(window)
+}
+
+#[tauri::command]
+fn workspace_native_surface_create(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, native_surface::WorkspaceNativeSurfaceState>,
+    geometry: native_surface::WorkspaceNativeSurfaceGeometry,
+) -> Result<native_surface::WorkspaceNativeSurfaceResult, String> {
+    native_surface::workspace_native_surface_create(
+        window,
+        state,
+        geometry,
+    )
+}
+
+#[tauri::command]
+fn workspace_native_surface_ensure_for_panel(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, native_surface::WorkspaceNativeSurfaceState>,
+    panel_id: String,
+    geometry: native_surface::WorkspaceNativeSurfaceGeometry,
+) -> Result<native_surface::WorkspaceNativeSurfaceResult, String> {
+    native_surface::workspace_native_surface_ensure_for_panel(
+        window,
+        state,
+        panel_id,
+        geometry,
+    )
+}
+
+#[tauri::command]
+fn workspace_native_surface_update(
+    state: tauri::State<'_, native_surface::WorkspaceNativeSurfaceState>,
+    surface_id: String,
+    geometry: native_surface::WorkspaceNativeSurfaceGeometry,
+) -> Result<(), String> {
+    native_surface::workspace_native_surface_update(
+        state,
+        surface_id,
+        geometry,
+    )
+}
+
+#[tauri::command]
+fn workspace_native_surface_set_visible(
+    state: tauri::State<'_, native_surface::WorkspaceNativeSurfaceState>,
+    surface_id: String,
+    visible: bool,
+) -> Result<(), String> {
+    native_surface::workspace_native_surface_set_visible(
+        state,
+        surface_id,
+        visible,
+    )
+}
+
+#[tauri::command]
+fn workspace_native_surface_adopt_x11_window(
+    state: tauri::State<'_, native_surface::WorkspaceNativeSurfaceState>,
+    surface_id: String,
+    window_id: String,
+) -> Result<native_surface::WorkspaceNativeSurfaceAdoptionResult, String> {
+    native_surface::workspace_native_surface_adopt_x11_window(
+        state,
+        surface_id,
+        window_id,
+    )
+}
+
+#[tauri::command]
+fn workspace_native_surface_release_x11_window(
+    state: tauri::State<'_, native_surface::WorkspaceNativeSurfaceState>,
+    surface_id: String,
+) -> Result<(), String> {
+    native_surface::workspace_native_surface_release_x11_window(
+        state,
+        surface_id,
+    )
+}
+
+#[tauri::command]
+fn workspace_native_surface_destroy(
+    state: tauri::State<'_, native_surface::WorkspaceNativeSurfaceState>,
+    surface_id: String,
+) -> Result<(), String> {
+    native_surface::workspace_native_surface_destroy(
+        state,
+        surface_id,
+    )
+}
+
+#[tauri::command]
+fn workspace_native_surface_reconcile_panels(
+    state: tauri::State<'_, native_surface::WorkspaceNativeSurfaceState>,
+    panel_ids: Vec<String>,
+) -> Result<(), String> {
+    native_surface::workspace_native_surface_reconcile_panels(
+        state,
+        panel_ids,
+    )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

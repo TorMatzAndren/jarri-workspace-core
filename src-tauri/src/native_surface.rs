@@ -25,23 +25,35 @@ pub(crate) struct WorkspaceNativeSurfaceGeometry {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WorkspaceNativeWindowIdentity {
-    backend: String,
-    window_id: String,
+    pub(crate) backend: String,
+    pub(crate) window_id: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WorkspaceNativeSurfaceResult {
-    surface_id: String,
-    width: u32,
-    height: u32,
+    pub(crate) surface_id: String,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WorkspaceNativeSurfaceAdoptionResult {
-    surface_id: String,
-    window_id: String,
+    pub(crate) surface_id: String,
+    pub(crate) window_id: String,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub(crate) struct WorkspaceNativeSurfaceInspection {
+    pub(crate) surface_id: String,
+    pub(crate) owner_panel_id: Option<String>,
+    pub(crate) container_window_id: u32,
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
 }
 
 #[cfg(target_os = "linux")]
@@ -884,10 +896,112 @@ mod linux {
             Ok(())
         })
     }
+
+    #[allow(dead_code)]
+    pub(crate) fn inspect_surfaces(
+        state: &WorkspaceNativeSurfaceState,
+    ) -> Result<Vec<WorkspaceNativeSurfaceInspection>, String> {
+        with_registry(state, |registry| {
+            let mut inspections = Vec::with_capacity(registry.surfaces.len());
+
+            for (surface_id, entry) in &registry.surfaces {
+                let geometry = registry
+                    .connection
+                    .get_geometry(entry.container_window_id)
+                    .map_err(|error| {
+                        format!("failed to query native surface {surface_id} geometry: {error}")
+                    })?
+                    .reply()
+                    .map_err(|error| {
+                        format!("native surface {surface_id} geometry query rejected: {error}")
+                    })?;
+
+                inspections.push(WorkspaceNativeSurfaceInspection {
+                    surface_id: surface_id.clone(),
+                    owner_panel_id: entry.owner_panel_id.clone(),
+                    container_window_id: entry.container_window_id,
+                    x: i32::from(geometry.x),
+                    y: i32::from(geometry.y),
+                    width: u32::from(geometry.width),
+                    height: u32::from(geometry.height),
+                });
+            }
+
+            inspections.sort_by(|left, right| left.surface_id.cmp(&right.surface_id));
+
+            Ok(inspections)
+        })
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn inspect_surface(
+        state: &WorkspaceNativeSurfaceState,
+        surface_id: &str,
+    ) -> Result<WorkspaceNativeSurfaceInspection, String> {
+        with_registry(state, |registry| {
+            let entry = registry
+                .surfaces
+                .get(surface_id)
+                .ok_or_else(|| format!("unknown native surface: {surface_id}"))?;
+
+            let geometry = registry
+                .connection
+                .get_geometry(entry.container_window_id)
+                .map_err(|error| {
+                    format!("failed to query native surface {surface_id} geometry: {error}")
+                })?
+                .reply()
+                .map_err(|error| {
+                    format!("native surface {surface_id} geometry query rejected: {error}")
+                })?;
+
+            Ok(WorkspaceNativeSurfaceInspection {
+                surface_id: surface_id.to_string(),
+                owner_panel_id: entry.owner_panel_id.clone(),
+                container_window_id: entry.container_window_id,
+                x: i32::from(geometry.x),
+                y: i32::from(geometry.y),
+                width: u32::from(geometry.width),
+                height: u32::from(geometry.height),
+            })
+        })
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn stale_surface_ids(
+        state: &WorkspaceNativeSurfaceState,
+        panel_ids: &[String],
+    ) -> Result<Vec<String>, String> {
+        let existing = panel_ids
+            .iter()
+            .map(|panel_id| panel_id.trim().to_string())
+            .filter(|panel_id| !panel_id.is_empty())
+            .collect::<HashSet<_>>();
+
+        with_registry(state, |registry| {
+            let mut stale = registry
+                .surfaces
+                .iter()
+                .filter_map(|(surface_id, entry)| {
+                    let owner = entry.owner_panel_id.as_ref()?;
+                    (!existing.contains(owner)).then(|| surface_id.clone())
+                })
+                .collect::<Vec<_>>();
+
+            stale.sort();
+
+            Ok(stale)
+        })
+    }
 }
 
 #[cfg(target_os = "linux")]
-pub(crate) use linux::WorkspaceNativeSurfaceState;
+#[allow(unused_imports)]
+pub(crate) use linux::{
+    inspect_surface as workspace_native_surface_inspect,
+    inspect_surfaces as workspace_native_surface_inspect_all,
+    stale_surface_ids as workspace_native_surface_stale_ids, WorkspaceNativeSurfaceState,
+};
 
 #[cfg(not(target_os = "linux"))]
 #[derive(Default)]
@@ -898,7 +1012,6 @@ fn unsupported<T>() -> Result<T, String> {
     Err("Workspace native surfaces are not available on this platform".to_string())
 }
 
-#[tauri::command]
 pub(crate) fn workspace_native_window_identity(
     window: tauri::WebviewWindow,
 ) -> Result<WorkspaceNativeWindowIdentity, String> {
@@ -914,7 +1027,6 @@ pub(crate) fn workspace_native_window_identity(
     }
 }
 
-#[tauri::command]
 pub(crate) fn workspace_native_surface_create(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, WorkspaceNativeSurfaceState>,
@@ -932,7 +1044,6 @@ pub(crate) fn workspace_native_surface_create(
     }
 }
 
-#[tauri::command]
 pub(crate) fn workspace_native_surface_ensure_for_panel(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, WorkspaceNativeSurfaceState>,
@@ -951,7 +1062,6 @@ pub(crate) fn workspace_native_surface_ensure_for_panel(
     }
 }
 
-#[tauri::command]
 pub(crate) fn workspace_native_surface_update(
     state: tauri::State<'_, WorkspaceNativeSurfaceState>,
     surface_id: String,
@@ -969,7 +1079,6 @@ pub(crate) fn workspace_native_surface_update(
     }
 }
 
-#[tauri::command]
 pub(crate) fn workspace_native_surface_set_visible(
     state: tauri::State<'_, WorkspaceNativeSurfaceState>,
     surface_id: String,
@@ -987,7 +1096,6 @@ pub(crate) fn workspace_native_surface_set_visible(
     }
 }
 
-#[tauri::command]
 pub(crate) fn workspace_native_surface_adopt_x11_window(
     state: tauri::State<'_, WorkspaceNativeSurfaceState>,
     surface_id: String,
@@ -1020,7 +1128,6 @@ pub(crate) fn workspace_native_surface_release_all_adopted(
     }
 }
 
-#[tauri::command]
 pub(crate) fn workspace_native_surface_release_x11_window(
     state: tauri::State<'_, WorkspaceNativeSurfaceState>,
     surface_id: String,
@@ -1037,7 +1144,6 @@ pub(crate) fn workspace_native_surface_release_x11_window(
     }
 }
 
-#[tauri::command]
 pub(crate) fn workspace_native_surface_destroy(
     state: tauri::State<'_, WorkspaceNativeSurfaceState>,
     surface_id: String,
@@ -1054,7 +1160,6 @@ pub(crate) fn workspace_native_surface_destroy(
     }
 }
 
-#[tauri::command]
 pub(crate) fn workspace_native_surface_reconcile_panels(
     state: tauri::State<'_, WorkspaceNativeSurfaceState>,
     panel_ids: Vec<String>,
