@@ -1494,7 +1494,7 @@ async fn workspace_capture_frame_screenshot(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .manage(WorkspaceFsSearchRegistry::default())
@@ -1524,8 +1524,27 @@ pub fn run() {
             workspace_fs_read_text,
             workspace_fs_read_binary,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Jarri Workspace Core");
+        .build(tauri::generate_context!())
+        .expect("error while building Jarri Workspace Core");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { .. } = event {
+            use tauri::Manager;
+
+            let state =
+                app_handle.state::<native_surface::WorkspaceNativeSurfaceState>();
+
+            if let Err(error) =
+                native_surface::workspace_native_surface_release_all_adopted(
+                    state.inner(),
+                )
+            {
+                eprintln!(
+                    "Workspace native surface shutdown release failed: {error}"
+                );
+            }
+        }
+    });
 }
 
 #[cfg(test)]

@@ -805,6 +805,51 @@ mod linux {
         })
     }
 
+    pub(crate) fn release_all_adopted(state: &WorkspaceNativeSurfaceState) -> Result<(), String> {
+        /*
+         * Orderly application shutdown must release borrowed foreign
+         * windows before Tauri/X11 destroys Workspace-owned containers.
+         *
+         * Do not use with_registry() here: shutdown must not establish a
+         * fresh X11 connection when the native-surface subsystem was never
+         * used during this process lifetime.
+         */
+        let mut slot = state
+            .registry
+            .lock()
+            .map_err(|_| "native surface registry lock poisoned".to_string())?;
+
+        let Some(registry) = slot.as_mut() else {
+            return Ok(());
+        };
+
+        let adopted_surface_ids = registry
+            .surfaces
+            .iter()
+            .filter_map(|(surface_id, entry)| {
+                matches!(entry.content, NativeSurfaceContent::Adopted(_))
+                    .then(|| surface_id.clone())
+            })
+            .collect::<Vec<_>>();
+
+        let mut failures = Vec::new();
+
+        for surface_id in adopted_surface_ids {
+            if let Err(error) = release_adopted_window(registry, &surface_id) {
+                failures.push(format!("{surface_id}: {error}"));
+            }
+        }
+
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "failed to release adopted native surfaces during shutdown: {}",
+                failures.join("; ")
+            ))
+        }
+    }
+
     pub(crate) fn destroy(
         state: tauri::State<'_, WorkspaceNativeSurfaceState>,
         surface_id: String,
@@ -960,6 +1005,21 @@ pub(crate) fn workspace_native_surface_adopt_x11_window(
     }
 }
 
+pub(crate) fn workspace_native_surface_release_all_adopted(
+    state: &WorkspaceNativeSurfaceState,
+) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        linux::release_all_adopted(state)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = state;
+        Ok(())
+    }
+}
+
 #[tauri::command]
 pub(crate) fn workspace_native_surface_release_x11_window(
     state: tauri::State<'_, WorkspaceNativeSurfaceState>,
@@ -1028,6 +1088,7 @@ mod tests {
                 width: 100,
                 height: 80,
             }),
+            visible_clips: None,
         };
 
         let value = serde_json::to_value(geometry).expect("serialize geometry");
