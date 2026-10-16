@@ -21,6 +21,7 @@ import { WorkspaceCanvas } from "../workspace/WorkspaceCanvas";
 import {
   isPanelMenuModuleExpanded,
   projectPanelMenuGroups,
+  filterPanelMenuGroups,
 } from "../core/panelMenu";
 import {
   explicitTextViewerResourcePath,
@@ -46,6 +47,7 @@ type WorkspaceScreenshotState = "idle" | "copying" | "copied" | "failed";
 
 export function WorkspaceShell() {
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
+  const [panelMenuSearchQuery, setPanelMenuSearchQuery] = useState("");
   const [frameControlsMenuOpen, setFrameControlsMenuOpen] = useState(false);
   const [collapsedFrameControlGroups, setCollapsedFrameControlGroups] =
     useState<Record<string, boolean>>({});
@@ -313,6 +315,11 @@ export function WorkspaceShell() {
         preferences.panelMenu,
       ),
     [controller.availablePanels, preferences.panelMenu, runtime],
+  );
+
+  const filteredPanelGroups = useMemo(
+    () => filterPanelMenuGroups(panelGroups, panelMenuSearchQuery),
+    [panelGroups, panelMenuSearchQuery],
   );
 
   const frameControlColumns = WORKSPACE_FRAME_CONTROL_CATALOG;
@@ -714,11 +721,36 @@ export function WorkspaceShell() {
                 </div>
               </div>
 
-              {panelGroups.map((group) => {
-                const expanded = isPanelMenuModuleExpanded(
-                  preferences.panelMenu,
-                  group.module.moduleId,
-                );
+              <div className="panel-menu__search">
+                <input
+                  type="search"
+                  value={panelMenuSearchQuery}
+                  placeholder="Search panels…"
+                  aria-label="Search available panels"
+                  onChange={(event) =>
+                    setPanelMenuSearchQuery(event.target.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      setPanelMenuSearchQuery("");
+                    }
+                  }}
+                />
+              </div>
+
+              {filteredPanelGroups.length === 0 ? (
+                <div className="panel-menu__search-empty">
+                  No matching panels
+                </div>
+              ) : null}
+
+              {filteredPanelGroups.map((group) => {
+                const expanded =
+                  Boolean(panelMenuSearchQuery.trim()) ||
+                  isPanelMenuModuleExpanded(
+                    preferences.panelMenu,
+                    group.module.moduleId,
+                  );
 
                 return (
                   <section
@@ -745,11 +777,14 @@ export function WorkspaceShell() {
                             type="button"
                             className="panel-menu__panel-button"
                             onClick={() => {
-                              controller.createPanel(
+                              const panelId = controller.createPanel(
                                 panel.moduleId,
                                 panel.panelType,
                               );
-                              setPanelMenuOpen(false);
+                              if (panelId) {
+                                setPanelMenuSearchQuery("");
+                                setPanelMenuOpen(false);
+                              }
                             }}
                           >
                             <strong>{panel.title}</strong>

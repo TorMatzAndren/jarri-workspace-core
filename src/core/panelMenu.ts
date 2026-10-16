@@ -46,3 +46,44 @@ export function isPanelMenuModuleExpanded(
 ) {
   return preferences.expandedModuleIds.includes(moduleId);
 }
+
+
+/**
+ * Filter the existing panel-menu projection without changing
+ * its module visibility, ordering, or panel ordering.
+ */
+export function filterPanelMenuGroups(
+  groups: PanelMenuGroup[],
+  query: string,
+): PanelMenuGroup[] {
+  const needle = query.trim().toLocaleLowerCase();
+
+  if (!needle) {
+    return groups;
+  }
+
+  return groups
+    .map((group) => {
+      const moduleMatches =
+        group.module.title.toLocaleLowerCase().includes(needle) ||
+        group.module.moduleId.toLocaleLowerCase().includes(needle);
+
+      return {
+        ...group,
+        panels: group.panels.filter(
+          (panel) =>
+            moduleMatches ||
+            [
+              panel.title,
+              panel.panelType,
+              panel.moduleId,
+              panel.category,
+            ].some((value) =>
+              typeof value === "string" &&
+              value.toLocaleLowerCase().includes(needle),
+            ),
+        ),
+      };
+    })
+    .filter((group) => group.panels.length > 0);
+}
