@@ -33,6 +33,7 @@ import {
 import jarriWorkspaceLogo from "../assets/jarri-workspace.png";
 import { openExternalUrl } from "../core/platform/openExternalUrl";
 import { WorkspaceClock } from "./WorkspaceClock";
+import { CoreOpenPanelSearch } from "./CoreOpenPanelSearch";
 import { DeveloperVersionIndicator } from "./DeveloperVersionIndicator";
 import { copyWorkspaceScreenshot } from "../workspace/screenshot";
 import { reconcileWorkspaceNativeSurfacePanels } from "../core/platform/nativeSurface";
@@ -162,6 +163,18 @@ export function WorkspaceShell() {
     persistence,
     defaultWorkspaceFactory,
   });
+
+  const [panelSearchNavigation, setPanelSearchNavigation] = useState<{
+    panelId: string;
+    requestId: number;
+  } | null>(null);
+
+  function navigateToSearchPanel(panelId: string) {
+    setPanelSearchNavigation((current) => ({
+      panelId,
+      requestId: (current?.requestId ?? 0) + 1,
+    }));
+  }
 
   const panelLifecycleProjection = useMemo(
     () =>
@@ -512,6 +525,12 @@ export function WorkspaceShell() {
             alt="Jarri Workspace"
           />
         </button>
+
+        <CoreOpenPanelSearch
+          controller={controller}
+          modules={runtime.listModules()}
+          onNavigateToPanel={navigateToSearchPanel}
+        />
 
         <div className="workspace-shell__actions">
           <div
@@ -901,6 +920,7 @@ export function WorkspaceShell() {
           setFrameControlsMenuOpen(false);
           setPanelMenuOpen((open) => !open);
         }}
+        navigationRequest={panelSearchNavigation}
         onFocusPanel={controller.focusPanel}
         onClosePanel={controller.closePanel}
         onTogglePanelMinimized={controller.togglePanelMinimized}

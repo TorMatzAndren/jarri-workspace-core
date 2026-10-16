@@ -62,6 +62,10 @@ type Props = {
   onOpenPanelsMenu: () => void;
   screenshotToolbarRef?: (element: HTMLDivElement | null) => void;
   onScreenshotSourceChange?: (source: WorkspaceCanvasScreenshotSource | null) => void;
+  navigationRequest?: {
+    panelId: string;
+    requestId: number;
+  } | null;
   onFocusPanel: (panelId: string) => void;
   onClosePanel: (panelId: string) => void;
   onTogglePanelMinimized: (panelId: string) => void;
@@ -150,6 +154,7 @@ export function WorkspaceCanvas({
   onOpenPanelsMenu,
   screenshotToolbarRef,
   onScreenshotSourceChange,
+  navigationRequest,
   onFocusPanel,
   onClosePanel,
   onTogglePanelMinimized,
@@ -669,6 +674,51 @@ export function WorkspaceCanvas({
     });
     rememberViewport();
   }
+
+
+  const handledSearchNavigationRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (!navigationRequest) return;
+    if (handledSearchNavigationRef.current === navigationRequest.requestId) {
+      return;
+    }
+
+    const target = panels.find(
+      (panel) => panel.id === navigationRequest.panelId,
+    );
+
+    if (!target || target.display?.mode === "minimized") return;
+
+    if (!surfaceRef.current) return;
+
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        if (
+          handledSearchNavigationRef.current ===
+          navigationRequest.requestId
+        ) {
+          return;
+        }
+
+        handledSearchNavigationRef.current = navigationRequest.requestId;
+        positionPanelInViewport(target);
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [
+    navigationRequest?.panelId,
+    navigationRequest?.requestId,
+    tabId,
+    panels,
+    cameraViewportSize.width,
+    cameraViewportSize.height,
+  ]);
 
   function focusPanel(panel: PanelInstance, navigation: "none" | "panel-bar") {
     onFocusPanel(panel.id);
