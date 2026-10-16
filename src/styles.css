@@ -5356,3 +5356,215 @@ code {
   color: var(--text-muted, currentColor);
   opacity: 0.75;
 }
+
+
+/* Add Panel V2 — Core viewport-owned spatial launcher. */
+
+/*
+ * The launcher belongs to the visible application viewport,
+ * not the logical Workspace canvas. Panning and zooming have
+ * no effect on its screen position.
+ */
+
+.workspace-shell__floating-panel-menu--right {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  left: auto;
+  z-index: 12000;
+}
+
+.panel-menu__content--masonry {
+  position: absolute;
+  top: 0;
+  left: auto;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  gap: 8px;
+  overflow: hidden;
+}
+
+.panel-menu__content--masonry > .panel-menu__header,
+.panel-menu__content--masonry > .panel-menu__search {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.panel-menu__content--masonry .panel-menu__search input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.panel-menu__masonry {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  gap: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.panel-menu__masonry-column {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 0;
+  min-width: 0;
+  max-width: none;
+  gap: 10px;
+}
+
+/* Lab's invisible width probes do not affect Core geometry. */
+.panel-menu__masonry-width-probe {
+  position: absolute;
+  width: 0;
+  height: 0;
+  min-width: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.panel-menu__content--masonry .panel-menu__group,
+.panel-menu__content--masonry .panel-menu__group-heading,
+.panel-menu__content--masonry .panel-menu__group-toggle,
+.panel-menu__content--masonry .panel-menu__group-panels,
+.panel-menu__content--masonry .panel-menu__panel-button,
+.panel-menu__content--masonry .panel-menu__column-drop {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.panel-menu__group-heading {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.panel-menu__group-heading .panel-menu__group-toggle {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.panel-menu__content--masonry .panel-menu__group-toggle h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-menu__content--masonry .panel-menu__group-panels > button {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.panel-menu__content--masonry .panel-menu__group-panels > button span {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.panel-menu__drag-grip {
+  display: inline-flex;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  border-radius: 5px;
+  color: var(--color-muted);
+  cursor: grab;
+  user-select: none;
+  letter-spacing: -2px;
+  font-size: 17px;
+}
+
+.panel-menu__drag-grip[aria-disabled="true"] {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.panel-menu__drag-grip:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.panel-menu__layout-lock {
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 32px;
+}
+
+.panel-menu__column-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.panel-menu__column-drop {
+  flex: 0 0 28px;
+  min-height: 28px;
+  border: 1px dashed transparent;
+  border-radius: 6px;
+}
+
+.panel-menu__column-drop[data-drop-target="true"],
+.panel-menu__group[data-drop-target="true"] {
+  outline: 2px dashed var(--color-border-strong);
+  outline-offset: 2px;
+}
+
+.panel-menu__group[data-dragging="true"] {
+  opacity: 0.45;
+}
+
+/* Resize the left edge; keep the right edge fixed. */
+.panel-menu__resize-left {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  width: 12px;
+  border-left: 2px solid transparent;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.panel-menu__resize-left:hover,
+.panel-menu__resize-left:focus-visible {
+  border-left-color: var(--color-border-strong);
+  background: color-mix(
+    in srgb,
+    var(--color-text) 8%,
+    transparent
+  );
+  outline: none;
+}

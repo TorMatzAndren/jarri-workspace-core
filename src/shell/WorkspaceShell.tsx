@@ -1,4 +1,11 @@
 import {
+  moveCatalogueModule,
+  reconcileCatalogueColumns,
+  mergeCatalogueModuleOrder,
+  projectCatalogueColumns,
+  resolveCatalogueDrop,
+} from "./panelCatalogueReorder";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -19,7 +26,6 @@ import { workspaceRuntime } from "../bootstrap/workspaceRuntime";
 import { TabBar } from "../tabs/TabBar";
 import { WorkspaceCanvas } from "../workspace/WorkspaceCanvas";
 import {
-  isPanelMenuModuleExpanded,
   projectPanelMenuGroups,
   filterPanelMenuGroups,
 } from "../core/panelMenu";
@@ -48,6 +54,91 @@ type WorkspaceScreenshotState = "idle" | "copying" | "copied" | "failed";
 export function WorkspaceShell() {
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
   const [panelMenuSearchQuery, setPanelMenuSearchQuery] = useState("");
+
+  const [catalogueLayoutLocked, setCatalogueLayoutLocked] =
+    useState(() => {
+      try {
+        const value = localStorage.getItem(
+          "jarri.workspace.core.catalogueLayoutLocked.v1",
+        );
+        if (value !== null) return value !== "false";
+
+        return localStorage.getItem(
+          "jarri.workspace.core.addPanelLayoutLocked.v1",
+        ) !== "false";
+      } catch {
+        return true;
+      }
+    });
+
+  const [catalogueManualColumns, setCatalogueManualColumns] =
+    useState<unknown>(() => {
+      try {
+        const raw = localStorage.getItem(
+          "jarri.workspace.core.catalogueColumns.v1",
+        );
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    });
+
+  const [catalogueWidth, setCatalogueWidth] = useState(() => {
+    try {
+      const raw = localStorage.getItem(
+        "jarri.workspace.core.catalogueWidth.v1",
+      );
+      const saved = raw === null ? NaN : Number(raw);
+      return Number.isFinite(saved) && saved >= 280
+        ? saved : 960;
+    } catch {
+      return 960;
+    }
+  });
+
+  const [catalogueViewportWidth, setCatalogueViewportWidth] =
+    useState(() => window.innerWidth);
+
+  useEffect(() => {
+    const update = () => setCatalogueViewportWidth(window.innerWidth);
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const catalogueResizeRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startWidth: number;
+    currentWidth: number;
+  } | null>(null);
+
+  const catalogueDragRef = useRef<string | null>(null);
+  const [catalogueDragId, setCatalogueDragId] =
+    useState<string | null>(null);
+  const [catalogueDropId, setCatalogueDropId] =
+    useState<string | null>(null);
+
+  function clampCatalogueWidth(value: number) {
+    return Math.max(
+      280,
+      Math.min(
+        value,
+        Math.max(280, catalogueViewportWidth - 32),
+      ),
+    );
+  }
+
+  function persistCatalogueWidth(value: number) {
+    try {
+      localStorage.setItem(
+        "jarri.workspace.core.catalogueWidth.v1",
+        String(clampCatalogueWidth(value)),
+      );
+    } catch {
+      // Resizing remains functional without storage.
+    }
+  }
+
   const [frameControlsMenuOpen, setFrameControlsMenuOpen] = useState(false);
   const [collapsedFrameControlGroups, setCollapsedFrameControlGroups] =
     useState<Record<string, boolean>>({});
@@ -321,6 +412,99 @@ export function WorkspaceShell() {
     () => filterPanelMenuGroups(panelGroups, panelMenuSearchQuery),
     [panelGroups, panelMenuSearchQuery],
   );
+
+  const effectiveCatalogueWidth = Math.min(
+    catalogueWidth,
+    Math.max(280, catalogueViewportWidth - 32),
+  );
+
+  const masonryColumnCount = Math.max(
+    1,
+    Math.min(6, Math.floor(effectiveCatalogueWidth / 300)),
+  );
+
+  const catalogueCanonicalColumns = reconcileCatalogueColumns(
+    panelGroups.map((group) => group.module.moduleId),
+    6,
+    catalogueManualColumns,
+    Object.fromEntries(
+      panelGroups.map((group) => [
+        group.module.moduleId,
+        1 + group.panels.length,
+      ]),
+    ),
+  );
+
+  const catalogueColumns = projectCatalogueColumns(
+    catalogueCanonicalColumns,
+    masonryColumnCount,
+  );
+
+  const masonryColumns = catalogueColumns.map((column) =>
+    column.flatMap((moduleId) =>
+      filteredPanelGroups.filter(
+        (group) => group.module.moduleId === moduleId,
+      ),
+    ),
+  );
+
+  function insertCatalogueModule(
+    movingId: string,
+    visibleColumn: number,
+    visibleIndex: number,
+  ) {
+    if (catalogueLayoutLocked || panelMenuSearchQuery.trim()) {
+      return;
+    }
+
+    const destination = resolveCatalogueDrop(
+      catalogueCanonicalColumns,
+      catalogueColumns,
+      visibleColumn,
+      visibleIndex,
+    );
+
+    if (!destination) return;
+
+    const next = moveCatalogueModule(
+      catalogueCanonicalColumns,
+      movingId,
+      destination.column,
+      destination.index,
+    );
+
+    if (next === catalogueCanonicalColumns) return;
+
+    setCatalogueManualColumns(next);
+
+    try {
+      localStorage.setItem(
+        "jarri.workspace.core.catalogueColumns.v1",
+        JSON.stringify(next),
+      );
+    } catch {
+      // In-memory arrangement still works.
+    }
+
+    const nextOrder = mergeCatalogueModuleOrder(
+      preferences.panelMenu.moduleOrder,
+      panelGroups.map((group) => group.module.moduleId),
+      next,
+    );
+
+    controller.updatePreferences({
+      panelMenu: {
+        ...preferences.panelMenu,
+        moduleOrder: nextOrder,
+      },
+    });
+  }
+
+  function resetCatalogueDrag() {
+    catalogueDragRef.current = null;
+    setCatalogueDragId(null);
+    setCatalogueDropId(null);
+  }
 
   const frameControlColumns = WORKSPACE_FRAME_CONTROL_CATALOG;
   const frameControlGroups = panelGroups;
@@ -667,48 +851,174 @@ export function WorkspaceShell() {
       />
 
       <div
-        className="workspace-shell__floating-panel-menu"
+        className="workspace-shell__floating-panel-menu workspace-shell__floating-panel-menu--right"
         style={{
-          left: `${preferences.systemSurfacePositions.addPanel.x}px`,
-          top: `${preferences.systemSurfacePositions.addPanel.y}px`,
-          right: "auto",
+          right: "16px",
+          top: "16px",
         }}
       >
         <div className="panel-menu">
           {panelMenuOpen ? (
-            <div className="panel-menu__content" data-workspace-native-occluder>
+            <div
+              className="panel-menu__content panel-menu__content--masonry"
+              data-workspace-native-occluder
+              style={{ width: `${effectiveCatalogueWidth}px` }}
+            >
               <div
-                className="panel-menu__header panel-menu__header--draggable"
-                onPointerDown={(event) =>
-                  beginSystemSurfaceDrag("addPanel", event)
-                }
-                onPointerMove={moveSystemSurfaceDrag}
-                onPointerUp={endSystemSurfaceDrag}
-                onPointerCancel={endSystemSurfaceDrag}
-              >
+                className="panel-menu__resize-left"
+                role="separator"
+                tabIndex={0}
+                aria-label="Resize Add Panel"
+                aria-orientation="vertical"
+                aria-valuemin={280}
+                aria-valuemax={Math.max(
+                  280,
+                  catalogueViewportWidth - 32,
+                )}
+                aria-valuenow={effectiveCatalogueWidth}
+                title="Drag left to expand Add Panel"
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+
+                  event.preventDefault();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+
+                  catalogueResizeRef.current = {
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startWidth: effectiveCatalogueWidth,
+                    currentWidth: effectiveCatalogueWidth,
+                  };
+                }}
+                onPointerMove={(event) => {
+                  const drag = catalogueResizeRef.current;
+                  if (!drag || drag.pointerId !== event.pointerId) return;
+
+                  const next = clampCatalogueWidth(
+                    drag.startWidth + drag.startX - event.clientX,
+                  );
+
+                  drag.currentWidth = next;
+                  setCatalogueWidth(next);
+                }}
+                onPointerUp={(event) => {
+                  const drag = catalogueResizeRef.current;
+                  if (!drag || drag.pointerId !== event.pointerId) return;
+
+                  const next = clampCatalogueWidth(
+                    drag.startWidth + drag.startX - event.clientX,
+                  );
+
+                  setCatalogueWidth(next);
+                  persistCatalogueWidth(next);
+
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                  }
+
+                  catalogueResizeRef.current = null;
+                }}
+                onPointerCancel={() => {
+                  catalogueResizeRef.current = null;
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    event.key !== "ArrowLeft" &&
+                    event.key !== "ArrowRight"
+                  ) return;
+
+                  event.preventDefault();
+
+                  const next = clampCatalogueWidth(
+                    effectiveCatalogueWidth +
+                    (event.key === "ArrowLeft" ? 300 : -300),
+                  );
+
+                  setCatalogueWidth(next);
+                  persistCatalogueWidth(next);
+                }}
+              />
+
+              <div className="panel-menu__header">
                 <strong>Add Panel</strong>
+
                 <div className="panel-menu__header-actions">
                   <button
                     type="button"
                     className="panel-menu__collapse-all"
-                    disabled={
-                      !panelGroups.some((group) =>
-                        isPanelMenuModuleExpanded(
-                          preferences.panelMenu,
-                          group.module.moduleId,
-                        ),
-                      )
-                    }
+                    disabled={panelGroups.length === 0}
                     onClick={() =>
                       controller.updatePreferences({
                         panelMenu: {
                           ...preferences.panelMenu,
-                          expandedModuleIds: [],
+                          expandedModuleIds: panelGroups.every((group) =>
+                            preferences.panelMenu.expandedModuleIds.includes(
+                              group.module.moduleId,
+                            ),
+                          )
+                            ? preferences.panelMenu.expandedModuleIds.filter(
+                                (id) =>
+                                  !panelGroups.some(
+                                    (group) => group.module.moduleId === id,
+                                  ),
+                              )
+                            : [
+                                ...new Set([
+                                  ...preferences.panelMenu.expandedModuleIds,
+                                  ...panelGroups.map(
+                                    (group) => group.module.moduleId,
+                                  ),
+                                ]),
+                              ],
                         },
                       })
                     }
                   >
-                    Collapse all
+                    {panelGroups.length > 0 &&
+                    panelGroups.every((group) =>
+                      preferences.panelMenu.expandedModuleIds.includes(
+                        group.module.moduleId,
+                      ),
+                    )
+                      ? "Collapse all"
+                      : "Expand all"}
+                  </button>
+
+                  <span
+                    className="panel-menu__column-indicator"
+                    title="Drag left edge to resize"
+                  >
+                    {masonryColumnCount} col
+                  </span>
+                  <button
+                    type="button"
+                    className="panel-menu__layout-lock"
+                    aria-label={
+                      catalogueLayoutLocked
+                        ? "Unlock module arrangement"
+                        : "Lock module arrangement"
+                    }
+                    aria-pressed={catalogueLayoutLocked}
+                    title={
+                      catalogueLayoutLocked
+                        ? "Unlock module drag-and-drop"
+                        : "Lock module drag-and-drop"
+                    }
+                    onClick={() => {
+                      const next = !catalogueLayoutLocked;
+                      setCatalogueLayoutLocked(next);
+                      resetCatalogueDrag();
+                      try {
+                        localStorage.setItem(
+                          "jarri.workspace.core.catalogueLayoutLocked.v1",
+                          String(next),
+                        );
+                      } catch {
+                        // Lock remains functional without storage.
+                      }
+                    }}
+                  >
+                    {catalogueLayoutLocked ? "🔒" : "🔓"}
                   </button>
                   <button
                     type="button"
@@ -738,17 +1048,40 @@ export function WorkspaceShell() {
                 />
               </div>
 
-              {filteredPanelGroups.length === 0 ? (
-                <div className="panel-menu__search-empty">
-                  No matching panels
-                </div>
-              ) : null}
-
-              {filteredPanelGroups.map((group) => {
+              <div className="panel-menu__masonry">
+                {masonryColumns.map((column, columnIndex) => (
+                  <div
+                    className="panel-menu__masonry-column"
+                    key={columnIndex}
+                  >
+                    <div
+                      className="panel-menu__masonry-width-probe"
+                      aria-hidden="true"
+                    >
+                      {column.flatMap((group) =>
+                        group.panels.map((panel) => (
+                          <div
+                            className="panel-menu__masonry-width-sample"
+                            key={`${panel.moduleId}:${panel.panelType}`}
+                          >
+                            <strong>{panel.title}</strong>
+                            <span>{panel.description}</span>
+                          </div>
+                        )),
+                      )}
+                      {column.map((group) => (
+                        <div
+                          className="panel-menu__masonry-heading-sample"
+                          key={group.module.moduleId}
+                        >
+                          {group.module.title}
+                        </div>
+                      ))}
+                    </div>
+                    {column.map((group) => {
                 const expanded =
                   Boolean(panelMenuSearchQuery.trim()) ||
-                  isPanelMenuModuleExpanded(
-                    preferences.panelMenu,
+                  preferences.panelMenu.expandedModuleIds.includes(
                     group.module.moduleId,
                   );
 
@@ -756,18 +1089,188 @@ export function WorkspaceShell() {
                   <section
                     className="panel-menu__group"
                     key={group.module.moduleId}
+                    data-dragging={
+                      catalogueDragId === group.module.moduleId
+                    }
+                    data-drop-target={
+                      catalogueDropId?.startsWith(
+                        `${group.module.moduleId}:`,
+                      ) ?? false
+                    }
+                    onDragOver={(event) => {
+                      if (
+                        catalogueLayoutLocked ||
+                        panelMenuSearchQuery.trim() ||
+                        !catalogueDragRef.current
+                      ) return;
+
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+
+                      const rect =
+                        event.currentTarget.getBoundingClientRect();
+
+                      const side =
+                        event.clientY < rect.top + rect.height / 2
+                          ? "before" : "after";
+
+                      setCatalogueDropId(
+                        `${group.module.moduleId}:${side}`,
+                      );
+                    }}
+                    onDragLeave={(event) => {
+                      if (!event.currentTarget.contains(
+                        event.relatedTarget as Node | null,
+                      )) setCatalogueDropId(null);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+
+                      if (catalogueDragRef.current) {
+                        const rect =
+                          event.currentTarget.getBoundingClientRect();
+
+                        const after =
+                          event.clientY >= rect.top + rect.height / 2;
+
+                        const columnIndex = catalogueColumns.findIndex(
+                          (column) =>
+                            column.includes(group.module.moduleId),
+                        );
+
+                        if (columnIndex >= 0) {
+                          const index = catalogueColumns[
+                            columnIndex
+                          ].indexOf(group.module.moduleId);
+
+                          insertCatalogueModule(
+                            catalogueDragRef.current,
+                            columnIndex,
+                            index + (after ? 1 : 0),
+                          );
+                        }
+                      }
+
+                      resetCatalogueDrag();
+                    }}
                   >
+                    <div className="panel-menu__group-heading">
+                      <span
+                        className="panel-menu__drag-grip"
+                        role="button"
+                        tabIndex={
+                          catalogueLayoutLocked ||
+                          Boolean(panelMenuSearchQuery.trim())
+                            ? -1 : 0
+                        }
+                        draggable={
+                          !catalogueLayoutLocked &&
+                          !panelMenuSearchQuery.trim()
+                        }
+                        aria-label={`Reorder ${group.module.title}`}
+                        aria-disabled={
+                          catalogueLayoutLocked ||
+                          Boolean(panelMenuSearchQuery.trim())
+                        }
+                        title={
+                          catalogueLayoutLocked
+                            ? "Unlock to reorder modules"
+                            : "Drag or use Arrow Up / Arrow Down"
+                        }
+                        onDragStart={(event) => {
+                          if (
+                            catalogueLayoutLocked ||
+                            panelMenuSearchQuery.trim()
+                          ) {
+                            event.preventDefault();
+                            return;
+                          }
+                          catalogueDragRef.current =
+                            group.module.moduleId;
+                          setCatalogueDragId(group.module.moduleId);
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData(
+                            "text/plain", group.module.moduleId,
+                          );
+                        }}
+                        onDragEnd={resetCatalogueDrag}
+                        onKeyDown={(event) => {
+                          if (
+                            catalogueLayoutLocked ||
+                            panelMenuSearchQuery.trim()
+                          ) return;
+
+                          const direction = event.key;
+
+                          if (![
+                            "ArrowUp",
+                            "ArrowDown",
+                            "ArrowLeft",
+                            "ArrowRight",
+                          ].includes(direction)) return;
+
+                          event.preventDefault();
+                          event.stopPropagation();
+
+                          const sourceColumn =
+                            catalogueColumns.findIndex((column) =>
+                              column.includes(group.module.moduleId),
+                            );
+
+                          if (sourceColumn < 0) return;
+
+                          const index =
+                            catalogueColumns[sourceColumn].indexOf(
+                              group.module.moduleId,
+                            );
+
+                          let targetColumn = sourceColumn;
+                          let targetIndex = index;
+
+                          if (direction === "ArrowUp") {
+                            targetIndex = index - 1;
+                          } else if (direction === "ArrowDown") {
+                            targetIndex = index + 2;
+                          } else {
+                            targetColumn +=
+                              direction === "ArrowLeft" ? -1 : 1;
+
+                            if (
+                              targetColumn < 0 ||
+                              targetColumn >= catalogueColumns.length
+                            ) return;
+
+                            targetIndex = Math.min(
+                              index,
+                              catalogueColumns[targetColumn].length,
+                            );
+                          }
+
+                          if (
+                            targetIndex < 0 ||
+                            targetIndex >
+                              catalogueColumns[targetColumn].length
+                          ) return;
+
+                          insertCatalogueModule(
+                            group.module.moduleId,
+                            targetColumn,
+                            targetIndex,
+                          );
+                        }}
+                      >
+                        ⋮⋮
+                      </span>
                     <button
                       type="button"
                       className="panel-menu__group-toggle"
-                      onClick={() =>
-                        togglePanelMenuModule(group.module.moduleId)
-                      }
+                      onClick={() => togglePanelMenuModule(group.module.moduleId)}
                       aria-expanded={expanded}
                     >
                       <h2>{group.module.title}</h2>
                       <span>{expanded ? "Collapse" : "Expand"}</span>
                     </button>
+                    </div>
 
                     {expanded ? (
                       <div className="panel-menu__group-panels">
@@ -788,14 +1291,51 @@ export function WorkspaceShell() {
                             }}
                           >
                             <strong>{panel.title}</strong>
-                            <span>{panel.description}</span>
+                            <span title={panel.description}>{panel.description}</span>
                           </button>
                         ))}
                       </div>
                     ) : null}
                   </section>
                 );
-              })}
+                    })}
+                    <div
+                      className="panel-menu__column-drop"
+                      data-drop-target={
+                        catalogueDropId ===
+                        `column:${columnIndex}`
+                      }
+                      onDragOver={(event) => {
+                        if (
+                          catalogueLayoutLocked ||
+                          panelMenuSearchQuery.trim() ||
+                          !catalogueDragRef.current
+                        ) return;
+
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                        setCatalogueDropId(
+                          `column:${columnIndex}`,
+                        );
+                      }}
+                      onDragLeave={() => setCatalogueDropId(null)}
+                      onDrop={(event) => {
+                        event.preventDefault();
+
+                        if (catalogueDragRef.current) {
+                          insertCatalogueModule(
+                            catalogueDragRef.current,
+                            columnIndex,
+                            catalogueColumns[columnIndex].length,
+                          );
+                        }
+
+                        resetCatalogueDrag();
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>

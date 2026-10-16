@@ -87,3 +87,51 @@ export function filterPanelMenuGroups(
     })
     .filter((group) => group.panels.length > 0);
 }
+
+
+/**
+ * Move a visible module relative to another without removing
+ * hidden or temporarily unavailable module IDs.
+ *
+ * Missing visible IDs are appended before moving. Reordering
+ * never changes the available-module projection itself.
+ */
+export function movePanelMenuModule(
+  currentOrder: string[],
+  visibleModuleIds: string[],
+  movingId: string,
+  targetId: string,
+): string[] {
+  const visible = new Set(visibleModuleIds);
+
+  if (
+    movingId === targetId ||
+    !visible.has(movingId) ||
+    !visible.has(targetId)
+  ) {
+    return currentOrder;
+  }
+
+  const order = [...new Set(currentOrder)];
+
+  for (const id of visibleModuleIds) {
+    if (!order.includes(id)) {
+      order.push(id);
+    }
+  }
+
+  const sourceIndex = order.indexOf(movingId);
+  if (sourceIndex < 0) return currentOrder;
+
+  order.splice(sourceIndex, 1);
+
+  const targetIndex = order.indexOf(targetId);
+  if (targetIndex < 0) return currentOrder;
+
+  order.splice(targetIndex, 0, movingId);
+
+  return order.every((id, index) => id === currentOrder[index]) &&
+    order.length === currentOrder.length
+    ? currentOrder
+    : order;
+}

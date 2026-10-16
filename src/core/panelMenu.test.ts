@@ -1,4 +1,4 @@
-import { projectPanelMenuGroups } from "./panelMenu";
+import { projectPanelMenuGroups, movePanelMenuModule } from "./panelMenu";
 import { panelSummarySemantic } from "./panelSemantics";
 import type {
   PanelDefinition,
@@ -109,5 +109,68 @@ function testHiddenModulePreferencesStillHideModulePanels() {
 
 testNewRegisteredCorePanelReachesPanelMenuProjection();
 testHiddenModulePreferencesStillHideModulePanels();
+
+
+function testModuleReordering() {
+  const original = ["core", "hidden", "media", "development"];
+
+  const moved = movePanelMenuModule(
+    original,
+    ["core", "media", "development"],
+    "development",
+    "core",
+  );
+
+  assertEqual(
+    moved.join(","),
+    "development,core,hidden,media",
+    "Moving a module preserves hidden entries",
+  );
+
+  assertEqual(
+    original.join(","),
+    "core,hidden,media,development",
+    "Original ordering remains unchanged",
+  );
+
+  const noOp = movePanelMenuModule(
+    original,
+    ["core", "media"],
+    "hidden",
+    "media",
+  );
+
+  assert(
+    noOp === original,
+    "Hidden modules cannot be dragged from the visible catalogue",
+  );
+
+  const appended = movePanelMenuModule(
+    ["core", "hidden"],
+    ["core", "media"],
+    "media",
+    "core",
+  );
+
+  assertEqual(
+    appended.join(","),
+    "media,core,hidden",
+    "Newly registered modules can be reordered",
+  );
+
+  const same = movePanelMenuModule(
+    original,
+    ["core", "media"],
+    "core",
+    "core",
+  );
+
+  assert(
+    same === original,
+    "Dropping onto itself is a no-op",
+  );
+}
+
+testModuleReordering();
 
 console.log("panel menu projection tests passed");
