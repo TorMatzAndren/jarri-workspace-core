@@ -472,6 +472,16 @@ screenshot ownership into domain modules or panel implementations.
 - No direct copying from source projects.
 - No global store decision beyond the state contracts.
 
+## Panel Lifecycle Coordination
+
+The generic runtime-only state model and ownership boundaries are specified in
+[`000005-panel-lifecycle-contract.md`](000005-panel-lifecycle-contract.md).
+The coordinator observes actual workspace membership, active-tab presentation,
+and minimization. It does not own persisted panel data, dirty state, projection
+publication, native-surface lifetime, or panel-body rendering. Lifecycle
+coordination must not be described as complete offscreen rendering
+virtualization.
+
 ## Challenge Notes
 
 - Freeform panels are enough for v1, but the contract should not block future dock/split layouts.

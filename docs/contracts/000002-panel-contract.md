@@ -78,7 +78,7 @@ type PanelDefinition = {
   normalizeState: (input: unknown, context: PanelNormalizeContext) => PanelNormalizeResult;
   semanticStrategy: PanelSemanticStrategy;
   surfacePresentationMemory?: PanelSurfacePresentationMemoryPolicy;
-  lifecycle?: PanelLifecycleHooks;
+  lifecycle?: Partial<PanelLifecycleCapabilities>;
 };
 
 type PanelSemanticStrategy =
@@ -99,6 +99,12 @@ type PanelCapabilities = {
   usesTemporalProvider?: string;
 };
 
+type PanelLifecycleCapabilities = {
+  projectionRetention: "discard-on-detach" | "retain";
+  runtimeRetention: "discard-on-detach" | "suspend" | "keep-alive";
+  backgroundActivity: "stop-when-hidden" | "pause-when-hidden" | "continue";
+};
+
 type PanelNormalizeResult = {
   state: unknown;
   repaired: boolean;
@@ -116,6 +122,9 @@ Definition rules:
 - Definitions must not perform destructive work in creation or normalization hooks.
 - Definitions must declare an explicit semantic strategy.
 - Definitions may opt into Workspace-owned surface presentation memory.
+- Definitions may declare generic lifecycle retention policies. These policies
+  are runtime metadata; they do not trigger suspension, unmounting, or service
+  control in the current implementation. See contract 000005.
 - Surface presentation memory is keyed by stable panel type identity, not by one live panel instance.
 - Opted-in presentation memory may preserve geometry after the live instance is closed.
 - Presentation memory must contain only presentation state and must never become canonical runtime or domain truth.

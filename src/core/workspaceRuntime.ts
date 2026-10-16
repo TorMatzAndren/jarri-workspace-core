@@ -3,8 +3,13 @@ import {
   type WorkspaceModuleRuntime,
 } from "./moduleRuntime";
 import type { WorkspaceModuleDefinition } from "./types";
+import {
+  createPanelLifecycleCoordinator,
+  type PanelLifecycleCoordinator,
+} from "./panelLifecycleCoordinator";
 
 export type WorkspaceRuntime = WorkspaceModuleRuntime & {
+  lifecycle: PanelLifecycleCoordinator;
   registerCleanup: (cleanup: () => void) => void;
   dispose: () => void;
 };
@@ -20,11 +25,14 @@ export type WorkspaceRuntimeComposition = {
 
 export function createWorkspaceRuntime(): WorkspaceRuntime {
   const modules = createWorkspaceModuleRuntime();
+  const lifecycle = createPanelLifecycleCoordinator();
   const cleanups: Array<() => void> = [];
   let disposed = false;
+  cleanups.push(() => lifecycle.dispose());
 
   const runtime: WorkspaceRuntime = {
     ...modules,
+    lifecycle,
     registerCleanup(cleanup) {
       if (disposed) {
         throw new Error("Cannot register cleanup on a disposed Workspace Runtime.");

@@ -9,6 +9,7 @@ import type {
 } from "./projection";
 import type { OpenResourceRequest, OpenResourceResult } from "./resources";
 import type { PanelInteractionCapabilities } from "./panelInteractions";
+import type { PanelLifecycleCapabilities } from "./panelLifecycle";
 
 export const WORKSPACE_SCHEMA_VERSION = 2;
 
@@ -336,6 +337,7 @@ export type PanelDefinition = {
   ) => PanelNormalizeResult;
   semanticStrategy: PanelSemanticStrategy;
   interactionCapabilities?: PanelInteractionCapabilities;
+  lifecycle?: Partial<PanelLifecycleCapabilities>;
   surfacePresentationMemory?: PanelSurfacePresentationMemoryPolicy;
   Component: ComponentType<PanelBodyProps>;
 };

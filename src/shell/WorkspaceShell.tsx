@@ -37,6 +37,7 @@ import { DeveloperVersionIndicator } from "./DeveloperVersionIndicator";
 import { copyWorkspaceScreenshot } from "../workspace/screenshot";
 import { reconcileWorkspaceNativeSurfacePanels } from "../core/platform/nativeSurface";
 import type { WorkspaceCanvasScreenshotSource } from "../workspace/workspaceScreenshotComposition";
+import { projectWorkspacePanelLifecycle } from "../core/workspacePanelLifecycle";
 
 const JARRI_SYSTEMS_URL = "http://jarri.systems/";
 
@@ -161,6 +162,31 @@ export function WorkspaceShell() {
     persistence,
     defaultWorkspaceFactory,
   });
+
+  const panelLifecycleProjection = useMemo(
+    () =>
+      projectWorkspacePanelLifecycle(controller.workspace, (panel) =>
+        runtime.registry.getPanel(panel.moduleId, panel.panelType)?.lifecycle,
+      ),
+    [controller.workspace, runtime.registry],
+  );
+
+  useEffect(() => {
+    runtime.lifecycle.reconcilePanels(
+      panelLifecycleProjection.panelIds,
+      panelLifecycleProjection.capabilitiesByPanelId,
+    );
+    runtime.lifecycle.reconcileActivePanels(
+      panelLifecycleProjection.activePanelIds,
+    );
+  }, [panelLifecycleProjection, runtime.lifecycle]);
+
+  useEffect(
+    () => () => {
+      runtime.lifecycle.reconcilePanels([]);
+    },
+    [runtime.lifecycle],
+  );
 
   const nativeSurfacePanelIds = controller.workspace.tabs
     .flatMap((tab) => tab.panels)

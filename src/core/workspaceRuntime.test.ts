@@ -78,8 +78,27 @@ function testCompositionRegistersModulesAndCleansUpExactlyOnce() {
     "composition registers supplied and contributed modules",
   );
 
+  runtime.lifecycle.registerPanel("runtime-owned-panel");
+  let disposedSnapshotObserved = false;
+  const unsubscribeLifecycle = runtime.lifecycle.subscribe(() => {
+    disposedSnapshotObserved =
+      runtime.lifecycle.getSnapshot().panels["runtime-owned-panel"]?.state ===
+      "disposed";
+  });
+
   runtime.dispose();
   runtime.dispose();
+  unsubscribeLifecycle();
+
+  assertEqual(
+    Object.keys(runtime.lifecycle.getSnapshot().panels).length,
+    0,
+    "runtime disposal releases lifecycle records and subscriptions",
+  );
+  assert(
+    disposedSnapshotObserved,
+    "runtime teardown notifies lifecycle subscribers of panel disposal",
+  );
 
   assertEqual(
     events.join(","),
