@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   WorkspaceSelect,
   type WorkspaceSelectOption,
@@ -7,6 +8,12 @@ import type {
   PanelBodyProps,
   WorkspacePreferences,
 } from "../core/types";
+import {
+  consumeSettingsSectionRequest,
+  getSettingsSectionNavigationSnapshot,
+  subscribeSettingsSectionNavigation,
+} from "../core/settingsSectionNavigation";
+import { UpdateSettingsSection } from "./UpdateSettingsSection";
 
 const fontOptions: Array<WorkspaceSelectOption<
   WorkspacePreferences["fontFamily"]
@@ -47,7 +54,27 @@ export function SettingsPanel({
   updatePreferences,
   openPanel,
 }: PanelBodyProps) {
+  const [settingsNavigation, setSettingsNavigation] = useState(
+    getSettingsSectionNavigationSnapshot,
+  );
   const arrangedModules = arrangeModules(modules, preferences.panelMenu.moduleOrder);
+
+  useEffect(() => {
+    const unsubscribe = subscribeSettingsSectionNavigation(() => {
+      setSettingsNavigation(getSettingsSectionNavigationSnapshot());
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (settingsNavigation.requestedSection !== "updates") return;
+    document
+      .getElementById("settings-updates-section")
+      ?.scrollIntoView({ block: "start", behavior: "smooth" });
+    consumeSettingsSectionRequest(settingsNavigation.revision);
+  }, [settingsNavigation]);
 
   function updateScale(delta: number) {
     const nextScale = Math.max(
@@ -94,6 +121,7 @@ export function SettingsPanel({
 
   return (
     <div className="panel-body settings-panel">
+      <UpdateSettingsSection />
       <section className="settings-panel__section settings-panel__section--interface">
         <h3>Interface</h3>
 

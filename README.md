@@ -30,6 +30,14 @@ Core owns the reusable workspace substrate:
 Domain applications remain responsible for their own runtime truth, services,
 business logic, and specialized panels.
 
+### Application Boundary
+
+Core contains reusable workspace infrastructure, framework-owned panels, and a
+small demonstration module for exercising the module contract. Application
+integrations belong in the consuming application's repository and register
+through Core's generic module and panel interfaces. Core does not bundle
+application clients or domain modules.
+
 ## Architecture
 
 Workspace Core follows a simple ownership model:

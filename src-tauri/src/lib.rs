@@ -1,9 +1,8 @@
+mod developer_status;
 mod native_surface;
-mod steam_client;
 
 use native_surface::WorkspaceNativeSurfaceState;
 
-use steam_client::steam_client_find_or_launch;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -1596,7 +1595,7 @@ pub fn run() {
         .manage(WorkspaceFsSearchRegistry::default())
         .manage(WorkspaceNativeSurfaceState::default())
         .invoke_handler(tauri::generate_handler![
-            steam_client_find_or_launch,
+            developer_status::developer_status,
             workspace_native_window_identity,
             workspace_native_surface_create,
             workspace_native_surface_ensure_for_panel,

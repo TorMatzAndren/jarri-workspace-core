@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const styles = readFileSync("src/styles.css", "utf8");
 const settingsPanel = readFileSync("src/panels/SettingsPanel.tsx", "utf8");
+const updateSettingsSection = readFileSync("src/panels/UpdateSettingsSection.tsx", "utf8");
 
 function indexInOrder(source, values, description) {
   let previous = -1;
@@ -35,6 +36,7 @@ function atRuleBlocks(source, atRule) {
 indexInOrder(
   settingsPanel,
   [
+    "<UpdateSettingsSection />",
     "settings-panel__section--interface",
     "settings-panel__group--display",
     "settings-panel__group--layout",
@@ -45,10 +47,15 @@ indexInOrder(
   ],
   "Settings semantic regions remain in stable document order",
 );
+assert.match(
+  updateSettingsSection,
+  /className="settings-panel__section settings-panel__section--updates"/,
+  "Updates is a dedicated Settings section",
+);
 
 assert.match(
   styles,
-  /\.settings-panel\s*\{[^}]*grid-template-areas:\s*"interface"\s*"appearance"\s*"panel-menu";[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,
+  /\.settings-panel\s*\{[^}]*grid-template-areas:\s*"updates"\s*"interface"\s*"appearance"\s*"panel-menu";[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,
   "Settings sections occupy one explicit, ordered column",
 );
 assert.match(

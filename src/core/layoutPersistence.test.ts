@@ -555,6 +555,56 @@ function testCanvasBoundsPreserveNegativeOriginAndExpandAroundPanels() {
   );
 }
 
+function testRemovedApplicationPanelRemainsRecoverable() {
+  const persisted = basePersistedWorkspace();
+  const tab = (persisted.tabs as Array<Record<string, unknown>>)[0];
+  const originalState = {
+    windowId: "0x1234",
+    released: true,
+    applicationData: { preserve: "for recovery" },
+  };
+  tab.panels = [
+    {
+      id: "old-steam-client",
+      moduleId: "steam",
+      panelType: "client",
+      title: "Steam",
+      geometry: { x: 200, y: 160, width: 900, height: 600 },
+      focusOrder: 1,
+      stateVersion: 1,
+      panelState: originalState,
+      createdAt: "2026-08-19T00:00:00.000Z",
+      updatedAt: "2026-08-19T00:00:00.000Z",
+    },
+  ];
+
+  const result = load(persisted);
+  const recovered = result.state.tabs[0].panels[0];
+
+  assertEqual(
+    result.state.schemaVersion,
+    WORKSPACE_SCHEMA_VERSION,
+    "removed application panel does not change the workspace schema",
+  );
+  assertEqual(recovered.moduleId, "core", "removed module uses Core recovery panel");
+  assertEqual(recovered.panelType, "missing", "removed panel uses missing placeholder");
+  assertEqual(recovered.title, "Steam", "saved application panel title is retained");
+  assertEqual(
+    (recovered.panelState as { moduleId: string }).moduleId,
+    "steam",
+    "original module identity is retained",
+  );
+  assertEqual(
+    JSON.stringify((recovered.panelState as { originalState: unknown }).originalState),
+    JSON.stringify(originalState),
+    "original application panel state remains recoverable",
+  );
+  assert(
+    result.report.warnings.some((warning) => warning.includes("steam:client")),
+    "load report explains the removed panel definition",
+  );
+}
+
 function testCanvasCameraSurvivesNormalizationPerTab() {
   const persisted = basePersistedWorkspace();
   const baseTab = (persisted.tabs as Array<Record<string, unknown>>)[0];
@@ -649,6 +699,7 @@ function main() {
   testUnknownThemePresetRepairsToNeutral();
   testSchemaTwoCoreLayoutReceivesGenericCameraDefaults();
   testInvalidGenericCameraValuesRepairDeterministically();
+  testRemovedApplicationPanelRemainsRecoverable();
   testCanvasBoundsPreserveNegativeOriginAndExpandAroundPanels();
   testCanvasCameraSurvivesNormalizationPerTab();
   testPanelMenuExpandedModulesNormalizeDeterministically();

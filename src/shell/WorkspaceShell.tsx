@@ -33,6 +33,7 @@ import {
 import jarriWorkspaceLogo from "../assets/jarri-workspace.png";
 import { openExternalUrl } from "../core/platform/openExternalUrl";
 import { WorkspaceClock } from "./WorkspaceClock";
+import { DeveloperVersionIndicator } from "./DeveloperVersionIndicator";
 import { copyWorkspaceScreenshot } from "../workspace/screenshot";
 import { reconcileWorkspaceNativeSurfacePanels } from "../core/platform/nativeSurface";
 import type { WorkspaceCanvasScreenshotSource } from "../workspace/workspaceScreenshotComposition";
@@ -185,6 +186,19 @@ export function WorkspaceShell() {
   }, [nativeSurfacePanelKey]);
 
   const preferences = controller.workspace.preferences;
+
+  function openSettingsFromDeveloperIndicator() {
+    setPanelMenuOpen(false);
+    setFrameControlsMenuOpen(false);
+    const settingsPanel = controller.activeTab.panels.find(
+      (panel) => panel.moduleId === "core" && panel.panelType === "settings",
+    );
+    if (!settingsPanel) {
+      controller.createPanel("core", "settings", {
+        initialPosition: preferences.systemSurfacePositions.settings,
+      });
+    }
+  }
 
   function beginSystemSurfaceDrag(
     surface: "addPanel" | "frameSettings",
@@ -555,6 +569,10 @@ export function WorkspaceShell() {
           >
             Settings
           </button>
+
+          <DeveloperVersionIndicator
+            openSettings={openSettingsFromDeveloperIndicator}
+          />
 
           <WorkspaceClock
             preferences={preferences.clock}
