@@ -13,7 +13,7 @@ export type RuntimeResourceEvidenceClaim = Readonly<{
 
 export type RuntimeResourceEvidenceSnapshot = Readonly<{
   revision: number;
-  claims: readonly RuntimeResourceEvidenceClaim[];
+  claims: readonly (RuntimeResourceEvidenceClaim & { references: number })[];
 }>;
 
 export type RuntimeResourceEvidenceLease = {
@@ -25,6 +25,7 @@ export type RuntimeResourceEvidenceRegistry = {
   acquire: (claim: Omit<RuntimeResourceEvidenceClaim, "owner"> & { owner: { kind: "panel"; id: string } }) => RuntimeResourceEvidenceLease;
   subscribe: (listener: () => void) => () => void;
   getSnapshot: () => RuntimeResourceEvidenceSnapshot;
+  dispose: () => void;
 };
 
 export type RuntimeResourceEvidencePublisher = {
@@ -58,18 +59,20 @@ export function createRuntimeResourceEvidenceRegistry(): RuntimeResourceEvidence
   const listeners = new Set<() => void>();
   let revision = 0;
   let snapshot: RuntimeResourceEvidenceSnapshot = Object.freeze({ revision, claims: Object.freeze([]) });
+  let disposed = false;
 
   function publish() {
     revision += 1;
     snapshot = Object.freeze({
       revision,
-      claims: Object.freeze([...records.values()].map(({ claim }) => claim)),
+      claims: Object.freeze([...records.values()].map(({ claim, references }) => Object.freeze({ ...claim, references }))),
     });
     for (const listener of listeners) listener();
   }
 
   return {
     acquire(input) {
+      if (disposed) return { update() { return undefined; }, release() { return undefined; } };
       const ownerId = required("Panel owner ID", input.owner.id);
       const resourceClass = required("Resource class", input.resourceClass);
       const resourceKey = required("Resource key", input.resourceKey);
@@ -83,6 +86,7 @@ export function createRuntimeResourceEvidenceRegistry(): RuntimeResourceEvidence
           throw new Error(`Conflicting duplicate resource evidence claim: ${resourceClass}/${resourceKey}`);
         }
         existing.references += 1;
+        publish();
       } else {
         records.set(key, {
           references: 1,
@@ -115,6 +119,7 @@ export function createRuntimeResourceEvidenceRegistry(): RuntimeResourceEvidence
           const record = records.get(key);
           if (!record) return;
           record.references -= 1;
+          if (record.references > 0) publish();
           if (record.references === 0) {
             records.delete(key);
             publish();
@@ -123,11 +128,17 @@ export function createRuntimeResourceEvidenceRegistry(): RuntimeResourceEvidence
       };
     },
     subscribe(listener) {
+      if (disposed) return () => undefined;
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
     getSnapshot() {
       return snapshot;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      listeners.clear();
     },
   };
 }

@@ -1,6 +1,7 @@
 import {
   Component,
   memo,
+  Profiler,
   Suspense,
   useEffect,
   useMemo,
@@ -8,6 +9,7 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
+import { useWorkspaceRuntime } from "../core/workspaceRuntimeReact";
 import type { PanelFrameControlPublisher } from "../core/frameControls";
 import {
   createErrorProjection,
@@ -116,6 +118,7 @@ export function PanelProjectionHost({
   onOpenPanel,
   onOpenResource,
 }: Props) {
+  const runtime = useWorkspaceRuntime();
   const failedBodyLeaseRef = useRef<
     ReturnType<WorkspaceProjectionPublicationController["publish"]> | null
   >(null);
@@ -210,10 +213,20 @@ export function PanelProjectionHost({
       >
         <Suspense fallback={<PanelBodyLoading />}>
           {definition?.Component ? (
-            <PanelProjectionRenderer
-              Component={definition.Component}
-              bodyProps={bodyProps}
-            />
+            <Profiler
+              id={`${panel.moduleId}/${panel.panelType}`}
+              onRender={(_id, phase, actualDuration, baseDuration, startTime, commitTime) => {
+                if (["runtime-diagnostics", "runtime-events", "runtime-inspector"].includes(panel.panelType)) return;
+                queueMicrotask(() => runtime.timing.record("react-profiler", `${panel.moduleId}/${panel.panelType}`, {
+                  durationMs: actualDuration,
+                  startedAt: startTime,
+                  completedAt: commitTime,
+                  metadata: { moduleId: panel.moduleId, panelType: panel.panelType, panelId: panel.id, phase, baseDurationMs: baseDuration, measurement: "React Profiler actualDuration" },
+                }));
+              }}
+            >
+              <PanelProjectionRenderer Component={definition.Component} bodyProps={bodyProps} />
+            </Profiler>
           ) : (
             <PanelBodyFailure
               panelTitle={panel.title}

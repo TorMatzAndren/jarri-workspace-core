@@ -41,6 +41,7 @@ export type RuntimeObservationRegistry = {
   subscribe: (listener: () => void) => () => void;
   getSnapshot: () => RuntimeObservationSnapshot;
   clear: () => void;
+  dispose: () => void;
 };
 
 function normalizeLabel(label: string, value: string): string {
@@ -125,6 +126,7 @@ export function createRuntimeObservationRegistry():
   const listeners = new Set<() => void>();
   let revision = 0;
   let snapshot = immutableSnapshot(revision, observations);
+  let disposed = false;
 
   function publish() {
     revision += 1;
@@ -137,6 +139,7 @@ export function createRuntimeObservationRegistry():
 
   return {
     observe({ observer, resource }) {
+      if (disposed) return { release() { return undefined; } };
       const normalizedObserver = normalizeObserver(observer);
       const normalizedResource = normalizeResource(resource);
       const key = edgeKey(normalizedObserver, normalizedResource);
@@ -179,6 +182,7 @@ export function createRuntimeObservationRegistry():
     },
 
     subscribe(listener) {
+      if (disposed) return () => undefined;
       listeners.add(listener);
 
       return () => {
@@ -191,12 +195,19 @@ export function createRuntimeObservationRegistry():
     },
 
     clear() {
+      if (disposed) return;
       if (!observations.size) {
         return;
       }
 
       observations.clear();
       publish();
+    },
+
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      listeners.clear();
     },
   };
 }

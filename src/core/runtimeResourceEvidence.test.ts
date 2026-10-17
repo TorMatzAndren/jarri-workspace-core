@@ -52,8 +52,10 @@ function testIdentityAndDuplicateLeaseSemantics() {
   const a = registry.acquire({ ...knownBytes(10), owner: { kind: "panel", id: "panel-a" } });
   const duplicate = registry.acquire({ ...knownBytes(10), owner: { kind: "panel", id: "panel-a" } });
   equal(registry.getSnapshot().claims.length, 1, "duplicate identity is one canonical claim");
+  equal(registry.getSnapshot().claims[0]?.references, 2, "shared claim exposes its reference count");
   throws(() => registry.acquire({ ...knownBytes(11), owner: { kind: "panel", id: "panel-a" } }), "conflicting duplicate evidence is rejected");
   duplicate.release();
+  equal(registry.getSnapshot().claims[0]?.references, 1, "reference count follows duplicate lease release");
   equal(registry.getSnapshot().claims.length, 1, "claim remains until last duplicate lease releases");
   a.release();
   equal(registry.getSnapshot().claims.length, 0, "last lease removes canonical claim");
@@ -95,7 +97,21 @@ function testPanelPublisherDisposalAndObservationIsolation() {
   replayLease.release();
 }
 
+function testRegistryDisposalPreservesSnapshotAndReleasesSubscribers() {
+  const registry = createRuntimeResourceEvidenceRegistry();
+  const lease = registry.acquire({ ...knownBytes(20), owner: { kind: "panel", id: "panel-a" } });
+  let notifications = 0;
+  registry.subscribe(() => { notifications += 1; });
+  const snapshot = registry.getSnapshot();
+  registry.dispose();
+  registry.acquire({ ...knownBytes(2), owner: { kind: "panel", id: "panel-b" } }).release();
+  equal(registry.getSnapshot(), snapshot, "disposal retains the last evidence snapshot");
+  equal(notifications, 0, "disposal releases registry subscribers");
+  lease.release();
+}
+
 testClaimLifecycleAndStableReads();
 testIdentityAndDuplicateLeaseSemantics();
 testInputValidationAndUnknownAbsence();
 testPanelPublisherDisposalAndObservationIsolation();
+testRegistryDisposalPreservesSnapshotAndReleasesSubscribers();

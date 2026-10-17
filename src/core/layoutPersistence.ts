@@ -6,6 +6,7 @@ import {
 import { createId, nowIso } from "./id";
 import { normalizeFrameControlPreferences } from "./frameControls";
 import { normalizeGeometry, repairFocusOrder } from "./layoutEngine";
+import { migrateLegacyRuntimeDiagnosticIdentity } from "./runtimeDiagnosticIdentity";
 import type { PanelRegistry } from "./panelRegistry";
 import type {
   LayoutRepairReport,
@@ -85,6 +86,54 @@ export function createLocalStorageProvider(): LayoutStorageProvider {
   };
 }
 
+function migrateLegacyRuntimeDiagnosticIdentities(
+  input: Record<string, unknown>,
+  registry: PanelRegistry,
+  warnings: string[],
+): { workspace: Record<string, unknown>; migrated: boolean } {
+  let migrated = false;
+  const tabs = Array.isArray(input.tabs) ? input.tabs.map((tab) => {
+    if (!isRecord(tab) || !Array.isArray(tab.panels)) return tab;
+    let changed = false;
+    const panels = tab.panels.map((panel) => {
+      if (!isRecord(panel) || typeof panel.moduleId !== "string" || typeof panel.panelType !== "string") return panel;
+      const target = migrateLegacyRuntimeDiagnosticIdentity(panel.moduleId, panel.panelType);
+      if (!target || !registry.getPanel(target.moduleId, target.panelType)) return panel;
+      changed = true;
+      migrated = true;
+      warnings.push(`Migrated legacy Runtime panel identity ${panel.moduleId}/${panel.panelType} to ${target.moduleId}/${target.panelType}.`);
+      return { ...panel, ...target };
+    });
+    return changed ? { ...tab, panels } : tab;
+  }) : input.tabs;
+
+  let surfacePresentationMemory = input.surfacePresentationMemory;
+  if (isRecord(surfacePresentationMemory)) {
+    const memory = { ...surfacePresentationMemory };
+    for (const [surfaceId, value] of Object.entries(surfacePresentationMemory)) {
+      if (!isRecord(value) || typeof value.moduleId !== "string" || typeof value.panelType !== "string") continue;
+      const target = migrateLegacyRuntimeDiagnosticIdentity(value.moduleId, value.panelType);
+      if (!target || !registry.getPanel(target.moduleId, target.panelType)) continue;
+      const targetSurfaceId = `panel:${target.moduleId}:${target.panelType}`;
+      if (targetSurfaceId in memory) {
+        migrated = true;
+        warnings.push(`Kept canonical Runtime surface presentation memory ${targetSurfaceId} and retained colliding legacy memory ${surfaceId}.`);
+        continue;
+      }
+      memory[targetSurfaceId] = { ...value, ...target };
+      migrated = true;
+      warnings.push(`Migrated Runtime surface presentation memory ${surfaceId} to ${targetSurfaceId}.`);
+      delete memory[surfaceId];
+    }
+    surfacePresentationMemory = memory;
+  }
+
+  return {
+    workspace: migrated ? { ...input, tabs, surfacePresentationMemory } : input,
+    migrated,
+  };
+}
+
 export function createLayoutPersistence({
   registry,
   storageProvider = createLocalStorageProvider(),
@@ -110,12 +159,14 @@ export function createLayoutPersistence({
       };
     }
 
-    const fromSchemaVersion = finiteNumber(input.schemaVersion, 0);
-    const rawPreferences = isRecord(input.preferences) ? input.preferences : {};
+    const identityMigration = migrateLegacyRuntimeDiagnosticIdentities(input, registry, warnings);
+    const normalizedInput = identityMigration.workspace;
+    const fromSchemaVersion = finiteNumber(normalizedInput.schemaVersion, 0);
+    const rawPreferences = isRecord(normalizedInput.preferences) ? normalizedInput.preferences : {};
     const legacyCanvasBounds = normalizeCanvasBounds(rawPreferences.canvasBounds);
     const seenTabIds = new Set<string>();
-    let tabs = Array.isArray(input.tabs)
-      ? input.tabs.map((tab, index) =>
+    let tabs = Array.isArray(normalizedInput.tabs)
+      ? normalizedInput.tabs.map((tab, index) =>
           normalizeTab(
             tab,
             index,
@@ -133,12 +184,12 @@ export function createLayoutPersistence({
     }
 
     const activeTabId =
-      typeof input.activeTabId === "string" &&
-      tabs.some((tab) => tab.id === input.activeTabId)
-        ? input.activeTabId
+      typeof normalizedInput.activeTabId === "string" &&
+      tabs.some((tab) => tab.id === normalizedInput.activeTabId)
+        ? normalizedInput.activeTabId
         : tabs[0].id;
 
-    if (activeTabId !== input.activeTabId) {
+    if (activeTabId !== normalizedInput.activeTabId) {
       warnings.push("Repaired invalid active tab id.");
     }
 
@@ -152,22 +203,22 @@ export function createLayoutPersistence({
       state: {
         schemaVersion: WORKSPACE_SCHEMA_VERSION,
         workspaceId:
-          typeof input.workspaceId === "string" && input.workspaceId.trim()
-            ? input.workspaceId
+          typeof normalizedInput.workspaceId === "string" && normalizedInput.workspaceId.trim()
+            ? normalizedInput.workspaceId
             : workspaceId,
         activeTabId,
         tabs,
-        preferences: normalizePreferences(input.preferences, panelViews),
+        preferences: normalizePreferences(normalizedInput.preferences, panelViews),
         surfacePresentationMemory: normalizeSurfacePresentationMemory(
-          input.surfacePresentationMemory,
+          normalizedInput.surfacePresentationMemory,
           warnings,
           registry,
         ),
         registryVersion:
-          typeof input.registryVersion === "string" ? input.registryVersion : "runtime-v1",
+          typeof normalizedInput.registryVersion === "string" ? normalizedInput.registryVersion : "runtime-v1",
       },
       report: {
-        migrated: fromSchemaVersion !== WORKSPACE_SCHEMA_VERSION,
+        migrated: fromSchemaVersion !== WORKSPACE_SCHEMA_VERSION || identityMigration.migrated,
         repaired: warnings.length > 0,
         fromSchemaVersion,
         toSchemaVersion: WORKSPACE_SCHEMA_VERSION,

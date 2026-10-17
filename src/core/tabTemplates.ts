@@ -1,5 +1,6 @@
 import { createId, nowIso } from "./id";
 import { normalizeGeometry, repairFocusOrder } from "./layoutEngine";
+import { migrateLegacyRuntimeDiagnosticIdentity } from "./runtimeDiagnosticIdentity";
 import type { PanelRegistry } from "./panelRegistry";
 import type {
   PanelGeometry,
@@ -193,13 +194,16 @@ function normalizeTemplate(input: unknown): SavedTabTemplate {
 
 function normalizePanelTemplate(input: unknown): SavedPanelTemplate {
   const raw = isRecord(input) ? input : {};
+  const moduleId = typeof raw.moduleId === "string" && raw.moduleId.trim()
+    ? raw.moduleId
+    : "core";
+  const panelType = typeof raw.panelType === "string" && raw.panelType.trim()
+    ? raw.panelType
+    : "missing";
+  const identity = migrateLegacyRuntimeDiagnosticIdentity(moduleId, panelType);
   return {
-    moduleId: typeof raw.moduleId === "string" && raw.moduleId.trim()
-      ? raw.moduleId
-      : "core",
-    panelType: typeof raw.panelType === "string" && raw.panelType.trim()
-      ? raw.panelType
-      : "missing",
+    moduleId: identity?.moduleId ?? moduleId,
+    panelType: identity?.panelType ?? panelType,
     title: typeof raw.title === "string" && raw.title.trim()
       ? raw.title.trim()
       : "Panel",

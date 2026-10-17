@@ -67,6 +67,12 @@ function testObservationOwnership() {
 
   assert(notifications > 0,
     "Subscribers must receive changes");
+
+  registry.dispose();
+  const disposedSnapshot = registry.getSnapshot();
+  registry.observe(edge).release();
+  assert(registry.getSnapshot() === disposedSnapshot,
+    "disposed observation registries reject new leases and retain their snapshot");
 }
 
 testObservationOwnership();

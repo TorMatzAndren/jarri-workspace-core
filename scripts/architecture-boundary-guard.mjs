@@ -8,7 +8,12 @@ const bootstrapPath = path.join(sourceRoot, "bootstrap", "workspaceRuntime.ts");
 const allowedCoreModuleSources = new Set([
   "../panels/corePanels",
   "../panels/demoModule",
+  "../modules/workspace-diagnostics",
 ]);
+const workspaceDiagnosticsModuleRoot = path.resolve(
+  applicationModuleRoot,
+  "workspace-diagnostics",
+);
 
 function collectProductionSources(directory) {
   if (!existsSync(directory)) return [];
@@ -35,26 +40,42 @@ function importedSpecifiers(source) {
 
 function isApplicationModuleImport(importerPath, specifier) {
   const normalizedSpecifier = specifier.replaceAll("\\", "/");
-  if (/(?:^|\/)modules(?:\/|$)/.test(normalizedSpecifier)) return true;
-  if (!specifier.startsWith(".")) return false;
+  const importerRelative = path.relative(workspaceDiagnosticsModuleRoot, importerPath);
+  const importerIsDiagnostics = importerRelative === "" ||
+    (!importerRelative.startsWith("..") && !path.isAbsolute(importerRelative));
+  if (!specifier.startsWith(".")) {
+    return /(?:^|\/)modules(?:\/|$)/.test(normalizedSpecifier);
+  }
 
   const resolved = path.resolve(path.dirname(importerPath), specifier);
-  const relative = path.relative(applicationModuleRoot, resolved);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  const relativeToModules = path.relative(applicationModuleRoot, resolved);
+  const resolvesToModule = relativeToModules === "" ||
+    (!relativeToModules.startsWith("..") && !path.isAbsolute(relativeToModules));
+  if (!resolvesToModule) return false;
+  if (importerIsDiagnostics) {
+    const relativeToDiagnostics = path.relative(workspaceDiagnosticsModuleRoot, resolved);
+    const remainsInDiagnostics = relativeToDiagnostics === "" ||
+      (!relativeToDiagnostics.startsWith("..") && !path.isAbsolute(relativeToDiagnostics));
+    return !remainsInDiagnostics;
+  }
+  return true;
 }
 
-const applicationSources = collectProductionSources(applicationModuleRoot);
+const applicationSources = collectProductionSources(applicationModuleRoot).filter(
+  (file) => {
+    const relative = path.relative(workspaceDiagnosticsModuleRoot, file);
+    return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+  },
+);
 assert.equal(
   applicationSources.length,
   0,
-  `Core cannot contain application module implementations under src/modules:\n${applicationSources
+  `Core may contain only its explicit first-party Workspace Diagnostics module under src/modules:\n${applicationSources
     .map((file) => `  - ${path.relative(process.cwd(), file)}`)
     .join("\n")}`,
 );
 
-const sourceFiles = collectProductionSources(sourceRoot).filter(
-  (file) => !path.relative(applicationModuleRoot, file).startsWith(".."),
-);
+const sourceFiles = collectProductionSources(workspaceDiagnosticsModuleRoot);
 const forbiddenImports = [];
 for (const file of sourceFiles) {
   const source = readFileSync(file, "utf8");

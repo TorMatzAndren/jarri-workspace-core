@@ -1,9 +1,10 @@
 import { bootstrapWorkspaceRuntime as bootstrapCoreWorkspaceRuntime } from "../core/workspaceRuntime";
 import { coreModule } from "../panels/corePanels";
+import { workspaceDiagnosticsModule } from "../modules/workspace-diagnostics";
 
 export function bootstrapWorkspaceRuntime() {
   return bootstrapCoreWorkspaceRuntime({
-    modules: [coreModule],
+    modules: [coreModule, workspaceDiagnosticsModule],
   });
 }
 

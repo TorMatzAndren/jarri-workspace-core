@@ -21,6 +21,7 @@ function assertEqual<T>(actual: T, expected: T, message: string) {
 
 function testBareRuntimeHasNoDistributionModules() {
   const runtime = createWorkspaceRuntime();
+  const otherRuntime = createWorkspaceRuntime();
 
   assertEqual(
     runtime.listModules().length,
@@ -32,8 +33,20 @@ function testBareRuntimeHasNoDistributionModules() {
     0,
     "bare runtime does not inherit distribution panels",
   );
+  assert(runtime.timing !== otherRuntime.timing, "runtimes own isolated timing engines");
+  assert(runtime.observations !== otherRuntime.observations, "runtime observations are isolated");
+  assert(runtime.resourceEvidence !== otherRuntime.resourceEvidence, "resource evidence is isolated");
+  assert(runtime.traceSelection !== otherRuntime.traceSelection, "trace selection is isolated");
+  assertEqual(runtime.timing.getSnapshot().completed.length, 0, "runtime timing starts empty");
+  runtime.timing.record("test", "owned", { durationMs: 10 });
+  assertEqual(runtime.timing.getSnapshot().completed.length, 1, "runtime timing records traces");
+  assertEqual(otherRuntime.timing.getSnapshot().completed.length, 0, "timing history is isolated");
 
   runtime.dispose();
+  assertEqual(runtime.timing.getSnapshot().completed.length, 1, "runtime disposal preserves timing history");
+  runtime.traceSelection.select("channel", "trace", "1");
+  assertEqual(runtime.traceSelection.getSnapshot().selections.length, 0, "disposed runtime does not retain stale selection");
+  otherRuntime.dispose();
 }
 
 function module(moduleId: string): WorkspaceModuleDefinition {
@@ -54,6 +67,8 @@ function testCompositionRegistersModulesAndCleansUpExactlyOnce() {
     contributors: [
       (contributedRuntime) => {
         runtimeFromContributor = contributedRuntime;
+        assert(contributedRuntime.timing, "contributors can access runtime timing");
+        contributedRuntime.timing.record("contributor", "access", { durationMs: 1 });
         contributedRuntime.registerModule(module("contributed"));
         events.push("contributor-start");
 
@@ -77,6 +92,7 @@ function testCompositionRegistersModulesAndCleansUpExactlyOnce() {
     "base,contributed",
     "composition registers supplied and contributed modules",
   );
+  assert(runtime.timing.getSnapshot().completed.some((trace) => trace.category === "workspace-startup"), "bootstrap records real startup timing");
 
   runtime.lifecycle.registerPanel("runtime-owned-panel");
   let disposedSnapshotObserved = false;

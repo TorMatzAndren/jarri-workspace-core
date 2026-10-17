@@ -26,6 +26,7 @@ Core owns the reusable workspace substrate:
 - generic workspace controls
 - filesystem and generic media surfaces
 - projection and semantic panel contracts
+- runtime timing, observation leases, explicit resource byte evidence, and diagnostics panels
 
 Domain applications remain responsible for their own runtime truth, services,
 business logic, and specialized panels.
@@ -108,10 +109,60 @@ Core currently owns these generic panel surfaces:
 - **Text Viewer**
 - **Image Viewer**
 - **Missing Panel** recovery surface
+- **Runtime Diagnostics**, **Runtime Events**, and **Runtime Inspector**
 
 The repository also contains a demonstration module used to exercise semantic
 panel behavior such as truth, advisory, and temporal/replay projections. Those
 demo panels are examples, not Core domain facilities.
+
+### Runtime Diagnostics Capability Inventory
+
+`src/bootstrap/workspaceRuntime.ts` registers `core` and the first-party
+`workspace-diagnostics` module with one `WorkspaceRuntime` from
+`src/core/workspaceRuntime.ts`. Runtime services remain foundational Core-owned
+services; the panels and their module definition live in
+`src/modules/workspace-diagnostics/`. `App.tsx` provides that
+same singleton to panel bodies through `WorkspaceRuntimeProvider`; the shell,
+timing engine, observation registry, resource-evidence registry, and linked
+selection service therefore share one actual runtime instance.
+
+Core records bootstrap elapsed time, synchronous panel lifecycle reconciliation time, and React Profiler
+`actualDuration` for non-diagnostics panels. Profiler durations are not
+wall-clock durations. Completed traces are retained up to 100, aggregate
+groups up to 100, active traces up to 1,000, and marks up to 100 per trace; aggregate
+statistics continue accumulating for retained groups. Runtime Events
+virtualization is opt-in and persists its scroll position in panel state.
+Normal rendering remains the default.
+
+Observation evidence is limited to active leases registered with
+`runtime.observations`; no Core panel currently registers backend, execution,
+or projection observations. Resource evidence displays only explicit
+`exact-known` byte claims from `runtime.resourceEvidence`, including lease
+reference counts. It is not process RAM, GPU memory, or a total physical memory
+measurement. Those sources are unavailable until a real Core-owned producer
+publishes them.
+
+The panel identities are `workspace-diagnostics/runtime-diagnostics`,
+`workspace-diagnostics/runtime-events`, and
+`workspace-diagnostics/runtime-inspector`. The module appears as its own
+Workspace Diagnostics catalogue group, with panels categorized as observability.
+Saved layouts migrate only the three exact legacy `core/runtime-*` identities
+when the Diagnostics module is registered, retaining panel IDs, saved state,
+geometry, tab placement, selection-channel values, and surface presentation
+memory. If the module is unavailable, normal missing-panel restoration keeps the
+legacy identity and original state recoverable. Saved tab templates migrate the
+same exact identities and preserve geometry; the existing template format does
+not store panel state. Selection is shared by channel, defaults to
+`runtime-primary`, and resolves missing bounded-history entries as stale.
+Runtime Demands, execution-registry events, projection-store provenance, and
+Lab demand/linked-selection integrations remain Lab-specific because Core has
+no corresponding registries or producers. Jarri-Distribution alignment is a
+separate pending pre-GitHub gate.
+
+Diagnostics use React DOM, React Profiler, and the host JavaScript monotonic
+performance clock. They add no native platform API dependency and do not
+expand Core's desktop platform support matrix. OS process-memory reporting is
+unavailable on every platform in this implementation.
 
 ## File Browser And Resources
 

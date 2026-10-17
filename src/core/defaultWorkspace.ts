@@ -87,10 +87,10 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
       colorOverrides: {},
       panelRadius: 8,
       panelMenu: {
-        moduleOrder: ["core", "demo"],
+        moduleOrder: ["core", "workspace-diagnostics", "demo"],
         hiddenModuleIds: [],
         panelSort: "registered",
-        expandedModuleIds: ["core", "demo"],
+        expandedModuleIds: ["core", "workspace-diagnostics", "demo"],
       },
       frameControls: {
         visibility: {},

@@ -281,14 +281,27 @@ export function WorkspaceShell() {
   );
 
   useEffect(() => {
-    runtime.lifecycle.reconcilePanels(
-      panelLifecycleProjection.panelIds,
-      panelLifecycleProjection.capabilitiesByPanelId,
-    );
-    runtime.lifecycle.reconcileActivePanels(
-      panelLifecycleProjection.activePanelIds,
-    );
-  }, [panelLifecycleProjection, runtime.lifecycle]);
+    const trace = runtime.timing.start("panel-lifecycle", "workspace-reconciliation");
+    try {
+      runtime.lifecycle.reconcilePanels(
+        panelLifecycleProjection.panelIds,
+        panelLifecycleProjection.capabilitiesByPanelId,
+      );
+      runtime.lifecycle.reconcileActivePanels(
+        panelLifecycleProjection.activePanelIds,
+      );
+      runtime.timing.annotate(trace, {
+        panelCount: panelLifecycleProjection.panelIds.length,
+        activePanelCount: panelLifecycleProjection.activePanelIds.length,
+        outcome: "complete",
+      });
+    } catch (error) {
+      runtime.timing.annotate(trace, { outcome: "error" });
+      throw error;
+    } finally {
+      runtime.timing.finish(trace);
+    }
+  }, [panelLifecycleProjection, runtime.lifecycle, runtime.timing]);
 
   useEffect(
     () => () => {
