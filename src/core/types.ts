@@ -74,6 +74,8 @@ export type WorkspacePreferences = {
   systemSurfacePositions: WorkspaceSystemSurfacePositions;
   clock: WorkspaceClockPreferences;
   density: "compact" | "comfortable";
+  tabStripOverflow: "scroll" | "wrap";
+  compressTabButtons: boolean;
   themeMode: "system" | "light" | "dark";
   fontFamily: "system" | "humanist" | "serif" | "mono" | "compact";
   themePreset:

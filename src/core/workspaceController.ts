@@ -8,6 +8,7 @@ import {
   repairFocusOrder,
 } from "./layoutEngine";
 import type { LayoutPersistence } from "./layoutPersistence";
+import { reorderWorkspaceTabs } from "./tabOrder";
 import type { PanelRegistry } from "./panelRegistry";
 import {
   createLocalTabTemplateStorage,
@@ -290,6 +291,7 @@ export type WorkspaceController = {
   createTab: () => void;
   renameTab: (tabId: string, title: string) => void;
   closeTab: (tabId: string) => void;
+  reorderTab: (tabId: string, insertionIndex: number) => void;
   savedTabTemplates: SavedTabTemplate[];
   saveActiveTabTemplate: () => void;
   loadTabTemplate: (templateId: string) => void;
@@ -813,6 +815,10 @@ export function useWorkspaceController({
     createTab,
     renameTab,
     closeTab,
+    reorderTab: (tabId, insertionIndex) =>
+      setWorkspace((current) =>
+        reorderWorkspaceTabs(current, tabId, insertionIndex),
+      ),
     savedTabTemplates,
     saveActiveTabTemplate,
     loadTabTemplate,

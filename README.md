@@ -77,6 +77,7 @@ Detailed contracts live under `docs/contracts/`.
 The current Core provides:
 
 - multi-tab workspaces
+- scrollable or wrapping tab strips, optional compact tab buttons, accessible custom horizontal scrolling, and pointer-based tab reordering
 - persistent tab state
 - expandable logical workspace canvases
 - independent tab-local camera state
@@ -94,6 +95,14 @@ The current Core provides:
 
 Native window resizing is kept separate from logical camera position so viewport
 changes do not corrupt the user's location in workspace space.
+
+Tab-strip presentation is controlled by the persisted `tabStripOverflow`
+(`scroll` by default, or `wrap`) and `compressTabButtons` (off by default)
+workspace preferences. Reordering updates the existing `WorkspaceState.tabs`
+array through `src/core/tabOrder.ts`, preserving each tab and the active tab;
+changing display preferences leaves layout state intact. The scroll mode uses a
+custom keyboard-accessible scrollbar and keeps the active tab visible. Wrap mode
+uses the same tab controls and supports multi-row drop positioning.
 
 ## Module And Panel System
 

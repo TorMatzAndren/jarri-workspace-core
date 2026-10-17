@@ -70,6 +70,8 @@ function createDefaultWorkspace(): WorkspaceState {
         showWeekNumber: true,
       },
       density: "compact",
+      tabStripOverflow: "scroll",
+      compressTabButtons: false,
       themeMode: "system",
       fontFamily: "system",
       themePreset: "neutral",
@@ -798,6 +800,43 @@ function testAppearancePreferencesNormalizeAndPersistIndependently() {
   assertEqual(repaired.glassAppearance.surfaceOpacity, 0.95, "Glass opacity clamps to its supported range");
 }
 
+function testTabStripPreferencesNormalizeAndRoundTrip() {
+  const legacy = basePersistedWorkspace();
+  const legacyPreferences = legacy.preferences as Record<string, unknown>;
+  delete legacyPreferences.tabStripOverflow;
+  delete legacyPreferences.compressTabButtons;
+  const legacyNormalized = load(legacy).state.preferences;
+  assertEqual(legacyNormalized.tabStripOverflow, "scroll", "legacy tab overflow defaults to scrolling");
+  assertEqual(legacyNormalized.compressTabButtons, false, "legacy tab compression defaults off");
+
+  const malformed = basePersistedWorkspace();
+  const malformedPreferences = malformed.preferences as Record<string, unknown>;
+  malformedPreferences.tabStripOverflow = "unsupported";
+  malformedPreferences.compressTabButtons = "yes";
+  const repaired = load(malformed).state.preferences;
+  assertEqual(repaired.tabStripOverflow, "scroll", "invalid overflow repairs to scrolling");
+  assertEqual(repaired.compressTabButtons, false, "invalid compression repairs off");
+
+  const workspace = basePersistedWorkspace();
+  const preferences = workspace.preferences as WorkspaceState["preferences"];
+  preferences.tabStripOverflow = "wrap";
+  preferences.compressTabButtons = true;
+  const persistence = createLayoutPersistence({
+    registry: createPanelRegistry(),
+    storageProvider: createStorage(workspace),
+    defaultWorkspaceFactory: createDefaultWorkspace,
+    getModuleRecords: () => [],
+  });
+  const initial = persistence.loadWorkspace().state;
+  const tabIds = initial.tabs.map((tab) => tab.id).join(",");
+  persistence.saveWorkspace(initial);
+  const roundTrip = persistence.loadWorkspace().state;
+  assertEqual(roundTrip.preferences.tabStripOverflow, "wrap", "wrap mode persists");
+  assertEqual(roundTrip.preferences.compressTabButtons, true, "compression persists");
+  assertEqual(roundTrip.preferences.gridSize, initial.preferences.gridSize, "unrelated preferences remain intact");
+  assertEqual(roundTrip.tabs.map((tab) => tab.id).join(","), tabIds, "presentation preferences do not lose tabs");
+}
+
 function main() {
   testPanelInstanceFrameFontPreferenceRoundTrips();
   testLegacyWorkspaceGetsEmptyPresentationMemory();
@@ -813,6 +852,7 @@ function main() {
   testCanvasCameraSurvivesNormalizationPerTab();
   testPanelMenuExpandedModulesNormalizeDeterministically();
   testAppearancePreferencesNormalizeAndPersistIndependently();
+  testTabStripPreferencesNormalizeAndRoundTrip();
   console.log("layout persistence tests passed");
 }
 

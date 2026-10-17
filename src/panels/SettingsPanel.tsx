@@ -32,6 +32,13 @@ const densityOptions: Array<WorkspaceSelectOption<
   { value: "comfortable", label: "Comfortable" },
 ];
 
+const tabStripOverflowOptions: Array<WorkspaceSelectOption<
+  WorkspacePreferences["tabStripOverflow"]
+>> = [
+  { value: "scroll", label: "Scrollable single row" },
+  { value: "wrap", label: "Wrap to multiple rows" },
+];
+
 const zoomAnchorOptions: Array<WorkspaceSelectOption<
   WorkspacePreferences["workspaceZoomAnchorMode"]
 >> = [
@@ -156,6 +163,28 @@ export function SettingsPanel({
 
         <div className="settings-panel__group settings-panel__group--layout">
           <h4>Layout</h4>
+          <label>
+            <span>Tab overflow</span>
+            <WorkspaceSelect
+              value={preferences.tabStripOverflow}
+              options={tabStripOverflowOptions}
+              ariaLabel="Tab strip overflow"
+              onChange={(tabStripOverflow) => updatePreferences({ tabStripOverflow })}
+            />
+          </label>
+          <label>
+            <span>Compress tab buttons</span>
+            <input
+              type="checkbox"
+              checked={preferences.compressTabButtons}
+              onChange={(event) =>
+                updatePreferences({ compressTabButtons: event.target.checked })
+              }
+            />
+          </label>
+          <p className="settings-panel__help">
+            Scroll keeps tabs in one row with a keyboard-accessible scrollbar. Wrap shows tabs on additional rows. Compression reduces each tab title’s minimum width.
+          </p>
           <label>
           <span>Grid</span>
           <input

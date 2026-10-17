@@ -880,6 +880,9 @@ export function WorkspaceShell() {
         onCreateTab={controller.createTab}
         onRenameTab={controller.renameTab}
         onCloseTab={controller.closeTab}
+        onReorderTab={controller.reorderTab}
+        overflow={preferences.tabStripOverflow}
+        compressTabs={preferences.compressTabButtons}
       />
 
       <input

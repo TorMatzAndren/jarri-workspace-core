@@ -72,6 +72,8 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
         showWeekNumber: true,
       },
       density: "compact",
+      tabStripOverflow: "scroll",
+      compressTabButtons: false,
       themeMode: "system",
       fontFamily: "system",
       themePreset: "neutral",

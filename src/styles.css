@@ -1004,9 +1004,10 @@ button:disabled {
 }
 
 .tab-bar {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  align-items: center;
   gap: 12px;
   min-height: calc(46px * var(--workspace-scale));
   padding: calc(8px * var(--workspace-scale)) calc(16px * var(--workspace-scale)) 0;
@@ -1016,6 +1017,8 @@ button:disabled {
 
 .tab-bar__actions {
   display: flex;
+  align-self: center;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
@@ -1037,19 +1040,135 @@ button:disabled {
 
 .tab-bar__tabs {
   display: flex;
+  flex: 1 1 0;
   gap: 4px;
   min-width: 0;
+}
+
+.tab-bar__strip-region {
+  min-width: 0;
+}
+
+.tab-bar__strip-region--scroll {
+  display: grid;
+  grid-template-rows: max-content 8px;
+  align-content: start;
+}
+
+.strip-overflow--scroll {
+  flex-wrap: nowrap;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+.strip-overflow--scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.strip-overflow--scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.strip-overflow--scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--color-border-strong);
+}
+
+.tab-bar__tabs.strip-overflow--scroll,
+.workspace-shell .tab-bar__tabs.strip-overflow--scroll {
+  scrollbar-width: none;
+}
+
+.workspace-shell .tab-bar__tabs.strip-overflow--scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.tab-bar__tabs.strip-overflow--scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.tab-strip-scrollbar {
+  position: relative;
+  min-width: 0;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-panel-header) 44%, transparent);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.tab-strip-scrollbar--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.tab-strip-scrollbar__thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  display: block;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-border-strong) 78%, transparent);
+  cursor: grab;
+}
+
+.tab-strip-scrollbar__thumb:hover,
+.tab-strip-scrollbar__thumb:active {
+  background: var(--color-border-strong);
+}
+
+.tab-strip-scrollbar:focus-visible {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 1px;
+}
+
+.strip-overflow--wrap {
+  flex-wrap: wrap;
+  overflow: visible;
+  white-space: normal;
 }
 
 .tab-bar__tab {
+  position: relative;
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 2px;
   border: 1px solid var(--color-border);
-  border-bottom: 0;
-  border-radius: 6px 6px 0 0;
+  border-radius: min(var(--workspace-panel-radius, 8px), 6px);
   background: var(--color-button);
+}
+
+.tab-bar__tab--dragging {
+  opacity: 0.48;
+}
+
+.tab-bar__tab--insert-before::before,
+.tab-bar__tab--insert-after::after {
+  position: absolute;
+  top: -3px;
+  bottom: -1px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-text);
+  content: "";
+  pointer-events: none;
+}
+
+.tab-bar__tab--insert-before::before {
+  left: -4px;
+}
+
+.tab-bar__tab--insert-after::after {
+  right: -4px;
 }
 
 .tab-bar__tab--active {
@@ -1065,11 +1184,34 @@ button:disabled {
 
 .tab-bar__tab button:first-child {
   min-width: 116px;
+  width: max-content;
   padding: 0 12px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  user-select: none;
+  cursor: grab;
+}
+
+.tab-bar__tab--compressed button:first-child {
+  min-width: 0;
+  padding-inline: 6px;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.tab-bar__tab--dragging button:first-child {
+  cursor: grabbing;
+}
+
+
+/* Emphasize the selected workspace tab title. */
+.tab-bar__tab--active button:first-child {
+  font-weight: 750;
 }
 
 .tab-bar__tab button:last-child {
   width: 32px;
+  flex: 0 0 32px;
 }
 
 .tab-bar__rename-input {
@@ -1077,7 +1219,7 @@ button:disabled {
   min-height: 36px;
   padding: 0 10px;
   border: 0;
-  border-radius: 6px 0 0 0;
+  border-radius: min(var(--workspace-panel-radius, 8px), 6px) 0 0 min(var(--workspace-panel-radius, 8px), 6px);
   outline: 2px solid var(--color-border-strong);
   outline-offset: -2px;
   background: var(--color-panel);
@@ -4426,6 +4568,14 @@ code {
 
 .settings-panel__group--layout {
   grid-area: layout;
+}
+
+.settings-panel__help {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.76em;
+  line-height: 1.4;
 }
 
 .settings-panel__group--clock {

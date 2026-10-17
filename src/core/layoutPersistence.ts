@@ -330,6 +330,8 @@ function normalizePreferences(
     ),
     clock: normalizeClockPreferences(raw.clock),
     density,
+    tabStripOverflow: raw.tabStripOverflow === "wrap" ? "wrap" : "scroll",
+    compressTabButtons: raw.compressTabButtons === true,
     themeMode,
     fontFamily,
     themePreset,

@@ -103,6 +103,8 @@ type WorkspacePreferences = {
   systemSurfacePositions: WorkspaceSystemSurfacePositions;
   clock: WorkspaceClockPreferences;
   density: "compact" | "comfortable";
+  tabStripOverflow: "scroll" | "wrap";
+  compressTabButtons: boolean;
   themeMode: "system" | "light" | "dark";
   fontFamily: "system" | "humanist" | "serif" | "mono" | "compact";
   themePreset:
@@ -338,7 +340,8 @@ Temporal panels must be able to answer:
 Workspace Core components should follow these ownership boundaries:
 
 - Shell: global status, module actions, preferences, tabs, command entry points.
-- TabBar: tab create/select/rename/close.
+- TabBar: tab create/select/rename/close/reorder, scroll or wrap presentation,
+  optional compressed buttons, and accessible horizontal overflow navigation.
 - Canvas: panel placement surface and add-panel entry point.
 - PanelFrame: chrome, focus, drag, resize, close, dirty coordination, toolbar slots,
   and the individual-frame screenshot presentation boundary.
@@ -348,6 +351,29 @@ Workspace Core components should follow these ownership boundaries:
 - Domain Adapter: truth/action/preflight/temporal service calls.
 
 No component should own both long-lived domain truth and layout persistence.
+
+### Tab Strip Preferences And Ordering
+
+`WorkspacePreferences.tabStripOverflow` defaults to `scroll`; the alternative
+`wrap` lays tabs out over multiple rows. `compressTabButtons` defaults to
+`false` and removes the tab title's minimum width when enabled. Both values are
+normalized and persisted by `src/core/layoutPersistence.ts`, without changing
+the workspace schema version or tab identities. Missing or invalid values
+repair to the defaults.
+
+The shell passes these preferences to `src/tabs/TabBar.tsx`. Scroll mode keeps
+the strip horizontally navigable, reveals the active tab, and provides a custom
+keyboard-accessible scrollbar; wheel input navigates horizontally. Wrap mode
+keeps all tab controls available across rows. Pointer reordering uses strip
+rectangle geometry from `src/core/tabOrder.ts` to map the pointer to a logical
+insertion slot. Reorder updates the existing `WorkspaceState.tabs` array and
+preserves tab objects and `activeTabId`; it does not create a second ordering
+authority or alter panel ownership, tab templates, or layout history.
+
+The scrollbar geometry and tab ordering helpers have deterministic unit tests
+registered in `npm run test:core`. Pointer capture, auto-scroll, cancellation,
+rendered responsiveness at narrow widths, and native-window feel still require
+manual desktop GUI review.
 
 ## Workspace Screenshot Ownership
 
