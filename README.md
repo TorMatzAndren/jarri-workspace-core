@@ -2,8 +2,8 @@
 
 Reusable cognitive workspace substrate for Jarri-style panel, module, observatory, and operator-console systems.
 
-> **Current development line:** Workspace Core 0.3.0 release candidate
-> The final 0.3.0 release is pending clean-machine installation and integration verification.
+> **Current development line:** Workspace Core 0.4.0 release candidate
+> Core 0.4.0 is under service and integration verification; it has not been tagged or published.
 
 ## What Workspace Core Is
 

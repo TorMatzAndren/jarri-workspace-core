@@ -1,5 +1,74 @@
 # Changelog
 
+## v0.4.0 — Release Candidate (unreleased)
+
+Workspace Core 0.4.0 continues the source-distributed,
+AI-adaptable Core architecture. This development candidate
+has not been tagged or published.
+
+### Workspace navigation and presentation
+
+- Added cross-tab Open Panel search.
+- Added a searchable spatial Add Panel catalogue with
+  viewport-anchored presentation, dragging, resizing,
+  and persistent catalogue layout controls.
+- Added configurable panel corner radius, persisted
+  with Workspace preferences.
+- Added Dashboard Night (UX Planet), a community theme
+  contributed by **Sh0ken (Kenny)**.
+  The supplied palette is dark-only; independent
+  Light/System variations have not been implemented.
+
+### Appearance and workspace customization
+
+- Promoted theme-independent Glass effects from Workspace Lab,
+  including frosted surfaces, opacity, blur, saturation,
+  border intensity, and reduced-effects controls.
+- Added viewport-fixed gradient wallpapers with configurable
+  colors and angle, independent of theme selection.
+- Moved Panel Corner Radius into Themes / Colours while
+  preserving the existing rounded-frame implementation.
+- Removed obsolete Panel Menu Arrangement controls from
+  Settings, retaining catalogue organization and preferences
+  through Add Panel.
+- Preserved backwards-compatible appearance persistence
+  and existing theme behavior.
+
+### Runtime observation infrastructure
+
+- Added deterministic panel-to-resource observation tracking.
+- Added lease-based, exact-known resource evidence claims
+  with explicit byte units and lifecycle tests.
+- These registries provide infrastructure for future runtime
+  integration; they do not represent physical process
+  measurements or a completed monitoring interface.
+
+### Lifecycle and virtualization
+
+- Added generic panel lifecycle coordination.
+- Ported the opt-in Workspace virtual-list presentation
+  infrastructure from Workspace Lab.
+- Added deterministic list geometry, overscan, dynamic
+  row measurement, scroll-request handling, and tests.
+- Added a standalone development benchmark supporting
+  up to 100,000 materialized records.
+- Virtualization is a reusable presentation capability;
+  individual panels retain their own virtualization and
+  materialization policies.
+- Existing Core panels are not automatically virtualized.
+
+### Release verification
+
+- TypeScript typecheck, Core regression tests,
+  update-awareness tests, architecture boundary tests,
+  and frontend builds passed at the preceding checkpoint.
+- Native Rust validation and 0.4.0 integration verification
+  remain release-candidate tasks.
+- No final release, tag, binary publication, or
+  distribution-format change is implied.
+
+---
+
 ## v0.3.0 — Release Candidate (unreleased)
 
 Workspace Core 0.3.0 promotes the mature generic Workspace behavior developed
