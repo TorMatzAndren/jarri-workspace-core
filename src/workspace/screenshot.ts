@@ -71,6 +71,42 @@ function screenshotNodeFilter(node: Node): boolean {
 async function renderLogicalWorkspaceScreenshot(
   target: Extract<WorkspaceScreenshotTarget, { kind: "workspace" }>,
 ): Promise<Blob> {
+  if (target.element.dataset.wallpaperRendered === "true") {
+    const sourceShell = target.element.closest<HTMLElement>(".workspace-shell");
+    if (!sourceShell) throw new Error("Workspace screenshot could not resolve theme owner.");
+    const themeHost = createScreenshotThemeHost(sourceShell, target.width, target.height);
+    const replica = target.element.cloneNode(true) as HTMLElement;
+    synchronizeCaptureReplica(target.element, replica);
+    // Logical captures keep their established canvas crop, excluding the viewport backdrop.
+    replica.removeAttribute("data-wallpaper-rendered");
+    replica.style.position = "relative";
+    replica.style.left = "0";
+    replica.style.top = "0";
+    replica.style.width = `${target.width}px`;
+    replica.style.height = `${target.height}px`;
+    replica.style.margin = "0";
+    replica.style.transform = "none";
+    replica.style.transformOrigin = "top left";
+    replica.style.pointerEvents = "none";
+    themeHost.appendChild(replica);
+    const staging = document.createElement("div");
+    staging.style.cssText = `position:absolute;left:0;top:${Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.scrollY + window.innerHeight) + 64}px;width:${target.width}px;height:${target.height}px;overflow:visible;margin:0;padding:0;pointer-events:none;z-index:-2147483647`;
+    staging.appendChild(themeHost);
+    document.body.appendChild(staging);
+    try {
+      await waitForCaptureLayout();
+      const captured = await domToBlob(themeHost, {
+        width: target.width, height: target.height, scale: 1,
+        style: { transform: "none", transformOrigin: "top left" },
+        filter: screenshotNodeFilter,
+        features: { copyScrollbar: true, removeAbnormalAttributes: true, removeControlCharacter: true, fixSvgXmlDecode: true, restoreScrollPosition: true },
+      });
+      if (!captured) throw new Error("Workspace screenshot produced no image data.");
+      return captured;
+    } finally {
+      staging.remove();
+    }
+  }
   const captured = await domToBlob(target.element, {
     width: target.width,
     height: target.height,
@@ -165,6 +201,7 @@ async function renderLogicalWorkspaceTileScreenshot(
 
   const replica = target.element.cloneNode(true) as HTMLElement;
   synchronizeCaptureReplica(target.element, replica);
+  replica.removeAttribute("data-wallpaper-rendered");
   replica.style.position = "absolute";
   replica.style.left = -tile.x + "px";
   replica.style.top = -tile.y + "px";

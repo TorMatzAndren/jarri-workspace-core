@@ -43,7 +43,6 @@ indexInOrder(
     "settings-panel__group--surfaces",
     "settings-panel__group--clock",
     "settings-panel__section--appearance",
-    "settings-panel__section--panel-menu",
   ],
   "Settings semantic regions remain in stable document order",
 );
@@ -55,7 +54,7 @@ assert.match(
 
 assert.match(
   styles,
-  /\.settings-panel\s*\{[^}]*grid-template-areas:\s*"updates"\s*"interface"\s*"appearance"\s*"panel-menu";[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,
+  /\.settings-panel\s*\{[^}]*grid-template-areas:\s*"updates"\s*"interface"\s*"appearance";[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,
   "Settings sections occupy one explicit, ordered column",
 );
 assert.match(

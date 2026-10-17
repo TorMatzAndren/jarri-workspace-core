@@ -14,7 +14,9 @@ import type {
   PersistedModuleRecord,
   PersistedWorkspaceDocument,
   WorkspaceCanvasBounds,
+  WorkspaceCanvasAppearancePreferences,
   WorkspaceColorTokens,
+  WorkspaceGlassAppearancePreferences,
   WorkspacePanelViewPreferences,
   WorkspacePreferences,
   WorkspaceState,
@@ -240,7 +242,8 @@ function normalizePreferences(
     raw.themePreset === "blueprint" ||
     raw.themePreset === "pink-sparkle" ||
     raw.themePreset === "chronogit" ||
-    raw.themePreset === "dashboard-night"
+    raw.themePreset === "dashboard-night" ||
+    raw.themePreset === "jarri-glass"
       ? raw.themePreset
       : "neutral";
 
@@ -279,6 +282,8 @@ function normalizePreferences(
     themeMode,
     fontFamily,
     themePreset,
+    canvasAppearance: normalizeCanvasAppearance(raw.canvasAppearance),
+    glassAppearance: normalizeGlassAppearance(raw.glassAppearance, themePreset === "jarri-glass"),
     colorOverrides: normalizeColorOverrides(raw.colorOverrides),
     panelRadius: clamp(
       Math.round(finiteNumber(raw.panelRadius, 8)), 0, 24,
@@ -286,6 +291,50 @@ function normalizePreferences(
     panelMenu: normalizePanelMenuPreferences(raw.panelMenu),
     frameControls: normalizeFrameControlPreferences(raw.frameControls),
     panelViews,
+  };
+}
+
+const WALLPAPER_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+function normalizeCanvasAppearance(input: unknown): WorkspaceCanvasAppearancePreferences {
+  const raw = isRecord(input) ? input : {};
+  const wallpaper = isRecord(raw.wallpaper) ? raw.wallpaper : {};
+  let normalizedWallpaper: WorkspaceCanvasAppearancePreferences["wallpaper"] = { kind: "none" };
+  if (wallpaper.kind === "gradient") {
+    const from = typeof wallpaper.from === "string" ? wallpaper.from : "";
+    const to = typeof wallpaper.to === "string" ? wallpaper.to : "";
+    if (WALLPAPER_COLOR.test(from) && WALLPAPER_COLOR.test(to)) {
+      normalizedWallpaper = { kind: "gradient", from, to, angle: clamp(finiteNumber(wallpaper.angle, 135), 0, 360) };
+    }
+  }
+  const position = isRecord(raw.position) ? raw.position : {};
+  return {
+    wallpaper: normalizedWallpaper,
+    fit: raw.fit === "contain" || raw.fit === "center" ? raw.fit : "cover",
+    position: { x: clamp(finiteNumber(position.x, 0.5), 0, 1), y: clamp(finiteNumber(position.y, 0.5), 0, 1) },
+    anchor: "viewport",
+  };
+}
+
+function normalizeGlassAppearance(input: unknown, legacyJarriGlassPreset: boolean): WorkspaceGlassAppearancePreferences {
+  const raw = isRecord(input) ? input : {};
+  const surfaces = isRecord(raw.surfaces) ? raw.surfaces : {};
+  const customized = raw.panelContentPolicyCustomized === true;
+  const policy = (value: unknown): "glass" | "solid" => value === "solid" ? "solid" : "glass";
+  return {
+    enabled: typeof raw.enabled === "boolean" ? raw.enabled : legacyJarriGlassPreset,
+    mode: raw.mode === "clear" || raw.mode === "solid" ? raw.mode : "frosted",
+    surfaceOpacity: clamp(finiteNumber(raw.surfaceOpacity, 0.72), 0.2, 0.95),
+    backdropBlurRadius: clamp(finiteNumber(raw.backdropBlurRadius, 12), 0, 32),
+    saturation: clamp(finiteNumber(raw.saturation, 1.15), 0, 2),
+    borderIntensity: clamp(finiteNumber(raw.borderIntensity, 0.35), 0, 1),
+    panelContentPolicyCustomized: customized,
+    surfaces: {
+      frameShell: policy(surfaces.frameShell), header: policy(surfaces.header),
+      toolbar: policy(surfaces.toolbar), tab: policy(surfaces.tab),
+      panelContent: customized ? policy(surfaces.panelContent) : "glass",
+    },
+    reducedEffects: raw.reducedEffects === true,
   };
 }
 

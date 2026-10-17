@@ -45,7 +45,9 @@ import { DeveloperVersionIndicator } from "./DeveloperVersionIndicator";
 import { copyWorkspaceScreenshot } from "../workspace/screenshot";
 import { reconcileWorkspaceNativeSurfacePanels } from "../core/platform/nativeSurface";
 import type { WorkspaceCanvasScreenshotSource } from "../workspace/workspaceScreenshotComposition";
+import type { WorkspacePreferences } from "../core/types";
 import { projectWorkspacePanelLifecycle } from "../core/workspacePanelLifecycle";
+import { WorkspaceSelect } from "../core/WorkspaceSelect";
 
 const JARRI_SYSTEMS_URL = "http://jarri.systems/";
 
@@ -54,6 +56,7 @@ type WorkspaceScreenshotState = "idle" | "copying" | "copied" | "failed";
 export function WorkspaceShell() {
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
   const [panelMenuSearchQuery, setPanelMenuSearchQuery] = useState("");
+  const [moduleManagementOpen, setModuleManagementOpen] = useState(false);
 
   const [catalogueLayoutLocked, setCatalogueLayoutLocked] =
     useState(() => {
@@ -398,6 +401,20 @@ export function WorkspaceShell() {
     title: module.title,
   }));
 
+  const hiddenModuleIds = new Set(preferences.panelMenu.hiddenModuleIds);
+  const hiddenModuleCount = modules.filter((module) => hiddenModuleIds.has(module.moduleId)).length;
+
+  function updatePanelMenuPreferences(updates: Partial<WorkspacePreferences["panelMenu"]>) {
+    controller.updatePreferences({ panelMenu: { ...preferences.panelMenu, ...updates } });
+  }
+
+  function setPanelModuleVisible(moduleId: string, visible: boolean) {
+    const hidden = new Set(preferences.panelMenu.hiddenModuleIds);
+    if (visible) hidden.delete(moduleId);
+    else hidden.add(moduleId);
+    updatePanelMenuPreferences({ hiddenModuleIds: [...hidden] });
+  }
+
   const panelGroups = useMemo(
     () =>
       projectPanelMenuGroups(
@@ -555,6 +572,10 @@ export function WorkspaceShell() {
     "--workspace-scale": preferences.scale,
     "--workspace-font-size": `${preferences.fontSize}px`,
     "--workspace-panel-radius": `${preferences.panelRadius}px`,
+    "--glass-surface-opacity": `${preferences.glassAppearance.surfaceOpacity * 100}%`,
+    "--glass-blur-radius": `${preferences.glassAppearance.backdropBlurRadius}px`,
+    "--glass-saturation": preferences.glassAppearance.saturation,
+    "--glass-border-strength": `${preferences.glassAppearance.borderIntensity * 100}%`,
     ...(preferences.colorOverrides.page
       ? { "--override-page": preferences.colorOverrides.page }
       : {}),
@@ -684,6 +705,14 @@ export function WorkspaceShell() {
       data-font-family={preferences.fontFamily}
       data-theme-mode={preferences.themeMode}
       data-theme-preset={preferences.themePreset}
+      data-glass-enabled={preferences.glassAppearance.enabled}
+      data-glass-mode={preferences.glassAppearance.mode}
+      data-glass-reduced-effects={preferences.glassAppearance.reducedEffects}
+      data-glass-frame-shell={preferences.glassAppearance.surfaces.frameShell}
+      data-glass-header={preferences.glassAppearance.surfaces.header}
+      data-glass-toolbar={preferences.glassAppearance.surfaces.toolbar}
+      data-glass-tab={preferences.glassAppearance.surfaces.tab}
+      data-glass-panel-content={preferences.glassAppearance.surfaces.panelContent}
       data-grid-visible={preferences.showGrid}
       data-has-custom-page={Boolean(preferences.colorOverrides.page)}
       data-has-custom-canvas={Boolean(preferences.colorOverrides.canvas)}
@@ -1031,6 +1060,44 @@ export function WorkspaceShell() {
                   </button>
                 </div>
               </div>
+
+              <div className="panel-menu__catalogue-tools">
+                <label className="panel-menu__sort-control">
+                  <span>Panel sort</span>
+                  <WorkspaceSelect
+                    value={preferences.panelMenu.panelSort}
+                    options={[
+                      { value: "registered", label: "Registered order" },
+                      { value: "title", label: "Title" },
+                    ]}
+                    ariaLabel="Panel sort"
+                    onChange={(panelSort) => updatePanelMenuPreferences({ panelSort })}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="panel-menu__manage-modules"
+                  aria-expanded={moduleManagementOpen}
+                  aria-controls="panel-menu-module-management"
+                  onClick={() => setModuleManagementOpen((open) => !open)}
+                >
+                  Manage modules{hiddenModuleCount > 0 ? ` (${hiddenModuleCount} hidden)` : ""}
+                </button>
+              </div>
+              {moduleManagementOpen ? (
+                <div className="panel-menu__module-management" id="panel-menu-module-management" aria-label="Manage visible modules">
+                  {modules.map((module) => (
+                    <label key={module.moduleId}>
+                      <input
+                        type="checkbox"
+                        checked={!hiddenModuleIds.has(module.moduleId)}
+                        onChange={(event) => setPanelModuleVisible(module.moduleId, event.target.checked)}
+                      />
+                      <span>{module.title}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
 
               <div className="panel-menu__search">
                 <input

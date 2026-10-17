@@ -8,7 +8,7 @@ import type {
   PersistedWorkspaceDocument,
   WorkspaceState,
 } from "./types";
-import { WORKSPACE_SCHEMA_VERSION } from "./types";
+import { DEFAULT_WORKSPACE_CANVAS_APPEARANCE, DEFAULT_WORKSPACE_GLASS_APPEARANCE, WORKSPACE_SCHEMA_VERSION } from "./types";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -73,6 +73,8 @@ function createDefaultWorkspace(): WorkspaceState {
       themeMode: "system",
       fontFamily: "system",
       themePreset: "neutral",
+      canvasAppearance: { ...DEFAULT_WORKSPACE_CANVAS_APPEARANCE, wallpaper: { kind: "none" }, position: { x: 0.5, y: 0.5 } },
+      glassAppearance: { ...DEFAULT_WORKSPACE_GLASS_APPEARANCE, surfaces: { ...DEFAULT_WORKSPACE_GLASS_APPEARANCE.surfaces } },
       colorOverrides: {},
       panelRadius: 8,
       panelMenu: {
@@ -756,6 +758,46 @@ function testPanelMenuExpandedModulesNormalizeDeterministically() {
   );
 }
 
+function testAppearancePreferencesNormalizeAndPersistIndependently() {
+  const legacy = basePersistedWorkspace();
+  const legacyPreferences = legacy.preferences as Record<string, unknown>;
+  delete legacyPreferences.canvasAppearance;
+  delete legacyPreferences.glassAppearance;
+  const defaults = load(legacy).state.preferences;
+  assertEqual(defaults.glassAppearance.enabled, false, "legacy documents keep Glass disabled");
+  assertEqual(defaults.canvasAppearance.wallpaper.kind, "none", "legacy documents have no wallpaper");
+
+  const workspace = basePersistedWorkspace();
+  const preferences = workspace.preferences as WorkspaceState["preferences"];
+  preferences.glassAppearance.enabled = true;
+  preferences.canvasAppearance.wallpaper = { kind: "gradient", from: "#102030", to: "#aabbcc", angle: 220 };
+  preferences.colorOverrides = { panel: "#123456" };
+  preferences.panelRadius = 17;
+  const storage = createStorage(workspace);
+  const persistence = createLayoutPersistence({
+    registry: createPanelRegistry(), storageProvider: storage,
+    defaultWorkspaceFactory: createDefaultWorkspace, getModuleRecords: () => [],
+  });
+  const state = persistence.loadWorkspace().state;
+  state.preferences.themePreset = "chronogit";
+  persistence.saveWorkspace(state);
+  const switched = persistence.loadWorkspace().state.preferences;
+  assertEqual(switched.glassAppearance.enabled, true, "Glass remains enabled across theme changes");
+  assertEqual(switched.canvasAppearance.wallpaper.kind, "gradient", "gradient survives persistence");
+  assertEqual(switched.colorOverrides.panel, "#123456", "semantic color override survives theme changes");
+  assertEqual(switched.panelRadius, 17, "existing radius preference survives appearance persistence");
+
+  const malformed = basePersistedWorkspace();
+  const malformedPreferences = malformed.preferences as Record<string, unknown>;
+  malformedPreferences.canvasAppearance = { wallpaper: { kind: "gradient", from: "bad", to: "#ffffff" } };
+  malformedPreferences.glassAppearance = { enabled: "yes", mode: "bad", surfaceOpacity: 4 };
+  const repaired = load(malformed).state.preferences;
+  assertEqual(repaired.canvasAppearance.wallpaper.kind, "none", "invalid gradients repair to no wallpaper");
+  assertEqual(repaired.glassAppearance.enabled, false, "malformed Glass enablement repairs disabled");
+  assertEqual(repaired.glassAppearance.mode, "frosted", "malformed Glass mode repairs deterministically");
+  assertEqual(repaired.glassAppearance.surfaceOpacity, 0.95, "Glass opacity clamps to its supported range");
+}
+
 function main() {
   testPanelInstanceFrameFontPreferenceRoundTrips();
   testLegacyWorkspaceGetsEmptyPresentationMemory();
@@ -770,6 +812,7 @@ function main() {
   testCanvasBoundsPreserveNegativeOriginAndExpandAroundPanels();
   testCanvasCameraSurvivesNormalizationPerTab();
   testPanelMenuExpandedModulesNormalizeDeterministically();
+  testAppearancePreferencesNormalizeAndPersistIndependently();
   console.log("layout persistence tests passed");
 }
 

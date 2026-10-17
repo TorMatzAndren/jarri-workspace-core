@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const canvas = readFileSync("src/workspace/WorkspaceCanvas.tsx", "utf8");
+const styles = readFileSync("src/styles.css", "utf8");
+const screenshot = readFileSync("src/workspace/screenshot.ts", "utf8");
+const presentation = readFileSync("src/workspace/canvasWallpaperPresentation.ts", "utf8");
+const appearance = readFileSync("src/panels/ThemeColorsPanel.tsx", "utf8");
+assert.ok(/data-wallpaper-rendered=\{wallpaperPresentation\.rendered\}[\s\S]*?backgroundAttachment: "scroll"/.test(canvas), "Wallpaper paints on the scroll viewport surface");
+assert.ok(/\.workspace-canvas__surface\s*\{[\s\S]*?background-attachment: scroll/.test(styles), "Wallpaper remains viewport attached");
+assert.ok(presentation.includes("linear-gradient(") && presentation.includes('anchor: "viewport"'), "Gradient presentation is viewport scoped");
+assert.ok(/\.workspace-canvas__logical\[data-wallpaper-rendered="true"\][\s\S]*?linear-gradient\(var\(--color-border\)/.test(styles), "Grid remains visible above wallpaper");
+assert.ok(screenshot.includes('replica.removeAttribute("data-wallpaper-rendered")'), "Logical screenshots retain their original crop semantics");
+assert.ok(appearance.includes('aria-label="Wallpaper gradient start color"') && appearance.includes('aria-label="Wallpaper gradient angle"'), "Gradient controls preserve color and angle configuration");
+assert.ok(!appearance.includes('type: "image"') && !appearance.includes("Image (not rendered)"), "Image wallpaper imports are outside this migration");
+console.log("Workspace wallpaper contract guard passed");

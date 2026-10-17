@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const settings = readFileSync("src/panels/SettingsPanel.tsx", "utf8");
+const shell = readFileSync("src/shell/WorkspaceShell.tsx", "utf8");
+const persistence = readFileSync("src/core/layoutPersistence.ts", "utf8");
+assert.ok(!settings.includes("Panel Menu Arrangement") && !settings.includes("settings-module-row"), "obsolete Settings menu arrangement UI is removed");
+assert.ok(shell.includes("Manage modules") && shell.includes("Panel sort"), "Add Panel retains visibility and sorting controls");
+assert.ok(shell.includes("panelMenu.moduleOrder") && shell.includes("moduleOrder: nextOrder"), "Add Panel ordering persists");
+assert.ok(persistence.includes("normalizePanelMenuPreferences(raw.panelMenu)"), "saved catalogue preferences continue to normalize");
+assert.ok(settings.includes("id=\"workspace-panel-corner-radius\"") === false, "radius slider is no longer in Settings");
+console.log("Panel menu cleanup contract guard passed");

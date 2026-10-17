@@ -4,6 +4,8 @@ import type { PanelRegistry } from "./panelRegistry";
 import type { PanelInstance, WorkspaceState } from "./types";
 import {
   DEFAULT_WORKSPACE_CANVAS_BOUNDS,
+  DEFAULT_WORKSPACE_CANVAS_APPEARANCE,
+  DEFAULT_WORKSPACE_GLASS_APPEARANCE,
   DEFAULT_WORKSPACE_SYSTEM_SURFACE_POSITIONS,
 } from "./types";
 import { WORKSPACE_SCHEMA_VERSION } from "./types";
@@ -73,6 +75,15 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
       themeMode: "system",
       fontFamily: "system",
       themePreset: "neutral",
+      canvasAppearance: {
+        ...DEFAULT_WORKSPACE_CANVAS_APPEARANCE,
+        wallpaper: { ...DEFAULT_WORKSPACE_CANVAS_APPEARANCE.wallpaper },
+        position: { ...DEFAULT_WORKSPACE_CANVAS_APPEARANCE.position },
+      },
+      glassAppearance: {
+        ...DEFAULT_WORKSPACE_GLASS_APPEARANCE,
+        surfaces: { ...DEFAULT_WORKSPACE_GLASS_APPEARANCE.surfaces },
+      },
       colorOverrides: {},
       panelRadius: 8,
       panelMenu: {

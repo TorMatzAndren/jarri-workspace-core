@@ -23,6 +23,7 @@ import {
 } from "../core/cameraMath";
 import { localWheelReservation } from "../core/panelInteractions";
 import { PanelFrame } from "./PanelFrame";
+import { canvasWallpaperPresentation } from "./canvasWallpaperPresentation";
 import { copyWorkspaceScreenshot } from "./screenshot";
 import { normalizeWorkspaceCanvasOrigin, type WorkspaceCanvasScreenshotSource } from "./workspaceScreenshotComposition";
 
@@ -195,6 +196,7 @@ export function WorkspaceCanvas({
     panels,
   );
   const normalizedContentsOrigin = normalizeWorkspaceCanvasOrigin(effectiveBounds);
+  const wallpaperPresentation = canvasWallpaperPresentation(preferences.canvasAppearance);
 
   useLayoutEffect(() => {
     const element = logicalRef.current;
@@ -848,9 +850,16 @@ export function WorkspaceCanvas({
 
       <div
         className={`workspace-canvas__surface ${panState ? "workspace-canvas__surface--panning" : ""}`}
+        data-wallpaper-kind={wallpaperPresentation.sourceKind}
+        data-wallpaper-rendered={wallpaperPresentation.rendered}
         ref={surfaceRef}
         style={{
           "--workspace-canvas-scale": canvasScale,
+          ...(wallpaperPresentation.rendered ? {
+            backgroundImage: wallpaperPresentation.backgroundImage ?? undefined,
+            backgroundPosition: wallpaperPresentation.backgroundPosition,
+            backgroundAttachment: "scroll",
+          } : {}),
         } as React.CSSProperties}
         onPointerDownCapture={beginCanvasPan}
       >
@@ -867,6 +876,7 @@ export function WorkspaceCanvas({
         >
         <div
           className="workspace-canvas__logical"
+          data-wallpaper-rendered={wallpaperPresentation.rendered}
           ref={logicalRef}
           style={{
             "--workspace-canvas-width": `${effectiveBounds.width}px`,

@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const styles = readFileSync("src/styles.css", "utf8");
+const shell = readFileSync("src/shell/WorkspaceShell.tsx", "utf8");
+const appearance = readFileSync("src/panels/ThemeColorsPanel.tsx", "utf8");
+const persistence = readFileSync("src/core/layoutPersistence.ts", "utf8");
+const types = readFileSync("src/core/types.ts", "utf8");
+const glass = styles.slice(styles.indexOf("/* Glass is an independent Workspace effect"), styles.indexOf(".panel-body--loading-boundary"));
+assert.ok(glass.includes('.workspace-shell[data-glass-enabled="true"]'), "Glass is opt-in independently of themes");
+assert.ok(!glass.includes('data-theme-preset="jarri-glass"'), "Glass rendering is not preset gated");
+for (const token of ["--glass-surface-opacity", "--glass-blur-radius", "--glass-saturation", "--glass-border-strength"]) assert.ok(shell.includes(token), `${token} is bound from preferences`);
+for (const token of ["var(--color-panel)", "var(--color-panel-header)", "var(--color-border-strong)"]) assert.ok(glass.includes(token), `${token} supplies theme-derived tint`);
+for (const value of ["chronogit", "pink-sparkle", "graphite", "blueprint", "neutral", "dashboard-night"]) assert.ok(appearance.includes(`value: "${value}"`), `${value} remains selectable with Glass controls`);
+for (const control of ["Enable glass effects", "Glass surface opacity", "Glass backdrop blur radius", "Glass saturation", "Glass border intensity", "Reduced effects"]) assert.ok(appearance.includes(control), `${control} is exposed`);
+assert.ok(types.includes("enabled: false"), "Glass defaults off for existing installations");
+assert.ok(persistence.includes("legacyJarriGlassPreset"), "legacy Glass preference migration remains deterministic");
+assert.ok(glass.includes(":has(") && glass.includes(".xterm"), "specialized content is excluded from body effects");
+assert.ok(appearance.includes('className="settings-panel__section theme-colors-panel__panel-appearance"') && appearance.includes('id="workspace-panel-corner-radius"'), "radius remains under Panel Appearance");
+console.log("Jarri Glass contract guard passed");

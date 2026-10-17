@@ -50,14 +50,12 @@ const panelNavigationAlignmentOptions: Array<WorkspaceSelectOption<
 
 export function SettingsPanel({
   preferences,
-  modules,
   updatePreferences,
   openPanel,
 }: PanelBodyProps) {
   const [settingsNavigation, setSettingsNavigation] = useState(
     getSettingsSectionNavigationSnapshot,
   );
-  const arrangedModules = arrangeModules(modules, preferences.panelMenu.moduleOrder);
 
   useEffect(() => {
     const unsubscribe = subscribeSettingsSectionNavigation(() => {
@@ -82,41 +80,6 @@ export function SettingsPanel({
       Math.min(1.35, Number((preferences.scale + delta).toFixed(2))),
     );
     updatePreferences({ scale: nextScale });
-  }
-
-  function updatePanelMenu(
-    updates: Partial<WorkspacePreferences["panelMenu"]>,
-  ) {
-    updatePreferences({
-      panelMenu: {
-        ...preferences.panelMenu,
-        ...updates,
-      },
-    });
-  }
-
-  function moveModule(moduleId: string, direction: -1 | 1) {
-    const currentOrder = arrangedModules.map((module) => module.moduleId);
-    const index = currentOrder.indexOf(moduleId);
-    const targetIndex = index + direction;
-    if (index < 0 || targetIndex < 0 || targetIndex >= currentOrder.length) {
-      return;
-    }
-
-    const nextOrder = [...currentOrder];
-    const [item] = nextOrder.splice(index, 1);
-    nextOrder.splice(targetIndex, 0, item);
-    updatePanelMenu({ moduleOrder: nextOrder });
-  }
-
-  function setModuleVisible(moduleId: string, visible: boolean) {
-    const hidden = new Set(preferences.panelMenu.hiddenModuleIds);
-    if (visible) {
-      hidden.delete(moduleId);
-    } else {
-      hidden.add(moduleId);
-    }
-    updatePanelMenu({ hiddenModuleIds: [...hidden] });
   }
 
   return (
@@ -525,31 +488,6 @@ export function SettingsPanel({
 
       <section className="settings-panel__section settings-panel__section--appearance">
         <h3>Appearance</h3>
-        <div className="settings-panel__corner-radius">
-          <label htmlFor="workspace-panel-corner-radius">
-            <span>Panel Corner Radius</span>
-            <strong>{preferences.panelRadius} px</strong>
-          </label>
-          <input
-            id="workspace-panel-corner-radius"
-            type="range"
-            min={0}
-            max={24}
-            step={1}
-            value={preferences.panelRadius}
-            aria-label="Panel corner radius"
-            onChange={(event) =>
-              updatePreferences({
-                panelRadius: Number(event.target.value),
-              })
-            }
-          />
-          <div className="settings-panel__corner-radius-scale">
-            <span>Square · 0 px</span>
-            <span>Rounded · 24 px</span>
-          </div>
-        </div>
-
         <button
           type="button"
           onClick={() => openPanel("core", "theme-colors")}
@@ -558,80 +496,6 @@ export function SettingsPanel({
         </button>
       </section>
 
-      <section className="settings-panel__section settings-panel__section--panel-menu">
-        <h3>Panel Menu Arrangement</h3>
-        <label>
-          <span>Panel sort</span>
-          <WorkspaceSelect
-            value={preferences.panelMenu.panelSort}
-            ariaLabel="Panel sort"
-            options={[
-              { value: "registered", label: "Registered order" },
-              { value: "title", label: "Title" },
-            ]}
-            onChange={(panelSort) =>
-              updatePanelMenu({ panelSort })
-            }
-          />
-        </label>
-
-        <div className="settings-module-list">
-          {arrangedModules.map((module, index) => {
-            const hidden = preferences.panelMenu.hiddenModuleIds.includes(
-              module.moduleId,
-            );
-
-            return (
-              <div className="settings-module-row" key={module.moduleId}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={!hidden}
-                    onChange={(event) =>
-                      setModuleVisible(module.moduleId, event.target.checked)
-                    }
-                  />
-                  <span>{module.title}</span>
-                </label>
-                <div>
-                  <button
-                    type="button"
-                    disabled={index === 0}
-                    onClick={() => moveModule(module.moduleId, -1)}
-                  >
-                    Up
-                  </button>
-                  <button
-                    type="button"
-                    disabled={index === arrangedModules.length - 1}
-                    onClick={() => moveModule(module.moduleId, 1)}
-                  >
-                    Down
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
     </div>
   );
-}
-
-function arrangeModules(
-  modules: PanelBodyProps["modules"],
-  moduleOrder: string[],
-) {
-  const orderIndex = new Map(
-    moduleOrder.map((moduleId, index) => [moduleId, index]),
-  );
-
-  return [...modules].sort((a, b) => {
-    const aIndex = orderIndex.get(a.moduleId) ?? Number.MAX_SAFE_INTEGER;
-    const bIndex = orderIndex.get(b.moduleId) ?? Number.MAX_SAFE_INTEGER;
-    if (aIndex !== bIndex) {
-      return aIndex - bIndex;
-    }
-    return a.title.localeCompare(b.title);
-  });
 }

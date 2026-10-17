@@ -83,12 +83,45 @@ export type WorkspacePreferences = {
     | "blueprint"
     | "pink-sparkle"
     | "chronogit"
-    | "dashboard-night";
+    | "dashboard-night"
+    | "jarri-glass";
+  canvasAppearance: WorkspaceCanvasAppearancePreferences;
+  glassAppearance: WorkspaceGlassAppearancePreferences;
   colorOverrides: Partial<WorkspaceColorTokens>;
   panelRadius: number;
   panelMenu: PanelMenuPreferences;
   frameControls: WorkspaceFrameControlPreferences;
   panelViews: WorkspacePanelViewPreferences;
+};
+
+export type WorkspaceCanvasAppearancePreferences = {
+  wallpaper: { kind: "none" } | { kind: "gradient"; from: string; to: string; angle: number };
+  fit: "cover" | "contain" | "center";
+  position: { x: number; y: number };
+  anchor: "viewport";
+};
+
+export type WorkspaceGlassAppearancePreferences = {
+  enabled: boolean;
+  mode: "clear" | "frosted" | "solid";
+  surfaceOpacity: number;
+  backdropBlurRadius: number;
+  saturation: number;
+  borderIntensity: number;
+  panelContentPolicyCustomized: boolean;
+  surfaces: { frameShell: "glass" | "solid"; header: "glass" | "solid"; toolbar: "glass" | "solid"; tab: "glass" | "solid"; panelContent: "glass" | "solid" };
+  reducedEffects: boolean;
+};
+
+export const DEFAULT_WORKSPACE_CANVAS_APPEARANCE: WorkspaceCanvasAppearancePreferences = {
+  wallpaper: { kind: "none" }, fit: "cover", position: { x: 0.5, y: 0.5 }, anchor: "viewport",
+};
+
+export const DEFAULT_WORKSPACE_GLASS_APPEARANCE: WorkspaceGlassAppearancePreferences = {
+  enabled: false, mode: "frosted", surfaceOpacity: 0.72, backdropBlurRadius: 12,
+  saturation: 1.15, borderIntensity: 0.35, panelContentPolicyCustomized: false,
+  surfaces: { frameShell: "glass", header: "glass", toolbar: "glass", tab: "glass", panelContent: "glass" },
+  reducedEffects: false,
 };
 
 export type WorkspaceColorTokens = {
