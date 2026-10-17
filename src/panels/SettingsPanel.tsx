@@ -525,6 +525,31 @@ export function SettingsPanel({
 
       <section className="settings-panel__section settings-panel__section--appearance">
         <h3>Appearance</h3>
+        <div className="settings-panel__corner-radius">
+          <label htmlFor="workspace-panel-corner-radius">
+            <span>Panel Corner Radius</span>
+            <strong>{preferences.panelRadius} px</strong>
+          </label>
+          <input
+            id="workspace-panel-corner-radius"
+            type="range"
+            min={0}
+            max={24}
+            step={1}
+            value={preferences.panelRadius}
+            aria-label="Panel corner radius"
+            onChange={(event) =>
+              updatePreferences({
+                panelRadius: Number(event.target.value),
+              })
+            }
+          />
+          <div className="settings-panel__corner-radius-scale">
+            <span>Square · 0 px</span>
+            <span>Rounded · 24 px</span>
+          </div>
+        </div>
+
         <button
           type="button"
           onClick={() => openPanel("core", "theme-colors")}

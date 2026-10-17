@@ -554,6 +554,7 @@ export function WorkspaceShell() {
   const colorStyle = {
     "--workspace-scale": preferences.scale,
     "--workspace-font-size": `${preferences.fontSize}px`,
+    "--workspace-panel-radius": `${preferences.panelRadius}px`,
     ...(preferences.colorOverrides.page
       ? { "--override-page": preferences.colorOverrides.page }
       : {}),

@@ -74,6 +74,7 @@ function createDefaultWorkspace(): WorkspaceState {
       fontFamily: "system",
       themePreset: "neutral",
       colorOverrides: {},
+      panelRadius: 8,
       panelMenu: {
         moduleOrder: ["core", "demo"],
         hiddenModuleIds: [],
@@ -327,6 +328,48 @@ function testPinkSparkleThemePresetSurvivesNormalization() {
     "chronogit theme preset survives normalization",
   );
 }
+
+
+function testPanelRadiusPersistence() {
+  const persisted = basePersistedWorkspace();
+  const preferences = persisted.preferences as Record<string, unknown>;
+
+  preferences.panelRadius = 16;
+  assertEqual(
+    load(persisted).state.preferences.panelRadius,
+    16,
+    "custom panel radius persists",
+  );
+
+  preferences.panelRadius = 999;
+  assertEqual(
+    load(persisted).state.preferences.panelRadius,
+    24,
+    "radius clamps to 24",
+  );
+
+  preferences.panelRadius = -10;
+  assertEqual(
+    load(persisted).state.preferences.panelRadius,
+    0,
+    "radius clamps to zero",
+  );
+
+  preferences.panelRadius = "invalid";
+  assertEqual(
+    load(persisted).state.preferences.panelRadius,
+    8,
+    "invalid radius defaults to eight",
+  );
+
+  delete preferences.panelRadius;
+  assertEqual(
+    load(persisted).state.preferences.panelRadius,
+    8,
+    "legacy workspaces retain eight-pixel radius",
+  );
+}
+
 
 function testUnknownThemePresetRepairsToNeutral() {
   const persisted = basePersistedWorkspace();
@@ -696,6 +739,7 @@ function main() {
   testLegacyWorkspaceGetsEmptyPresentationMemory();
   testValidPresentationMemorySurvivesNormalization();
   testPinkSparkleThemePresetSurvivesNormalization();
+  testPanelRadiusPersistence();
   testUnknownThemePresetRepairsToNeutral();
   testSchemaTwoCoreLayoutReceivesGenericCameraDefaults();
   testInvalidGenericCameraValuesRepairDeterministically();

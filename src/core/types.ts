@@ -84,6 +84,7 @@ export type WorkspacePreferences = {
     | "pink-sparkle"
     | "chronogit";
   colorOverrides: Partial<WorkspaceColorTokens>;
+  panelRadius: number;
   panelMenu: PanelMenuPreferences;
   frameControls: WorkspaceFrameControlPreferences;
   panelViews: WorkspacePanelViewPreferences;

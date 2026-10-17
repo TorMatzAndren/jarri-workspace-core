@@ -279,6 +279,9 @@ function normalizePreferences(
     fontFamily,
     themePreset,
     colorOverrides: normalizeColorOverrides(raw.colorOverrides),
+    panelRadius: clamp(
+      Math.round(finiteNumber(raw.panelRadius, 8)), 0, 24,
+    ),
     panelMenu: normalizePanelMenuPreferences(raw.panelMenu),
     frameControls: normalizeFrameControlPreferences(raw.frameControls),
     panelViews,
