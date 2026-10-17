@@ -239,7 +239,8 @@ function normalizePreferences(
     raw.themePreset === "contrast" ||
     raw.themePreset === "blueprint" ||
     raw.themePreset === "pink-sparkle" ||
-    raw.themePreset === "chronogit"
+    raw.themePreset === "chronogit" ||
+    raw.themePreset === "dashboard-night"
       ? raw.themePreset
       : "neutral";
 

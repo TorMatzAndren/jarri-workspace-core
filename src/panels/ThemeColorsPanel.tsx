@@ -26,6 +26,7 @@ const themePresetOptions: Array<WorkspaceSelectOption<
   { value: "blueprint", label: "Blueprint" },
   { value: "pink-sparkle", label: "Pink Sparkle" },
   { value: "chronogit", label: "ChronoGit" },
+  { value: "dashboard-night", label: "Dashboard Night (UX Planet)" },
 ];
 
 export function ThemeColorsPanel({
@@ -71,6 +72,14 @@ export function ThemeColorsPanel({
             }
           />
         </label>
+        {preferences.themePreset === "dashboard-night" ? (
+          <p className="dashboard-night-attribution">
+            Dashboard Night (UX Planet) — community theme contributed
+            by Sh0ken (Kenny). Original palette preserved from his Jarri theme
+            file. Suggested panel corner radius: 16 px; your radius
+            setting remains independent.
+          </p>
+        ) : null}
       </section>
 
       <section className="settings-panel__section settings-panel__section--colors">

@@ -371,6 +371,28 @@ function testPanelRadiusPersistence() {
 }
 
 
+function testDashboardNightThemePresetSurvivesNormalization() {
+  const persisted = basePersistedWorkspace();
+  const preferences = persisted.preferences as Record<string, unknown>;
+
+  preferences.themePreset = "dashboard-night";
+  preferences.panelRadius = 12;
+
+  const result = load(persisted);
+
+  assertEqual(
+    result.state.preferences.themePreset,
+    "dashboard-night",
+    "Dashboard Night survives normalization",
+  );
+
+  assertEqual(
+    result.state.preferences.panelRadius,
+    12,
+    "Dashboard Night does not replace custom radius",
+  );
+}
+
 function testUnknownThemePresetRepairsToNeutral() {
   const persisted = basePersistedWorkspace();
   const preferences = persisted.preferences as Record<string, unknown>;
@@ -740,6 +762,7 @@ function main() {
   testValidPresentationMemorySurvivesNormalization();
   testPinkSparkleThemePresetSurvivesNormalization();
   testPanelRadiusPersistence();
+  testDashboardNightThemePresetSurvivesNormalization();
   testUnknownThemePresetRepairsToNeutral();
   testSchemaTwoCoreLayoutReceivesGenericCameraDefaults();
   testInvalidGenericCameraValuesRepairDeterministically();

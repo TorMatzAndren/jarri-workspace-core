@@ -82,7 +82,8 @@ export type WorkspacePreferences = {
     | "contrast"
     | "blueprint"
     | "pink-sparkle"
-    | "chronogit";
+    | "chronogit"
+    | "dashboard-night";
   colorOverrides: Partial<WorkspaceColorTokens>;
   panelRadius: number;
   panelMenu: PanelMenuPreferences;

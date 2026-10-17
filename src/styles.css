@@ -221,6 +221,41 @@ button:disabled {
   --font-family-active: var(--font-family-compact);
 }
 
+/*
+ * Dashboard Night (UX Planet)
+ * Community theme contributed by Sh0ken (Kenny).
+ * Source: dashboard-night-ux-planet.jarri-theme.json
+ * Original semantic palette retained without modification.
+ */
+.workspace-shell[data-theme-preset="dashboard-night"] {
+  color-scheme: dark;
+  --theme-page: #060607;
+  --theme-canvas: #000000;
+  --theme-panel: #161618;
+  --theme-panel-header: #1f1f23;
+  --theme-text: #f4f2fa;
+  --theme-muted: #8f8ba0;
+  --theme-border: #2c2b33;
+  --theme-button: #222127;
+  --theme-control: #1c1b21;
+  --theme-menu: #1a1a1e;
+  --theme-shell: var(--theme-panel);
+  --theme-shell-muted: var(--theme-page);
+  --theme-border-strong: color-mix(
+    in srgb, var(--theme-border) 70%, var(--theme-text) 30%
+  );
+  --theme-button-hover: color-mix(
+    in srgb, var(--theme-button) 82%, var(--theme-text) 18%
+  );
+}
+
+.dashboard-night-attribution {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
 .workspace-shell[data-theme-preset="graphite"] {
   --theme-page: #1b1a17;
   --theme-shell: #28251f;
