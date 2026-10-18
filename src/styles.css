@@ -4524,11 +4524,18 @@ code {
     "heading heading heading"
     "display layout surfaces"
     "display clock surfaces";
-  grid-template-columns: repeat(3, minmax(min-content, 1fr));
+  grid-template-columns: minmax(16em, 0.9fr) minmax(24em, 1.3fr) minmax(20em, 1fr);
   grid-template-rows: auto auto auto;
   overflow-x: auto;
   align-items: start;
   gap: 12px;
+  container: settings-interface / inline-size;
+  --settings-control-height: 2.25em;
+  --settings-control-radius: 6px;
+  --settings-control-padding-inline: 0.6em;
+  --settings-control-font-size: 1em;
+  --settings-control-gap: 0.65em;
+  --settings-stepper-button-width: 2.25em;
 }
 
 .settings-panel__section--interface > h3 {
@@ -4555,7 +4562,99 @@ code {
 }
 
 .settings-panel__group label {
-  grid-template-columns: minmax(0, 0.65fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(10.5em, 0.8fr) minmax(0, 1.2fr) auto;
+  align-items: center;
+  column-gap: var(--settings-control-gap);
+  row-gap: 0.35em;
+}
+
+/* Layout and Clock: stable labels, controls and value positions. */
+.settings-panel__group--layout > label,
+.settings-panel__group--clock > label {
+  grid-template-columns: 12.5em minmax(0, 1fr) 4.5em;
+}
+
+/* Numeric values never resize the adjacent control. */
+.settings-panel__group--layout > label > strong,
+.settings-panel__group--clock > label > strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Controls always occupy the middle column. */
+.settings-panel__group--layout > label > .workspace-select,
+.settings-panel__group--layout > label > .workspace-number-input,
+.settings-panel__group--clock > label > .workspace-select,
+.settings-panel__group--clock > label > .workspace-number-input {
+  grid-column: 2;
+  min-width: 0;
+}
+
+/* Keep units and current values aligned at the right edge. */
+.settings-panel__group--layout > label > strong,
+.settings-panel__group--clock > label > strong {
+  grid-column: 3;
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.settings-panel__group .workspace-select__trigger,
+.settings-panel__group .workspace-number-input {
+  width: 100%;
+  min-width: 0;
+  height: var(--settings-control-height);
+  min-height: var(--settings-control-height);
+  border-radius: var(--settings-control-radius);
+  font-size: var(--settings-control-font-size);
+}
+
+.settings-panel__group .workspace-select__trigger {
+  padding-inline: var(--settings-control-padding-inline);
+}
+
+.settings-panel__group .workspace-number-input input {
+  min-height: 0;
+  padding-inline: var(--settings-control-padding-inline);
+  font-size: inherit;
+}
+
+.settings-panel__group .workspace-number-input__buttons {
+  grid-template-columns: repeat(2, var(--settings-stepper-button-width));
+}
+
+.settings-panel__group input[type="checkbox"] {
+  width: 1.05em;
+  height: 1.05em;
+  margin: 0;
+  justify-self: start;
+  align-self: center;
+  accent-color: var(--color-text);
+}
+
+.settings-panel__group .workspace-range {
+  min-height: var(--settings-control-height);
+  align-self: center;
+}
+
+.settings-panel__group > label > strong {
+  font-size: var(--settings-control-font-size);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.settings-panel__group--display .settings-stepper {
+  display: grid;
+  grid-template-columns: repeat(2, var(--settings-stepper-button-width));
+  gap: var(--settings-control-gap);
+}
+
+.settings-panel__group--display .settings-stepper button {
+  width: var(--settings-stepper-button-width);
+  height: var(--settings-control-height);
+  min-height: var(--settings-control-height);
+  padding: 0;
+  border-radius: var(--settings-control-radius);
+  font-size: var(--settings-control-font-size);
+  line-height: 1;
 }
 
 .settings-panel__group--surfaces {
@@ -4584,7 +4683,7 @@ code {
 
 .settings-surface-grid {
   display: grid;
-  grid-template-columns: minmax(6.25em, 1fr) 4.75em 4.75em;
+  grid-template-columns: minmax(6.25em, 1fr) repeat(2, 7em);
   min-width: max-content;
   align-items: center;
   gap: 7px;
@@ -4601,8 +4700,40 @@ code {
 }
 
 .settings-surface-grid .workspace-number-input {
+  --settings-stepper-button-width: 1.65em;
   width: 100%;
   min-width: 0;
+  height: var(--settings-control-height);
+  min-height: var(--settings-control-height);
+  border-radius: var(--settings-control-radius);
+  font-size: var(--settings-control-font-size);
+}
+
+.settings-surface-grid .workspace-number-input input {
+  min-height: 0;
+  padding-inline: var(--settings-control-padding-inline);
+}
+
+@container settings-interface (max-width: 36rem) {
+  .settings-panel__group:not(.settings-panel__group--surfaces) > label {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0.35em;
+  }
+
+  .settings-panel__group:not(.settings-panel__group--surfaces) > label > span:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .settings-panel__group:not(.settings-panel__group--surfaces) > label > .workspace-select,
+  .settings-panel__group:not(.settings-panel__group--surfaces) > label > .workspace-number-input,
+  .settings-panel__group:not(.settings-panel__group--surfaces) > label > .settings-stepper,
+  .settings-panel__group:not(.settings-panel__group--surfaces) > label > .workspace-range {
+    grid-column: 1;
+  }
+
+  .settings-panel__group:not(.settings-panel__group--surfaces) > label > strong {
+    grid-column: 2;
+  }
 }
 
 .settings-panel__visually-hidden {

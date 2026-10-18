@@ -115,7 +115,7 @@ for (const [declaration, description] of [
   ["grid-template-columns: 3.5em repeat(7, minmax(0, 1fr));", "Calendar week metadata column scales with its text"],
   ["min-height: 1.75em;", "File Browser text rows reserve font-relative height"],
   ["grid-template-columns: repeat(2, 1.75em);", "Numeric control buttons reserve font-relative width"],
-  ["grid-template-columns: repeat(3, minmax(min-content, 1fr));", "Settings keeps three intrinsic tracks inside its authored topology"],
+  ["grid-template-columns: minmax(16em, 0.9fr) minmax(24em, 1.3fr) minmax(20em, 1fr);", "Settings reserves font-relative space for Display, Layout and System Surfaces"],
 ]) {
   assert.ok(styles.includes(declaration), description);
 }

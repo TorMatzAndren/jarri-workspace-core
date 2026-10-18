@@ -59,8 +59,8 @@ assert.match(
 );
 assert.match(
   styles,
-  /\.settings-panel__section--interface\s*\{[^}]*grid-template-areas:\s*"heading heading heading"\s*"display layout surfaces"\s*"display clock surfaces";[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(min-content,\s*1fr\)\);[^}]*overflow-x:\s*auto;/s,
-  "Interface cards keep the authored three-column composition and scroll when intrinsic tracks cannot fit",
+  /\.settings-panel__section--interface\s*\{[^}]*grid-template-areas:\s*"heading heading heading"\s*"display layout surfaces"\s*"display clock surfaces";[^}]*grid-template-columns:\s*minmax\(16em,\s*0\.9fr\)\s*minmax\(24em,\s*1\.3fr\)\s*minmax\(20em,\s*1fr\);[^}]*overflow-x:\s*auto;/s,
+  "Interface cards preserve three proportioned columns and scroll when their minimum widths cannot fit",
 );
 assert.doesNotMatch(
   styles,
@@ -68,17 +68,51 @@ assert.doesNotMatch(
   "Interface semantic cards do not auto-fit or auto-fill into new topologies",
 );
 
-const settingsTopologySelector =
-  /\.settings-panel(?:\b|__|[\s.#:>+~])|\.settings-panel__group(?:\b|--)/;
 for (const atRule of ["@container", "@media"]) {
   for (const block of atRuleBlocks(styles, atRule)) {
     assert.doesNotMatch(
       block,
-      settingsTopologySelector,
-      `Settings topology is not changed by ${atRule} rules`,
+      /\.settings-panel__section--interface\s*\{|grid-template-areas:|grid-area:\s*(?:display|layout|surfaces|clock)\b/,
+      `Settings semantic card topology is not changed by ${atRule} rules`,
     );
   }
 }
+
+assert.match(
+  styles,
+  /container:\s*settings-interface\s*\/\s*inline-size/,
+  "Settings controls respond to Interface section width rather than viewport size",
+);
+assert.match(
+  styles,
+  /--settings-control-height:\s*2\.25em/,
+  "Settings defines one font-scaled control height",
+);
+assert.match(
+  styles,
+  /\.settings-panel__group \.workspace-select__trigger,\s*\.settings-panel__group \.workspace-number-input\s*\{[^}]*height:\s*var\(--settings-control-height\)[^}]*min-height:\s*var\(--settings-control-height\)/s,
+  "Workspace Select and Workspace Number Input share an explicit Settings height",
+);
+assert.match(
+  styles,
+  /\.settings-panel__group input\[type="checkbox"\]\s*\{[^}]*width:\s*1\.05em[^}]*height:\s*1\.05em[^}]*margin:\s*0/s,
+  "Settings checkboxes have consistent size and vertical alignment",
+);
+assert.match(
+  styles,
+  /@container settings-interface \(max-width:\s*36rem\)[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) auto[\s\S]*?grid-column:\s*1 \/ -1/,
+  "Settings labels stack within existing cards at narrower widths",
+);
+assert.match(
+  styles,
+  /\.settings-panel__group \.workspace-number-input__buttons\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*var\(--settings-stepper-button-width\)\)/s,
+  "Numeric stepper buttons share the same Settings hit width as the compact scale buttons",
+);
+assert.match(
+  styles,
+  /\.settings-surface-grid\s*\{[^}]*grid-template-columns:\s*minmax\(6\.25em,\s*1fr\) repeat\(2,\s*7em\)/s,
+  "System Surface coordinate controls use compact font-relative widths",
+);
 
 assert.doesNotMatch(
   settingsPanel,
