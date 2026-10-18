@@ -364,7 +364,7 @@ button:disabled {
   border-bottom-color: rgba(100, 240, 200, 0.34);
 }
 
-.workspace-shell[data-theme-preset="chronogit"] button {
+.workspace-shell[data-theme-preset="chronogit"] button:not(.workspace-shell__logo-link) {
   color-scheme: dark;
   color: var(--color-text);
   background: var(--color-button);
@@ -388,7 +388,7 @@ button:disabled {
   border-color: var(--color-border-strong);
 }
 
-.workspace-shell[data-theme-preset="chronogit"] button:hover {
+.workspace-shell[data-theme-preset="chronogit"] button:not(.workspace-shell__logo-link):hover {
   border-color: rgba(100, 240, 200, 0.65);
   background: var(--color-button-hover);
 }
@@ -1325,6 +1325,7 @@ button:disabled {
   width: var(--workspace-canvas-width, 1800px);
   height: var(--workspace-canvas-height, 1100px);
   outline: 2px solid var(--color-border-strong);
+  /* Grid contrast is independent of panel border colour. */
   background:
     linear-gradient(var(--color-border) 1px, transparent 1px),
     linear-gradient(90deg, var(--color-border) 1px, transparent 1px),
@@ -1337,6 +1338,7 @@ button:disabled {
 }
 
 .workspace-canvas__logical[data-wallpaper-rendered="true"] {
+  /* Transparent grid paint keeps the viewport wallpaper visible. */
   background:
     linear-gradient(var(--color-border) 1px, transparent 1px),
     linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
@@ -1349,6 +1351,19 @@ button:disabled {
 
 .workspace-shell[data-grid-visible="false"] .workspace-canvas__logical {
   background: var(--color-canvas);
+}
+
+/* Canvas grid paints above the wallpaper without intercepting input. */
+.workspace-shell[data-grid-visible="true"] .workspace-canvas__logical::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background-image:
+    linear-gradient(var(--color-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
+  background-size: var(--workspace-grid-size, 12px) var(--workspace-grid-size, 12px);
 }
 
 .workspace-canvas__contents {
