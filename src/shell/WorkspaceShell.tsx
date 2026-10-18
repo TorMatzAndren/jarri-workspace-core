@@ -742,6 +742,7 @@ export function WorkspaceShell() {
       style={colorStyle}
     >
       <header className="workspace-shell__header" ref={headerCaptureRef}>
+        <div className="workspace-shell__brand">
         <button
           type="button"
           className="workspace-shell__logo-link"
@@ -759,6 +760,10 @@ export function WorkspaceShell() {
             alt="Jarri Workspace"
           />
         </button>
+          <DeveloperVersionIndicator
+            openSettings={openSettingsFromDeveloperIndicator}
+          />
+        </div>
 
         <CoreOpenPanelSearch
           controller={controller}
@@ -848,10 +853,6 @@ export function WorkspaceShell() {
           >
             Settings
           </button>
-
-          <DeveloperVersionIndicator
-            openSettings={openSettingsFromDeveloperIndicator}
-          />
 
           <WorkspaceClock
             preferences={preferences.clock}

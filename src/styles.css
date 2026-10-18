@@ -867,6 +867,14 @@ button:disabled {
   background: var(--color-shell);
 }
 
+.workspace-shell__brand {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: calc(10px * var(--workspace-scale));
+  min-width: 0;
+}
+
 .workspace-shell__logo {
   display: block;
   width: auto;
