@@ -733,3 +733,36 @@ Completed history is bounded to 100 traces, aggregate keys to 100 groups, active
 Observation rows represent only active leases registered by real producers. Resource rows represent only explicit `exact-known` byte claims and include current lease reference counts. Neither empty observation nor empty claims imply zero activity or zero physical memory. Core currently has no demand source, projection store, execution registry, physical-memory provider or Core observation/resource producer. Lab's Runtime Demands and those richer provenance/event views remain application extensions until their source registries and consumers exist in Core. Runtime panel identities are `workspace-diagnostics/runtime-diagnostics`, `workspace-diagnostics/runtime-events`, and `workspace-diagnostics/runtime-inspector`; their module title is Workspace Diagnostics and catalogue category is observability. Layout loading migrates only the exact legacy `core/runtime-diagnostics`, `core/runtime-events`, and `core/runtime-inspector` identities when the target panel is registered. This preserves instance IDs, panel state (including selection channels and Events virtualization/scroll preferences), geometry, tab placement and associated surface presentation memory. Canonical and colliding legacy presentation-memory entries are both retained, with the canonical entry taking precedence. If the module is unavailable, the old identity is left for ordinary missing-panel recovery. Saved tab templates migrate those identities and retain geometry, while their existing schema continues to omit panel state. Jarri-Distribution alignment is a separate pending pre-GitHub gate.
 
 Diagnostics run in the existing React DOM host using React Profiler and the JavaScript monotonic performance clock. They introduce no native platform dependency and do not change the desktop platform support matrix. No OS process-memory measurement is available in this implementation.
+
+## Catalogue and Add Panel (Core 0.4.0)
+
+The Add Panel surface is a view over registered module and panel definitions;
+it does not own a second panel registry. Its searchable catalogue groups panels
+by registered module, supports hiding and reordering module groups, and offers
+spatial column and panel arrangement controls. Open Panel search can locate a
+registered panel across the workspace. Catalogue layout, width, lock, and
+column preferences use versioned browser `localStorage` keys; they are not
+workspace document fields and do not alter panel or tab persistence.
+
+The first-party bootstrap currently registers `core`, `workspace-diagnostics`,
+and a demonstration module. The `core` module owns generic Settings, Calendar,
+appearance, file and resource viewers, and Missing Panel recovery. Workspace
+Diagnostics owns the three runtime panels. The demonstration module is an
+example of the module and semantic projection contracts, not an application
+integration. Add Panel can only display modules registered by the running
+application.
+
+## Source Distribution and Native Boundaries
+
+The Core repository's release policy is source distribution. Its Tauri
+configuration can build local application bundles, but Core does not publish a
+binary update feed or implement binary installation/restart. Update awareness
+only reads an explicitly configured HTTPS metadata document; it does not fetch
+Git revisions or update a checkout. Distribution composition and alignment are
+handled outside this repository.
+
+The native filesystem bridge is part of the Tauri host. A separate adopted
+native-window surface implementation currently has Linux-specific code and
+no-op behavior on other targets. Treat that host as experimental and do not
+infer cross-platform native-surface support from Core's generic panel contract.
+It does not change the ordinary React panel or workspace ownership model.

@@ -1,406 +1,170 @@
 # Jarri Workspace Core
 
-Reusable cognitive workspace substrate for Jarri-style panel, module, observatory, and operator-console systems.
-
-> **Current development line:** Workspace Core 0.4.0 release candidate
-> Core 0.4.0 is under service and integration verification; it has not been tagged or published.
-
-## What Workspace Core Is
-
-Jarri Workspace Core is a reusable desktop workspace framework for building
-persistent, spatial, panel-based applications.
-
-It provides the generic workspace machinery shared by systems such as Jarri
-Workspace Lab and future Jarri-style observatories, while deliberately keeping
-domain-specific integrations outside Core.
-
-Core owns the reusable workspace substrate:
-
-- workspace tabs and logical canvases
-- panel instance behavior and geometry
-- deterministic layout persistence
-- module and panel registration
-- resource opening and presentation
-- workspace camera and spatial navigation
-- appearance and theme infrastructure
-- generic workspace controls
-- filesystem and generic media surfaces
-- projection and semantic panel contracts
-- runtime timing, observation leases, explicit resource byte evidence, and diagnostics panels
-
-Domain applications remain responsible for their own runtime truth, services,
-business logic, and specialized panels.
-
-### Application Boundary
-
-Core contains reusable workspace infrastructure, framework-owned panels, and a
-small demonstration module for exercising the module contract. Application
-integrations belong in the consuming application's repository and register
-through Core's generic module and panel interfaces. Core does not bundle
-application clients or domain modules.
-
-## Architecture
-
-Workspace Core follows a simple ownership model:
-
-    Domain services
-          ↓
-    Domain modules
-          ↓
-    Workspace Core
-          ↓
-    Projection / presentation
-
-Workspace Core does not become the source of domain truth merely because it
-displays that truth.
-
-Important architectural principles include:
-
-- deterministic behavior first
-- logical geometry is authoritative; visual scale is presentation
-- persisted state must remain repairable
-- runtime truth is not persisted as workspace truth
-- modules register capabilities instead of modifying the shell
-- panels own their body content; Workspace owns generic frame behavior
-- resource identity is distinct from presentation memory
-- advisory, truth, preflight, and temporal semantics remain explicit
-- generic infrastructure belongs in Core; domain-specific behavior does not
-
-The engineering doctrine is:
-
-    Investigate → Implement → Verify → Challenge → Document
-
-Detailed contracts live under `docs/contracts/`.
-
-## Workspace System
-
-The current Core provides:
-
-- multi-tab workspaces
-- scrollable or wrapping tab strips, optional compact tab buttons, accessible custom horizontal scrolling, and pointer-based tab reordering
-- persistent tab state
-- expandable logical workspace canvases
-- independent tab-local camera state
-- pan and zoom navigation
-- configurable canvas bounds
-- movable and resizable panels
-- panel minimization and restoration
-- deterministic focus ordering
-- persistent panel geometry
-- presentation-memory-aware panel creation
-- preferred initial geometry for content-aware resources
-- panel setup/template import and export
-- missing-panel repair behavior
-- logical whole-workspace screenshot capture
-
-Native window resizing is kept separate from logical camera position so viewport
-changes do not corrupt the user's location in workspace space.
-
-Tab-strip presentation is controlled by the persisted `tabStripOverflow`
-(`scroll` by default, or `wrap`) and `compressTabButtons` (off by default)
-workspace preferences. Reordering updates the existing `WorkspaceState.tabs`
-array through `src/core/tabOrder.ts`, preserving each tab and the active tab;
-changing display preferences leaves layout state intact. The scroll mode uses a
-custom keyboard-accessible scrollbar and keeps the active tab visible. Wrap mode
-uses the same tab controls and supports multi-row drop positioning.
-
-## Module And Panel System
-
-Modules register panels through the Workspace runtime rather than hard-wiring
-them into the shell.
-
-Core currently owns these generic panel surfaces:
-
-- **Settings**
-- **Themes / Colours**
-- **Colour Picker**
-- **File Browser**
-- **Text Viewer**
-- **Image Viewer**
-- **Missing Panel** recovery surface
-- **Runtime Diagnostics**, **Runtime Events**, and **Runtime Inspector**
-
-The repository also contains a demonstration module used to exercise semantic
-panel behavior such as truth, advisory, and temporal/replay projections. Those
-demo panels are examples, not Core domain facilities.
-
-### Runtime Diagnostics Capability Inventory
-
-`src/bootstrap/workspaceRuntime.ts` registers `core` and the first-party
-`workspace-diagnostics` module with one `WorkspaceRuntime` from
-`src/core/workspaceRuntime.ts`. Runtime services remain foundational Core-owned
-services; the panels and their module definition live in
-`src/modules/workspace-diagnostics/`. `App.tsx` provides that
-same singleton to panel bodies through `WorkspaceRuntimeProvider`; the shell,
-timing engine, observation registry, resource-evidence registry, and linked
-selection service therefore share one actual runtime instance.
-
-Core records bootstrap elapsed time, synchronous panel lifecycle reconciliation time, and React Profiler
-`actualDuration` for non-diagnostics panels. Profiler durations are not
-wall-clock durations. Completed traces are retained up to 100, aggregate
-groups up to 100, active traces up to 1,000, and marks up to 100 per trace; aggregate
-statistics continue accumulating for retained groups. Runtime Events
-virtualization is opt-in and persists its scroll position in panel state.
-Normal rendering remains the default.
-
-Observation evidence is limited to active leases registered with
-`runtime.observations`; no Core panel currently registers backend, execution,
-or projection observations. Resource evidence displays only explicit
-`exact-known` byte claims from `runtime.resourceEvidence`, including lease
-reference counts. It is not process RAM, GPU memory, or a total physical memory
-measurement. Those sources are unavailable until a real Core-owned producer
-publishes them.
-
-The panel identities are `workspace-diagnostics/runtime-diagnostics`,
-`workspace-diagnostics/runtime-events`, and
-`workspace-diagnostics/runtime-inspector`. The module appears as its own
-Workspace Diagnostics catalogue group, with panels categorized as observability.
-Saved layouts migrate only the three exact legacy `core/runtime-*` identities
-when the Diagnostics module is registered, retaining panel IDs, saved state,
-geometry, tab placement, selection-channel values, and surface presentation
-memory. If the module is unavailable, normal missing-panel restoration keeps the
-legacy identity and original state recoverable. Saved tab templates migrate the
-same exact identities and preserve geometry; the existing template format does
-not store panel state. Selection is shared by channel, defaults to
-`runtime-primary`, and resolves missing bounded-history entries as stale.
-Runtime Demands, execution-registry events, projection-store provenance, and
-Lab demand/linked-selection integrations remain Lab-specific because Core has
-no corresponding registries or producers. Jarri-Distribution alignment is a
-separate pending pre-GitHub gate.
-
-Diagnostics use React DOM, React Profiler, and the host JavaScript monotonic
-performance clock. They add no native platform API dependency and do not
-expand Core's desktop platform support matrix. OS process-memory reporting is
-unavailable on every platform in this implementation.
-
-## File Browser And Resources
-
-Workspace Core contains a native Tauri-backed filesystem surface.
-
-The File Browser currently supports:
-
-- directory browsing
-- tree and content views
-- directory navigation
-- browser-root management
-- recursive bounded search
-- search cancellation
-- hidden-file handling
-- sorting
-- folder-first presentation
-- copy and cut operations
-- rename
-- delete
-- new-folder creation
-- semantic file classification
-- resource-aware opening
-
-Search is rooted in the directory the user is actually browsing rather than an
-unrelated historical root.
-
-Filesystem discovery and resource presentation are deliberately separate.
-Finding a file does not imply that Core has a suitable viewer for it.
-
-## Text Resources
-
-Text opening is content-aware rather than purely extension-driven.
-
-Known text file types can route directly to the Text Viewer, while unknown or
-extensionless files can be probed before routing. Files whose sampled bytes are
-plausibly textual can therefore be opened even when Linux gives them no useful
-filename extension.
-
-Binary resources are not forced through the Text Viewer.
-
-The Text Viewer supports bounded reading and visibly reports truncation when the
-resource exceeds the safe read boundary.
-
-## Image Resources
-
-Core includes a generic Image Viewer for local image resources.
-
-Image presentation supports:
-
-- resource-aware image routing
-- content-sensitive preferred opening geometry
-- sensible minimum presentation size for tiny images
-- bounded initial sizing for large images
-- local wheel interaction owned by the viewer
-
-Resource-specific preferred geometry does not overwrite the user's remembered
-presentation preference for unrelated resources.
-
-## Appearance
-
-Workspace appearance is controlled through Core-owned theme infrastructure.
-
-Current facilities include:
-
-- dark and light modes
-- multiple theme presets
-- semantic colour tokens
-- advanced colour overrides
-- adjustable font family
-- adjustable font size
-- workspace scale controls
-- grid visibility
-- workspace-native select controls
-- workspace-native numeric controls
-- workspace-native colour selection
-
-Generic controls are themed by Workspace rather than falling back to unrelated
-native browser/WebKit colours.
-
-The repository includes theme presets used to verify that generic Workspace
-surfaces remain theme-correct across substantially different palettes.
-
-## Persistence
-
-Workspace state is persisted deterministically and repaired on load where
-possible.
-
-Persisted state includes presentation concerns such as:
-
-- tabs
-- panel instances
-- committed panel geometry
-- canvas bounds
-- camera state
-- appearance preferences
-- surface presentation memory
-- focus ordering
-
-Transient runtime truth remains outside the persistence model.
-
-Unknown or temporarily unavailable panels degrade into a recoverable missing
-state rather than destroying their persisted identity.
-
-## Resource Opening
-
-Core exposes a generic resource-opening path so panels and modules can request
-that another resource be presented without directly owning shell behavior.
-
-Resource opening separates:
-
-- resource identity
-- preferred panel/module routing
-- preferred initial geometry
-- existing-resource reuse
-- remembered presentation geometry
-
-This allows File Browser, semantic links, and future modules to share the same
-workspace-level presentation machinery.
-
-## Technology
-
-The current implementation uses:
-
-- React 19
-- TypeScript 5.8
-- Vite 7
-- Tauri 2
-- Rust for native host/filesystem operations
-
-Core intentionally avoids introducing a heavy application state-management
-framework where deterministic local ownership is sufficient.
-
-## Development
-
-Install JavaScript dependencies:
-
-    npm install
-
-Run the frontend development server:
-
-    npm run dev -- --host 127.0.0.1
-
-Typecheck:
-
-    npm run typecheck
-
-Run the Core regression suite:
-
-    npm run test:core
-
-Build the production frontend:
-
-    npm run build
-
-Additional native-control guards are available through:
-
-    npm run test:native-number-guard
-    npm run test:native-select-guard
-
-### Native Linux development
-
-Workspace Core is a Tauri desktop application and therefore also requires the
-appropriate Rust/Tauri and Linux native development environment.
-
-A clean-machine Linux installation procedure will be documented after the
-0.3.0 release-candidate reproducibility test. Until that procedure has been
-verified from a fresh machine, this README intentionally does not claim an
-untested distribution-specific dependency recipe.
-
-## Repository Structure
-
-    src/core/        Workspace contracts, state, persistence, controllers,
-                     resource semantics, geometry and generic primitives
-
-    src/workspace/   Workspace canvas, panel frame and projection hosting
-
-    src/panels/      Core-owned generic panels and demonstration panels
-
-    src/bootstrap/   Runtime/module bootstrap
-
-    src-tauri/       Native Tauri/Rust host and filesystem boundary
-
-    docs/contracts/  Canonical architecture contracts
-
-    docs/devlog/     Chronological implementation records
-
-    docs/investigations/
-                     Architectural investigations and historical analysis
-
-## Current 0.3.0 Release-Candidate Focus
-
-The 0.3.0 development line has concentrated on promoting mature generic
-Workspace behavior into Core and hardening it as reusable infrastructure.
-
-Major areas include:
-
-- semantic frame architecture
-- settings and presentation memory
-- deterministic panel placement
-- logical workspace screenshots
-- tab-local viewport/camera state
-- theme and colour infrastructure
-- workspace-native controls
-- spatial navigation
-- generic image presentation
-- native filesystem browsing
-- recursive filesystem search
-- semantic/content-aware text resources
-- content-aware preferred panel sizing
-- native resize/camera hardening
-
-The next release gate is reproducibility: cloning the public repositories onto
-a separate Linux machine and proving that Workspace Core and Workspace Lab can
-be built and run from repository state rather than relying on local development
-history.
-
-## Non-Goals
-
-Workspace Core is not intended to be:
-
-- a webpage dashboard framework
-- a traditional IDE clone
-- a source of application/domain truth
-- a dumping ground for Jarri-specific integrations
-- an operating system
-- a replacement for domain services
-
-It is the reusable cognitive workspace layer on which those applications can
-project their own capabilities.
+**Your workspace, your layout.**
+
+Jarri Workspace Core is an open-source, customizable desktop
+workspace. Arrange tools, information, and applications in movable
+panels across persistent, zoomable tabs.
+
+Browse files, open text and images, use the Calendar, customize
+the appearance, and organize your tools in a workspace that
+remembers how you left it.
+
+Use the built-in panels, discover more through Add Panel, or
+extend Workspace with modules of your own.
+
+**Core provides the foundation. You decide what to build on it.**
+
+![Jarri Workspace Core desktop workspace](docs/workspace-core-demo.png)
+
+> **Version 0.4.0 — release candidate.**
+> This version is under final verification and has not yet
+> been tagged or published. Core is distributed as adaptable
+> source code, not as an automatically updated binary.
+
+[What's new in 0.4.0](docs/releases/0.4.0.md) ·
+[Changelog](CHANGELOG.md) ·
+[Architecture documentation](docs/contracts/000001-workspace-core-architecture.md)
+
+## How the workspace works
+
+A workspace contains **tabs**. Each tab has a logical canvas that can be panned
+and zoomed independently. The canvas contains **frames**, which users can move,
+resize, minimize, restore, and arrange. A frame hosts a **panel** such as the
+File Browser or Calendar. **Modules** register panels with the Workspace runtime
+so the shell can discover, create, restore, and repair them.
+
+For example, keep a File Browser and Text Viewer open in one tab, then create a
+separate tab for a Calendar and Runtime Diagnostics. Tabs, panel geometry,
+camera position, appearance preferences, and panel presentation state are saved
+locally and restored on launch.
+
+## Included in 0.4.0
+
+- **Workspace navigation:** multiple persistent tabs, pan and zoom, configurable
+  canvas bounds, movable/resizable/minimizable frames, and whole-workspace or
+  individual-frame screenshots. Save and restore reusable tab templates when
+  you want to reuse a panel setup.
+- **Tab controls:** choose a horizontally scrollable or wrapping tab strip,
+  optionally compress tab buttons, and drag tabs to reorder them. These options
+  are in Settings and persist with workspace preferences.
+- **Panel discovery:** Add Panel opens a searchable catalogue of registered
+  modules and panels. Search across the workspace can also open a panel by name.
+  Catalogue groups can be organized and its spatial layout adjusted; those
+  catalogue controls are stored in browser local storage.
+- **Everyday panels:** Settings, Calendar, Themes / Colours, Colour Picker,
+  File Browser, Text Viewer, Image Viewer, and a recoverable Missing Panel
+  surface. A demonstration module exercises semantic panel projections.
+- **Files and resources:** browse and search the local filesystem, create
+  folders, rename, delete, copy or cut items, and open supported text and image
+  resources in Core viewers. Filesystem search is bounded and starts from the
+  directory being browsed. Text reading is bounded; large text shows a
+  truncation notice.
+- **Appearance:** light/dark/system themes and presets, semantic color
+  overrides, font and scale options, adjustable panel corners, optional glass
+  effects, and an optional configurable gradient canvas wallpaper. The Dashboard
+  Night palette is a community contribution and currently has no separate
+  light-mode palette.
+- **Workspace Diagnostics:** Runtime Diagnostics, Runtime Events, and Runtime
+  Inspector expose Core runtime timing, selection, observation leases, and
+  explicitly registered resource-byte evidence where available. This is
+  instrumentation, not a process or GPU memory monitor. Core currently has no
+  backend observation producer, so an empty observation list does not mean
+  there is no backend activity.
+
+## Customization and extension
+
+Use **Settings** for workspace layout preferences and **Themes / Colours** for
+appearance. Add Panel shows the panels registered by the running application.
+Core stores workspace state separately from runtime truth and keeps unknown
+panels as recoverable missing entries when their module is unavailable.
+
+Developers can register modules and panel definitions through the Workspace
+runtime, provide panel components and state normalization, and use generic
+resource-opening, semantic projection, lifecycle observation, and persistence
+contracts. The consuming application remains responsible for its services,
+domain truth, and domain-specific panels; Core does not include Workspace Lab
+or application integrations.
+
+## Stable behavior and boundaries
+
+Core's tab, panel, resource, theme, persistence, and catalogue paths are
+implemented and covered by repository checks, but 0.4.0 remains a release
+candidate pending integration and native release review. Specific limits:
+
+- List virtualization is an opt-in presentation utility, not automatic
+  virtualization of all panels. Runtime Events exposes an opt-in history mode;
+  normal rendering is the default. Virtualization does not determine how many
+  records a producer retains or materializes.
+- Runtime lifecycle coordination observes panel membership and presentation;
+  it does not suspend services, discard projections, or unmount offscreen
+  panels as a new policy.
+- Native filesystem access and the application host use Tauri. The separate
+  adopted-window native surface host has Linux-specific implementation and
+  remains experimental; it does not define a cross-platform plugin system.
+- The update-awareness UI checks a configured source-release metadata endpoint
+  only when requested. It can link to release information; it does not download
+  or install a binary update.
+- This repository is source-only as a release/distribution policy. Tauri
+  packaging can produce local bundles, but no Core binary feed or automatic
+  binary upgrade is provided here.
+
+## Prerequisites and local development
+
+Core is a source repository rather than a prebuilt application download. The
+frontend uses Node.js/npm, React 19, TypeScript 5.8, and Vite 7. Running the
+desktop host also requires Rust (the Tauri crate declares Rust 1.77.2 or newer),
+the Tauri 2 platform prerequisites, and native libraries required by the target.
+On Linux, the native dependencies include WebKitGTK and Cairo; see the official
+[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for the
+platform-specific system packages. A clean-machine dependency recipe has not
+been validated for this release candidate.
+
+From the repository root:
+
+```sh
+npm install
+npm run dev -- --host 127.0.0.1
+```
+
+The Vite server is useful for frontend work. Native commands such as filesystem
+access need the Tauri host, which starts Vite on the configured port:
+
+```sh
+npm run tauri -- dev
+```
+
+Build and typecheck the frontend with:
+
+```sh
+npm run typecheck
+npm run build
+```
+
+Run the Core regression suite with `npm run test:core`. The update-awareness,
+appearance-contract, screenshot-contract, architecture-boundary, and native
+control guards are available as `npm run test:update-awareness`,
+`npm run test:appearance-contracts`,
+`npm run test:workspace-screenshot-contract`,
+`npm run test:architecture-boundary`, `npm run test:native-number-guard`, and
+`npm run test:native-select-guard`.
+
+## Documentation
+
+- [0.4.0 release notes](docs/releases/0.4.0.md) — user-facing summary and
+  limitations.
+- [Changelog](CHANGELOG.md) — changes by release.
+- [Workspace architecture contract](docs/contracts/000001-workspace-core-architecture.md)
+  — runtime ownership, panels, navigation, native boundaries, and Diagnostics.
+- [Layout persistence contract](docs/contracts/000003-layout-persistence-contract.md)
+  — saved state, repair, and migration behavior.
+- [Panel lifecycle contract](docs/contracts/000005-panel-lifecycle-contract.md)
+  — implemented observations and explicit lifecycle limits.
+- [Update awareness contract](docs/contracts/000004-update-awareness-contract.md)
+  — source metadata format and update-status behavior.
+- [Source audit](docs/investigations/000001-workspace-core-source-audit.md)
+  — historical architectural investigation; it records the context at the time
+  it was written and is not a current capability list.
 
 ## License
 

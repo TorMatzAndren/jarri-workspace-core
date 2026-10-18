@@ -24,4 +24,22 @@ The metadata document is JSON with this shape:
 
 `releaseUrl` is optional and, when supplied, must be HTTPS. Versions use Semantic Versioning. Failed HTTP/JSON/schema checks report `error`; a rejected request reports `offline` when the browser reports an offline connection and otherwise `error`. Successful checks update `lastSuccessfulCheck`.
 
-This contract only reports status. It does not fetch Git data, change source files or Git state, install dependencies, build, or restart the application. Future UI can subscribe to `updateAwareness` from `src/bootstrap/updateAwareness.ts` and call `refresh()` on an explicit user action or controlled schedule.
+This contract only reports status. It does not fetch Git data, change source files or Git state, install dependencies, build, or restart the application.
+
+## Current Core presentation
+
+`src/panels/UpdateSettingsSection.tsx` subscribes to the runtime-only service
+and exposes a **Check for updates** button. Core does not schedule a check
+automatically. The shell's version indicator opens Settings at the Updates
+section; it shows an availability marker only after a confirmed available
+status. Settings displays the provider state and, when supplied by the metadata,
+an external release-information link. There is no release-message body,
+dismissible notification, or in-app update prompt in the current Core UI.
+
+The 0.4.0 user-facing release copy lives in
+[`docs/releases/0.4.0.md`](../releases/0.4.0.md). Once a release is genuinely
+published, the configured metadata `releaseUrl` can point to its published
+release page or notes. Until then, no release is advertised by this mechanism.
+The metadata endpoint is deployment configuration, not a repository-local
+announcement. The provider capabilities explicitly disable installation and
+restart, and the UI preserves the existing Settings navigation behavior.

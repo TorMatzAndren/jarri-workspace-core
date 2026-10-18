@@ -2,70 +2,113 @@
 
 ## v0.4.0 — Release Candidate (unreleased)
 
-Workspace Core 0.4.0 continues the source-distributed,
-AI-adaptable Core architecture. This development candidate
-has not been tagged or published.
+Workspace Core 0.4.0 is a source-only release candidate. It has not been tagged
+or published. See [the user-facing release notes](docs/releases/0.4.0.md).
 
-### Workspace navigation and presentation
+### Workspace navigation and discovery
 
-- Added cross-tab Open Panel search.
-- Added a searchable spatial Add Panel catalogue with
-  viewport-anchored presentation, dragging, resizing,
-  and persistent catalogue layout controls.
-- Added configurable panel corner radius, persisted
-  with Workspace preferences.
-- Added Dashboard Night (UX Planet), a community theme
-  contributed by **Sh0ken (Kenny)**.
-  The supplied palette is dark-only; independent
+- Added workspace-wide Open Panel search and a searchable Add Panel catalogue
+  for registered modules and panels.
+- Added spatial catalogue controls, viewport-anchored placement, resizing,
+  module-group rearrangement, manual column layout, and saved catalogue
+  preferences. Catalogue layout uses browser local storage, separately from the
+  persisted workspace document.
+- Added configurable tab-strip overflow: horizontal scroll or multi-row wrap,
+  optional compact tab buttons, accessible horizontal scrollbar behavior, and
+  pointer-based tab reordering. Tab ordering reuses the existing tabs array and
+  preserves active tab identity.
+- Added a persistent panel corner-radius preference and moved its control into
+  Themes / Colours.
+- Added Dashboard Night (UX Planet), a community theme contributed by
+  **Sh0ken (Kenny)**. The supplied palette is dark-only; independent
   Light/System variations have not been implemented.
+- Added the Core Calendar panel with ISO week labels, editable calendar items,
+  and calendar copy workflows. The Core clock can open the Calendar.
+- Added generic external-URL opening support through Core's host integration.
+- Added complete logical Workspace screenshot capture and individual frame
+  screenshot capability, with image clipboard publication owned by Workspace.
+- Added relative geometry hardening for persisted panels and panel interaction
+  improvements around wheel ownership and frame typography.
+- Added an adopted native-surface host and lifecycle cleanup/recovery paths.
+  This integration is experimental and currently has Linux-specific
+  implementation; it is not a supported cross-platform panel plugin system.
 
 ### Appearance and workspace customization
 
-- Promoted theme-independent Glass effects from Workspace Lab,
-  including frosted surfaces, opacity, blur, saturation,
-  border intensity, and reduced-effects controls.
-- Added viewport-fixed gradient wallpapers with configurable
-  colors and angle, independent of theme selection.
-- Moved Panel Corner Radius into Themes / Colours while
-  preserving the existing rounded-frame implementation.
-- Removed obsolete Panel Menu Arrangement controls from
-  Settings, retaining catalogue organization and preferences
-  through Add Panel.
-- Preserved backwards-compatible appearance persistence
-  and existing theme behavior.
+- Added theme-independent glass appearance controls, including surface policy,
+  opacity, blur, saturation, border intensity, and reduced effects.
+- Added viewport-fixed gradient canvas wallpaper with configurable colors and
+  angle, independent of the selected theme.
+- Removed obsolete Panel Menu Arrangement Settings controls; catalogue
+  organization and preferences are available through Add Panel.
+- Preserved existing theme behavior and normalized legacy appearance values.
 
-### Runtime observation infrastructure
+### Runtime, Diagnostics, and lifecycle
 
-- Added deterministic panel-to-resource observation tracking.
-- Added lease-based, exact-known resource evidence claims
-  with explicit byte units and lifecycle tests.
-- These registries provide infrastructure for future runtime
-  integration; they do not represent physical process
-  measurements or a completed monitoring interface.
+- Added generic panel lifecycle coordination for actual workspace membership,
+  selected-tab presentation, and minimization changes. It remains observational;
+  it does not implement background-service policies or automatic offscreen
+  unmounting.
+- Added runtime timing, bounded trace and aggregate history, trace selection,
+  active observation-lease tracking, and exact-known resource-byte evidence
+  registries.
+- Promoted Runtime Diagnostics, Runtime Events, and Runtime Inspector into the
+  first-party Workspace Diagnostics module and its own Add Panel catalogue
+  group. These panels display available Core runtime evidence; Core has no
+  backend observation producer or physical memory provider.
+- Migrated the exact legacy `core/runtime-*` panel identities to
+  `workspace-diagnostics/runtime-*` when the module is registered. Layout
+  migration preserves panel IDs, state, geometry, tab placement, selection
+  channels, Events virtualization/scroll preferences, and surface presentation
+  memory. Missing-module restore retains legacy identity for recovery. Templates
+  migrate identity and geometry but continue to omit panel state.
 
-### Lifecycle and virtualization
+### Architecture and compatibility
 
-- Added generic panel lifecycle coordination.
-- Ported the opt-in Workspace virtual-list presentation
-  infrastructure from Workspace Lab.
-- Added deterministic list geometry, overscan, dynamic
-  row measurement, scroll-request handling, and tests.
-- Added a standalone development benchmark supporting
-  up to 100,000 materialized records.
-- Virtualization is a reusable presentation capability;
-  individual panels retain their own virtualization and
-  materialization policies.
-- Existing Core panels are not automatically virtualized.
+- Consolidated Core runtime services into one bootstrapped `WorkspaceRuntime`
+  shared by the shell, timing, observation, resource-evidence, and selection
+  services.
+- Added opt-in Workspace virtual-list presentation primitives with deterministic
+  geometry, overscan, dynamic row measurement, scroll requests, and a standalone
+  development benchmark supporting up to 100,000 materialized records. This is
+  a utility, not automatic virtualization or an application retention policy.
+- Kept the adopted native-surface host experimental and Linux-specific; it does
+  not expand Core's documented cross-platform support matrix.
+- Kept source distribution distinct from local Tauri bundle capability. No
+  binary feed, auto-installer, or automatic restart/update path is included.
 
-### Release verification
+### Fixes and hardening
 
-- TypeScript typecheck, Core regression tests,
-  update-awareness tests, architecture boundary tests,
-  and frontend builds passed at the preceding checkpoint.
-- Native Rust validation and 0.4.0 integration verification
-  remain release-candidate tasks.
-- No final release, tag, binary publication, or
-  distribution-format change is implied.
+- Hardened adopted native-surface occlusion and stale-window recovery, and
+  release adopted surfaces during application shutdown.
+- Separated the native-surface engine from its Tauri command boundary.
+- Added relative geometry architecture and hardened panel interaction, wheel,
+  and frame-font ownership contracts.
+- Kept tab-order updates within canonical workspace state, preserving the
+  active-tab reference.
+- Preserved legacy appearance preferences and missing-panel recovery while
+  migrating Diagnostics to its first-party module.
+
+- Restored canvas grid visibility above gradient wallpapers with a
+  noninteractive overlay, retaining the theme's border colour and configured
+  grid spacing.
+- Prevented ChronoGit's generic button styling from changing the Jarri logo
+  background.
+- Refined Settings control alignment, consistent input heights, and fixed
+  numeric value-column geometry.
+
+### Release candidate status and limitations
+
+- Runtime diagnostics show React Profiler `actualDuration` for non-diagnostics
+  panels, not wall-clock latency. Resource rows are explicit byte claims, not
+  total process RAM or GPU memory. Empty registries indicate missing producers,
+  not zero activity.
+- Runtime Events history virtualization is user-selectable and persisted per
+  panel; normal rendering remains the default. Other Core panels are not
+  automatically virtualized.
+- Clean-machine native build, desktop integration review, and separate
+  distribution-repository alignment remain release checks. No final release,
+  tag, binary publication, or distribution-format change is implied.
 
 ---
 
