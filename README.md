@@ -26,6 +26,19 @@ extend Workspace with modules of your own.
 [Changelog](CHANGELOG.md) ·
 [Architecture documentation](docs/contracts/000001-workspace-core-architecture.md)
 
+## Spatial Workspace
+
+Workspace Core supports a resizable logical canvas, independently
+positioned panels, negative coordinates, camera navigation, and zoom.
+
+Preserve Sizes organization produces compact panel clusters that
+approximate the logical canvas aspect ratio without resizing the
+canvas or individual panels.
+
+See [Spatial Workspace Architecture](docs/spatial-workspace.md)
+for the coordinate model, geometry contracts, persistence,
+verification, and future work.
+
 ## How the workspace works
 
 A workspace contains **tabs**. Each tab has a logical canvas that can be panned
