@@ -1,5 +1,8 @@
 import { normalizeGeometry } from "./layoutEngine";
-import { resolvePanelCreationGeometry } from "./workspaceController";
+import {
+  resolvePanelCreationGeometry,
+  shouldPersistWorkspaceAfterLoad,
+} from "./workspaceController";
 import type { PanelGeometry, PanelInstance } from "./types";
 
 function assertEqual<T>(actual: T, expected: T, message: string) {
@@ -19,6 +22,38 @@ function assertGeometry(
   assertEqual(actual.y, expected.y, `${message} y`);
   assertEqual(actual.width, expected.width, `${message} width`);
   assertEqual(actual.height, expected.height, `${message} height`);
+}
+
+function testRepairedInitialLoadWaitsForUserMutationBeforeSaving() {
+  const initialState = {} as never;
+  assertEqual(
+    shouldPersistWorkspaceAfterLoad(initialState, initialState, true),
+    false,
+    "repaired normalized state is not silently persisted on mount",
+  );
+  assertEqual(
+    shouldPersistWorkspaceAfterLoad({} as never, initialState, true),
+    true,
+    "an explicit workspace state change is persisted after repaired load",
+  );
+  assertEqual(
+    shouldPersistWorkspaceAfterLoad(initialState, initialState, false),
+    true,
+    "clean initial load retains normal persistence behavior",
+  );
+}
+
+function testGeometryNormalizationKeepsCreationDefaultAndAllowsPersistedSignedMode() {
+  const input = { ...canonicalGeometry, x: -24, y: -36 };
+  const defaultGeometry = normalizeGeometry(input, canonicalGeometry);
+  const signedGeometry = normalizeGeometry(input, canonicalGeometry, {
+    allowNegativePosition: true,
+  });
+
+  assertEqual(defaultGeometry.x, 0, "default geometry normalization keeps its nonnegative creation contract");
+  assertEqual(defaultGeometry.y, 0, "default geometry normalization keeps its nonnegative creation contract");
+  assertEqual(signedGeometry.x, -24, "signed persistence normalization retains negative x");
+  assertEqual(signedGeometry.y, -36, "signed persistence normalization retains negative y");
 }
 
 const canvasBounds = {
@@ -333,6 +368,8 @@ function testPreferredGeometryDoesNotClampOrdinaryCreation() {
 }
 
 function main() {
+  testRepairedInitialLoadWaitsForUserMutationBeforeSaving();
+  testGeometryNormalizationKeepsCreationDefaultAndAllowsPersistedSignedMode();
   testExplicitPositionOwnsFirstSummon();
   testRememberedPositionSurvivesPreferredOpeningSize();
   testRememberedGeometryNeedsNoExplicitPosition();

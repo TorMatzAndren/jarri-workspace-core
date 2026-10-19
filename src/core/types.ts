@@ -62,6 +62,8 @@ export type WorkspacePreferences = {
   showGrid: boolean;
   gridSize: number;
   panelSpacing: number;
+  organizeMode: "preserve" | "uniform";
+  organizeGapUnits: number;
   workspaceZoomIncrement: number;
   workspaceZoomAnchorMode:
     | "viewport-center"
@@ -175,6 +177,13 @@ export type WorkspaceState = {
   registryVersion?: string;
 };
 
+export type WorkspaceOrganizeSnapshot = {
+  canvasBounds: WorkspaceCanvasBounds;
+  canvasScale: number;
+  canvasCamera: WorkspaceCanvasCamera;
+  geometries: Record<string, PanelGeometry>;
+};
+
 export type WorkspaceTab = {
   id: string;
   title: string;
@@ -182,6 +191,8 @@ export type WorkspaceTab = {
   canvasScale: number;
   canvasCamera: WorkspaceCanvasCamera;
   panels: PanelInstance[];
+  organizeSnapshot?: WorkspaceOrganizeSnapshot | null;
+  organizeActive?: boolean;
   createdAt: string;
   updatedAt: string;
 };

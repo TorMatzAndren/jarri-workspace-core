@@ -18,6 +18,7 @@ import type {
   WorkspaceCanvasAppearancePreferences,
   WorkspaceColorTokens,
   WorkspaceGlassAppearancePreferences,
+  WorkspaceOrganizeSnapshot,
   WorkspacePanelViewPreferences,
   WorkspacePreferences,
   WorkspaceState,
@@ -308,6 +309,12 @@ function normalizePreferences(
       0,
       240,
     ),
+    organizeMode: raw.organizeMode === "uniform" ? "uniform" : "preserve",
+    organizeGapUnits: clamp(
+      Math.round(finiteNumber(raw.organizeGapUnits, 0)),
+      0,
+      4,
+    ),
     workspaceZoomIncrement: clamp(
       finiteNumber(raw.workspaceZoomIncrement, 10),
       0.1,
@@ -542,11 +549,11 @@ function normalizeCanvasBounds(
       top: Math.min(current.top, panel.geometry.y),
       right: Math.max(
         current.right,
-        panel.geometry.x + panel.geometry.width + 48,
+        panel.geometry.x + panel.geometry.width,
       ),
       bottom: Math.max(
         current.bottom,
-        panel.geometry.y + panel.geometry.height + 48,
+        panel.geometry.y + panel.geometry.height,
       ),
     }),
     {
@@ -609,7 +616,7 @@ function normalizePanelGeometry(
     return normalizeGeometry(undefined, fallback);
   }
 
-  return normalizeGeometry(
+  const normalized = normalizeGeometry(
     {
       x: finiteNumber(input.x, fallback.x),
       y: finiteNumber(input.y, fallback.y),
@@ -619,7 +626,16 @@ function normalizePanelGeometry(
       minHeight: finiteNumber(input.minHeight, fallback.minHeight ?? 160),
     },
     fallback,
+    { allowNegativePosition: true },
   );
+  if (
+    Object.entries(normalized).some(([key, value]) =>
+      !Object.is(input[key], value),
+    )
+  ) {
+    warnings.push("Normalized persisted panel geometry.");
+  }
+  return normalized;
 }
 
 
@@ -630,7 +646,9 @@ function normalizePanelDisplay(input: unknown): PanelInstance["display"] {
 
   const mode = input.mode === "minimized" ? "minimized" : "normal";
   const restoreGeometry = isRecord(input.restoreGeometry)
-    ? normalizeGeometry(input.restoreGeometry, SAFE_PANEL_GEOMETRY)
+    ? normalizeGeometry(input.restoreGeometry, SAFE_PANEL_GEOMETRY, {
+        allowNegativePosition: true,
+      })
     : undefined;
 
   if (mode === "minimized") {
@@ -787,7 +805,9 @@ function normalizeSurfacePresentationMemory(
       moduleId,
       panelType,
       geometry: isRecord(value.geometry)
-        ? normalizeGeometry(value.geometry, fallback)
+        ? normalizeGeometry(value.geometry, fallback, {
+            allowNegativePosition: true,
+          })
         : undefined,
       panelState: value.panelState,
       display: normalizePanelDisplay(value.display),
@@ -835,6 +855,15 @@ function normalizeTab(
     panels,
     isRecord(raw.canvasBounds) ? DEFAULT_WORKSPACE_CANVAS_BOUNDS : fallbackCanvasBounds,
   );
+  if (
+    isRecord(raw.canvasBounds) &&
+    (raw.canvasBounds.x !== canvasBounds.x ||
+      raw.canvasBounds.y !== canvasBounds.y ||
+      raw.canvasBounds.width !== canvasBounds.width ||
+      raw.canvasBounds.height !== canvasBounds.height)
+  ) {
+    warnings.push("Expanded or repaired persisted canvas bounds.");
+  }
 
   return {
     id,
@@ -848,9 +877,84 @@ function normalizeTab(
       2,
     ),
     canvasCamera: normalizeCanvasCamera(raw.canvasCamera, canvasBounds),
+    organizeSnapshot: normalizeOrganizeSnapshot(
+      raw.organizeSnapshot,
+      canvasBounds,
+      panels,
+    ),
+    organizeActive:
+      raw.organizeActive === true ||
+      (raw.organizeActive === undefined &&
+        raw.organizeSnapshot != null),
     panels: repairFocusOrder(panels),
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now,
     updatedAt: now,
+  };
+}
+
+function normalizeOrganizeSnapshot(
+  input: unknown,
+  fallbackCanvasBounds: WorkspaceCanvasBounds,
+  panels: PanelInstance[],
+): WorkspaceOrganizeSnapshot | null {
+  if (!isRecord(input)) {
+    return null;
+  }
+
+  // Only retained panel IDs may receive restored geometry.
+  const validIds = new Set(panels.map((panel) => panel.id));
+  const geometries: Record<string, PanelGeometry> = {};
+
+  if (isRecord(input.geometries)) {
+    for (const [panelId, value] of Object.entries(input.geometries)) {
+      if (!validIds.has(panelId) || !isRecord(value)) {
+        continue;
+      }
+
+      const { x, y, width, height } = value;
+
+      if (
+        typeof x !== "number" || !Number.isFinite(x) ||
+        typeof y !== "number" || !Number.isFinite(y) ||
+        typeof width !== "number" || !Number.isFinite(width) ||
+        typeof height !== "number" || !Number.isFinite(height) ||
+        width <= 0 || height <= 0
+      ) {
+        continue;
+      }
+
+      const { minWidth, minHeight } = value;
+
+      geometries[panelId] = {
+        x,
+        y,
+        width,
+        height,
+        ...(typeof minWidth === "number" &&
+            Number.isFinite(minWidth) &&
+            minWidth > 0
+          ? { minWidth }
+          : {}),
+        ...(typeof minHeight === "number" &&
+            Number.isFinite(minHeight) &&
+            minHeight > 0
+          ? { minHeight }
+          : {}),
+      };
+    }
+  }
+
+  const canvasBounds = normalizeCanvasBounds(
+    input.canvasBounds,
+    [],
+    fallbackCanvasBounds,
+  );
+
+  return {
+    canvasBounds,
+    canvasScale: clamp(finiteNumber(input.canvasScale, 1), 0.25, 2),
+    canvasCamera: normalizeCanvasCamera(input.canvasCamera, canvasBounds),
+    geometries,
   };
 }
 

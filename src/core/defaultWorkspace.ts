@@ -57,6 +57,8 @@ export function createDefaultWorkspace(registry: PanelRegistry): WorkspaceState 
       showGrid: true,
       gridSize: 12,
       panelSpacing: 0,
+      organizeMode: "preserve",
+      organizeGapUnits: 0,
       workspaceZoomIncrement: 10,
       workspaceZoomAnchorMode: "active-panel-center",
       panelNavigationAlignment: "panel-center",

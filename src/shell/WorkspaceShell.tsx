@@ -54,6 +54,7 @@ const JARRI_SYSTEMS_URL = "http://jarri.systems/";
 type WorkspaceScreenshotState = "idle" | "copying" | "copied" | "failed";
 
 export function WorkspaceShell() {
+  const [organizeRequestId, setOrganizeRequestId] = useState(0);
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
   const [panelMenuSearchQuery, setPanelMenuSearchQuery] = useState("");
   const [moduleManagementOpen, setModuleManagementOpen] = useState(false);
@@ -816,6 +817,39 @@ export function WorkspaceShell() {
                 {workspaceScreenshotProgress}
               </span>
             ) : null}
+          </div>
+
+          <div
+            className="workspace-shell__organize-pair"
+            role="group"
+            aria-label="Active tab layout controls"
+          >
+            <button
+              type="button"
+              className="workspace-shell__action workspace-shell__organize-button"
+              aria-pressed={controller.activeTab.organizeActive === true}
+              onClick={() => setOrganizeRequestId((id) => id + 1)}
+              title={
+                controller.activeTab.organizeActive
+                  ? "Unlock and keep the arranged panel positions"
+                  : "Organize visible panels"
+              }
+            >
+              <span
+                className="workspace-canvas__organize-indicator"
+                aria-hidden="true"
+              />
+              Organize
+            </button>
+            <button
+              type="button"
+              className="workspace-shell__action workspace-shell__restore-button"
+              disabled={!controller.activeTab.organizeSnapshot}
+              onClick={controller.restoreActiveTabLayout}
+              title="Restore the saved panel layout, zoom and camera"
+            >
+              Restore
+            </button>
           </div>
 
           <button
@@ -1582,6 +1616,8 @@ export function WorkspaceShell() {
         }}
         navigationRequest={panelSearchNavigation}
         onFocusPanel={controller.focusPanel}
+        organizeRequestId={organizeRequestId}
+        onToggleOrganize={controller.toggleActiveTabOrganize}
         onClosePanel={controller.closePanel}
         onTogglePanelMinimized={controller.togglePanelMinimized}
         onGeometryChange={controller.updatePanelGeometry}

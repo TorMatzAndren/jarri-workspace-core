@@ -13,6 +13,11 @@ export type GeometryInteraction = {
   gridSize: number;
 };
 
+export type GeometryNormalizationOptions = {
+  /** Persisted layout positions may be negative in logical canvas space. */
+  allowNegativePosition?: boolean;
+};
+
 export function snapToGrid(value: number, gridSize = GRID_SIZE) {
   return Math.round(value / gridSize) * gridSize;
 }
@@ -24,13 +29,16 @@ export function snapUpToGrid(value: number, gridSize = GRID_SIZE) {
 export function normalizeGeometry(
   input: Partial<PanelGeometry> | undefined,
   fallback: PanelGeometry,
+  options: GeometryNormalizationOptions = {},
 ): PanelGeometry {
   const minWidth = snapUpToGrid(finiteNumber(input?.minWidth, fallback.minWidth ?? 260));
   const minHeight = snapUpToGrid(finiteNumber(input?.minHeight, fallback.minHeight ?? 160));
+  const x = snapToGrid(finiteNumber(input?.x, fallback.x));
+  const y = snapToGrid(finiteNumber(input?.y, fallback.y));
 
   return {
-    x: Math.max(0, snapToGrid(finiteNumber(input?.x, fallback.x))),
-    y: Math.max(0, snapToGrid(finiteNumber(input?.y, fallback.y))),
+    x: options.allowNegativePosition ? x : Math.max(0, x),
+    y: options.allowNegativePosition ? y : Math.max(0, y),
     width: Math.max(minWidth, snapToGrid(finiteNumber(input?.width, fallback.width))),
     height: Math.max(minHeight, snapToGrid(finiteNumber(input?.height, fallback.height))),
     minWidth,
@@ -110,19 +118,13 @@ export function previewGeometryInteraction(
   if (interaction.mode === "move") {
     return {
       ...interaction.startGeometry,
-      x: Math.max(
-        0,
-        snapToGrid(
-          interaction.startGeometry.x + deltaX,
-          interaction.gridSize,
-        ),
+      x: snapToGrid(
+        interaction.startGeometry.x + deltaX,
+        interaction.gridSize,
       ),
-      y: Math.max(
-        0,
-        snapToGrid(
-          interaction.startGeometry.y + deltaY,
-          interaction.gridSize,
-        ),
+      y: snapToGrid(
+        interaction.startGeometry.y + deltaY,
+        interaction.gridSize,
       ),
     };
   }
@@ -144,8 +146,8 @@ export function commitGeometryInteraction(
   return enforceMinSize(
     {
       ...geometry,
-      x: Math.max(0, snapToGrid(geometry.x, gridSize)),
-      y: Math.max(0, snapToGrid(geometry.y, gridSize)),
+      x: snapToGrid(geometry.x, gridSize),
+      y: snapToGrid(geometry.y, gridSize),
       width: snapToGrid(geometry.width, gridSize),
       height: snapToGrid(geometry.height, gridSize),
     },

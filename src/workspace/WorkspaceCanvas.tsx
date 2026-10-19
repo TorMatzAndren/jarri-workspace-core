@@ -26,10 +26,14 @@ import { PanelFrame } from "./PanelFrame";
 import { canvasWallpaperPresentation } from "./canvasWallpaperPresentation";
 import { copyWorkspaceScreenshot } from "./screenshot";
 import { normalizeWorkspaceCanvasOrigin, type WorkspaceCanvasScreenshotSource } from "./workspaceScreenshotComposition";
+import {
+  MIN_WORKSPACE_CANVAS_HEIGHT,
+  MIN_WORKSPACE_CANVAS_WIDTH,
+  normalizeWorkspaceCanvasBounds,
+} from "../core/workspaceCanvasBounds";
 
-const CANVAS_GRID_SIZE = 24;
-const MIN_CANVAS_WIDTH = 900;
-const MIN_CANVAS_HEIGHT = 700;
+const MIN_CANVAS_WIDTH = MIN_WORKSPACE_CANVAS_WIDTH;
+const MIN_CANVAS_HEIGHT = MIN_WORKSPACE_CANVAS_HEIGHT;
 
 type ResizeMode = "left" | "top" | "right" | "bottom" | "both";
 
@@ -68,6 +72,10 @@ type Props = {
     requestId: number;
   } | null;
   onFocusPanel: (panelId: string) => void;
+  organizeRequestId: number;
+  onToggleOrganize: (
+    viewport: { width: number; height: number },
+  ) => void;
   onClosePanel: (panelId: string) => void;
   onTogglePanelMinimized: (panelId: string) => void;
   onGeometryChange: (panelId: string, geometry: PanelGeometry) => void;
@@ -89,57 +97,6 @@ type Props = {
   onOpenResource: (request: OpenResourceRequest) => OpenResourceResult;
 };
 
-function snapToCanvasGrid(value: number) {
-  return Math.ceil(value / CANVAS_GRID_SIZE) * CANVAS_GRID_SIZE;
-}
-
-function requiredBoundsForPanels(panels: PanelInstance): WorkspaceCanvasBounds;
-function requiredBoundsForPanels(panels: PanelInstance[]): WorkspaceCanvasBounds;
-function requiredBoundsForPanels(panels: PanelInstance | PanelInstance[]): WorkspaceCanvasBounds {
-  const list = Array.isArray(panels) ? panels : [panels];
-  return list.reduce(
-    (bounds, panel) => ({
-      x: Math.min(bounds.x, panel.geometry.x),
-      y: Math.min(bounds.y, panel.geometry.y),
-      width: Math.max(
-        bounds.x + bounds.width,
-        panel.geometry.x + panel.geometry.width + CANVAS_GRID_SIZE * 2,
-      ) - Math.min(bounds.x, panel.geometry.x),
-      height: Math.max(
-        bounds.y + bounds.height,
-        panel.geometry.y + panel.geometry.height + CANVAS_GRID_SIZE * 2,
-      ) - Math.min(bounds.y, panel.geometry.y),
-    }),
-    { x: 0, y: 0, width: MIN_CANVAS_WIDTH, height: MIN_CANVAS_HEIGHT },
-  );
-}
-
-function normalizeBounds(
-  bounds: WorkspaceCanvasBounds,
-  panels: PanelInstance[],
-): WorkspaceCanvasBounds {
-  const required = requiredBoundsForPanels(panels);
-  const x = Math.min(bounds.x, required.x);
-  const y = Math.min(bounds.y, required.y);
-  const right = Math.max(
-    bounds.x + bounds.width,
-    required.x + required.width,
-    x + MIN_CANVAS_WIDTH,
-  );
-  const bottom = Math.max(
-    bounds.y + bounds.height,
-    required.y + required.height,
-    y + MIN_CANVAS_HEIGHT,
-  );
-
-  return {
-    x,
-    y,
-    width: snapToCanvasGrid(right - x),
-    height: snapToCanvasGrid(bottom - y),
-  };
-}
-
 export function WorkspaceCanvas({
   registry,
   tabId,
@@ -157,6 +114,8 @@ export function WorkspaceCanvas({
   onScreenshotSourceChange,
   navigationRequest,
   onFocusPanel,
+  organizeRequestId,
+  onToggleOrganize,
   onClosePanel,
   onTogglePanelMinimized,
   onGeometryChange,
@@ -191,7 +150,7 @@ export function WorkspaceCanvas({
     height: 0,
   });
 
-  const effectiveBounds = normalizeBounds(
+  const effectiveBounds = normalizeWorkspaceCanvasBounds(
     previewBounds ?? canvasBounds,
     panels,
   );
@@ -299,6 +258,27 @@ export function WorkspaceCanvas({
 
     return () => observer.disconnect();
   }, []);
+
+  function toggleOrganizeVisiblePanels() {
+    const surface = surfaceRef.current;
+    if (!surface) {
+      return;
+    }
+
+    onToggleOrganize({
+      width: surface.clientWidth,
+      height: surface.clientHeight,
+    });
+  }
+
+  useEffect(() => {
+    if (organizeRequestId > 0) {
+      toggleOrganizeVisiblePanels();
+    }
+    // Requests originate in the title bar, but viewport measurement
+    // remains owned by the canvas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizeRequestId]);
 
   function rememberViewport() {
     const surface = surfaceRef.current;
@@ -470,7 +450,7 @@ export function WorkspaceCanvas({
   ]);
 
   useEffect(() => {
-    const normalized = normalizeBounds(canvasBounds, panels);
+    const normalized = normalizeWorkspaceCanvasBounds(canvasBounds, panels);
     if (
       normalized.x !== canvasBounds.x ||
       normalized.y !== canvasBounds.y ||
@@ -517,7 +497,7 @@ export function WorkspaceCanvas({
         nextBottom = Math.max(start.y + MIN_CANVAS_HEIGHT, startBottom + deltaY);
       }
 
-      const nextBounds = normalizeBounds(
+      const nextBounds = normalizeWorkspaceCanvasBounds(
         {
           x: nextX,
           y: nextY,
@@ -532,7 +512,7 @@ export function WorkspaceCanvas({
     }
 
     function commitResize() {
-      const committed = normalizeBounds(
+      const committed = normalizeWorkspaceCanvasBounds(
         previewBoundsRef.current ?? activeResize.startBounds,
         panels,
       );
@@ -734,7 +714,7 @@ export function WorkspaceCanvas({
     event.preventDefault();
     event.stopPropagation();
 
-    const bounds = normalizeBounds(canvasBounds, panels);
+    const bounds = normalizeWorkspaceCanvasBounds(canvasBounds, panels);
     previewBoundsRef.current = bounds;
     setPreviewBounds(bounds);
     setResizeState({
@@ -828,6 +808,7 @@ export function WorkspaceCanvas({
         </div>
 
         <div className="workspace-canvas__toolbar-actions">
+
           <button
             type="button"
             onClick={captureWorkspaceScreenshot}

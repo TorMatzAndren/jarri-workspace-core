@@ -59,7 +59,9 @@ export function createTemplateFromTab(tab: WorkspaceTab): SavedTabTemplate {
       moduleId: panel.moduleId,
       panelType: panel.panelType,
       title: panel.title,
-      geometry: normalizeGeometry(panel.geometry, SAFE_PANEL_GEOMETRY),
+      geometry: normalizeGeometry(panel.geometry, SAFE_PANEL_GEOMETRY, {
+        allowNegativePosition: true,
+      }),
     })),
     createdAt: now,
     updatedAt: now,
@@ -136,6 +138,7 @@ function panelFromTemplate(
       geometry: normalizeGeometry(
         panel.geometry,
         offsetGeometry(SAFE_PANEL_GEOMETRY, index),
+        { allowNegativePosition: true },
       ),
       focusOrder: index + 1,
       stateVersion: 1,
@@ -155,11 +158,15 @@ function panelFromTemplate(
     moduleId: definition.moduleId,
     panelType: definition.panelType,
     title: panel.title.trim() || definition.title,
-    geometry: normalizeGeometry(panel.geometry, {
-      ...definition.defaultGeometry,
-      minWidth: definition.minGeometry.width,
-      minHeight: definition.minGeometry.height,
-    }),
+    geometry: normalizeGeometry(
+      panel.geometry,
+      {
+        ...definition.defaultGeometry,
+        minWidth: definition.minGeometry.width,
+        minHeight: definition.minGeometry.height,
+      },
+      { allowNegativePosition: true },
+    ),
     focusOrder: index + 1,
     stateVersion: definition.stateVersion,
     panelState: definition.createInitialState({ now }),
@@ -210,6 +217,7 @@ function normalizePanelTemplate(input: unknown): SavedPanelTemplate {
     geometry: normalizeGeometry(
       isRecord(raw.geometry) ? raw.geometry : undefined,
       SAFE_PANEL_GEOMETRY,
+      { allowNegativePosition: true },
     ),
   };
 }

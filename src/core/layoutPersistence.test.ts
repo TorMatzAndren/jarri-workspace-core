@@ -55,6 +55,8 @@ function createDefaultWorkspace(): WorkspaceState {
       showGrid: true,
       gridSize: 12,
       panelSpacing: 0,
+      organizeMode: "preserve",
+      organizeGapUnits: 0,
       workspaceZoomIncrement: 10,
       workspaceZoomAnchorMode: "active-panel-center",
       panelNavigationAlignment: "panel-center",
@@ -150,6 +152,103 @@ function testPanelInstanceFrameFontPreferenceRoundTrips() {
   assertEqual(roundTrip["instance-a"]?.fontScale, 0.9, "first instance scale survives persistence round-trip");
   assertEqual(roundTrip["instance-b"]?.fontScale, 1.6, "second instance scale survives persistence round-trip");
   assert(roundTrip["instance-new"] === undefined, "new instance begins without inherited Frame Font preference");
+}
+
+function testNegativePanelCoordinatesSurviveColdStartPersistenceRoundTrip() {
+  const persisted = basePersistedWorkspace();
+  const tab = (persisted.tabs as Array<Record<string, unknown>>)[0];
+  tab.canvasBounds = { x: -720, y: -720, width: 1800, height: 1100 };
+  tab.canvasCamera = { x: -480, y: -360 };
+  tab.canvasScale = 0.25;
+  tab.panels = [
+    {
+      id: "negative-panel-a",
+      moduleId: "fixture",
+      panelType: "missing-a",
+      title: "Negative A",
+      geometry: {
+        x: -600,
+        y: -600,
+        width: 360,
+        height: 240,
+        minWidth: 240,
+        minHeight: 180,
+      },
+      focusOrder: 1,
+      stateVersion: 1,
+      panelState: {},
+      createdAt: "2026-08-19T00:00:00.000Z",
+      updatedAt: "2026-08-19T00:00:00.000Z",
+    },
+    {
+      id: "negative-panel-b",
+      moduleId: "fixture",
+      panelType: "missing-b",
+      title: "Negative B",
+      geometry: {
+        x: -240,
+        y: -600,
+        width: 240,
+        height: 240,
+        minWidth: 240,
+        minHeight: 180,
+      },
+      focusOrder: 2,
+      stateVersion: 1,
+      panelState: {},
+      createdAt: "2026-08-19T00:00:00.000Z",
+      updatedAt: "2026-08-19T00:00:00.000Z",
+    },
+  ];
+
+  const storage = createStorage(persisted);
+  const persistence = createLayoutPersistence({
+    registry: createPanelRegistry(),
+    storageProvider: storage,
+    defaultWorkspaceFactory: createDefaultWorkspace,
+    getModuleRecords: () => [],
+  });
+  const firstLoad = persistence.loadWorkspace().state;
+  const firstTab = firstLoad.tabs[0];
+
+  assertEqual(firstTab.canvasBounds.x, -720, "cold load preserves negative canvas x");
+  assertEqual(firstTab.canvasBounds.y, -720, "cold load preserves negative canvas y");
+  assertEqual(firstTab.canvasBounds.width, 1800, "cold load preserves canvas width");
+  assertEqual(firstTab.canvasBounds.height, 1100, "cold load preserves canvas height");
+  assertEqual(firstTab.canvasCamera.x, -480, "cold load preserves camera x");
+  assertEqual(firstTab.canvasCamera.y, -360, "cold load preserves camera y");
+  assertEqual(firstTab.canvasScale, 0.25, "cold load preserves zoom");
+  assertEqual(firstTab.panels[0].geometry.x, -600, "cold load preserves panel A x");
+  assertEqual(firstTab.panels[0].geometry.y, -600, "cold load preserves panel A y");
+  assertEqual(firstTab.panels[0].geometry.width, 360, "cold load preserves panel A width");
+  assertEqual(firstTab.panels[0].geometry.height, 240, "cold load preserves panel A height");
+  assertEqual(firstTab.panels[1].geometry.x, -240, "cold load preserves distinct panel B x");
+  assertEqual(firstTab.panels[1].geometry.y, -600, "cold load preserves panel B y");
+  assertEqual(firstTab.panels[1].geometry.width, 240, "cold load preserves panel B width");
+  assertEqual(firstTab.panels[1].geometry.height, 240, "cold load preserves panel B height");
+  assertEqual(
+    firstTab.panels[0].geometry.x + firstTab.panels[0].geometry.width,
+    firstTab.panels[1].geometry.x,
+    "negative-coordinate panels remain adjacent without overlap",
+  );
+
+  persistence.saveWorkspace(firstLoad);
+  const secondTab = persistence.loadWorkspace().state.tabs[0];
+  assertEqual(secondTab.canvasBounds.x, -720, "reload preserves canvas x");
+  assertEqual(secondTab.canvasBounds.y, -720, "reload preserves canvas y");
+  assertEqual(secondTab.canvasBounds.width, 1800, "reload preserves canvas width");
+  assertEqual(secondTab.canvasBounds.height, 1100, "reload preserves canvas height");
+  assertEqual(secondTab.canvasCamera.x, -480, "reload preserves camera x");
+  assertEqual(secondTab.canvasCamera.y, -360, "reload preserves camera y");
+  assertEqual(secondTab.canvasScale, 0.25, "reload preserves zoom");
+  assertEqual(secondTab.panels[0].geometry.x, -600, "reload preserves panel A x");
+  assertEqual(secondTab.panels[0].geometry.y, -600, "reload preserves panel A y");
+  assertEqual(secondTab.panels[0].geometry.width, 360, "reload preserves panel A width");
+  assertEqual(secondTab.panels[0].geometry.height, 240, "reload preserves panel A height");
+  assertEqual(secondTab.panels[1].geometry.x, -240, "reload preserves panel B x");
+  assertEqual(secondTab.panels[1].geometry.y, -600, "reload preserves panel B y");
+  assertEqual(secondTab.panels[1].geometry.width, 240, "reload preserves panel B width");
+  assertEqual(secondTab.panels[1].geometry.height, 240, "reload preserves panel B height");
 }
 
 function load(workspace: Record<string, unknown>) {
@@ -614,13 +713,13 @@ function testCanvasBoundsPreserveNegativeOriginAndExpandAroundPanels() {
   );
   assertEqual(
     normalizedTab.canvasBounds.width,
-    2484,
+    2436,
     "canvas width expands from negative origin around right panel extent",
   );
   assertEqual(
     normalizedTab.canvasBounds.height,
-    1572,
-    "canvas height expands from negative origin around bottom panel extent",
+    1524,
+    "canvas height expands around the actual grid-normalized panel extent without artificial clearance",
   );
 }
 
@@ -837,8 +936,97 @@ function testTabStripPreferencesNormalizeAndRoundTrip() {
   assertEqual(roundTrip.tabs.map((tab) => tab.id).join(","), tabIds, "presentation preferences do not lose tabs");
 }
 
+function testOrganizeSnapshotSurvivesNormalization() {
+  const persisted = basePersistedWorkspace();
+  const baseTab = (
+    persisted.tabs as Array<Record<string, unknown>>
+  )[0];
+
+  const panelId = "organize-test-panel";
+  const existingPanel = {
+    id: panelId,
+    moduleId: "core",
+    panelType: "missing",
+    title: "Organize test panel",
+    geometry: {
+      x: 48,
+      y: 48,
+      width: 420,
+      height: 240,
+      minWidth: 324,
+      minHeight: 180,
+    },
+    focusOrder: 1,
+    stateVersion: 1,
+    panelState: {},
+    createdAt: "2026-10-18T00:00:00.000Z",
+    updatedAt: "2026-10-18T00:00:00.000Z",
+  };
+
+  persisted.tabs = [
+    {
+      ...baseTab,
+      panels: [existingPanel],
+      organizeSnapshot: {
+        canvasBounds: {
+          x: -240,
+          y: 0,
+          width: 7728,
+          height: 3384,
+        },
+        canvasScale: 0.5,
+        canvasCamera: { x: 120, y: 48 },
+        geometries: {
+          [panelId]: {
+            x: 48,
+            y: 48,
+            width: 420,
+            height: 240,
+            minWidth: 324,
+            minHeight: 180,
+          },
+          removedPanel: {
+            x: 12,
+            y: 12,
+            width: 400,
+            height: 300,
+          },
+          invalidPanel: {
+            x: "broken",
+            y: 0,
+            width: 10,
+            height: 10,
+          },
+        },
+      },
+    },
+  ];
+
+  const result = load(persisted);
+  const snapshot = result.state.tabs[0].organizeSnapshot;
+
+  assert(snapshot, "Organize snapshot survives normalization");
+  assertEqual(snapshot.canvasScale, 0.5, "Original zoom survives");
+  assertEqual(snapshot.canvasCamera.x, 120, "Original camera survives");
+  assertEqual(snapshot.canvasBounds.width, 7728, "Original bounds survive");
+  assertEqual(
+    snapshot.geometries[panelId].minWidth,
+    324,
+    "Original minimum width survives",
+  );
+  assert(
+    !("removedPanel" in snapshot.geometries),
+    "Deleted panel geometry is not retained",
+  );
+  assert(
+    !("invalidPanel" in snapshot.geometries),
+    "Invalid geometry is discarded",
+  );
+}
+
 function main() {
   testPanelInstanceFrameFontPreferenceRoundTrips();
+  testNegativePanelCoordinatesSurviveColdStartPersistenceRoundTrip();
   testLegacyWorkspaceGetsEmptyPresentationMemory();
   testValidPresentationMemorySurvivesNormalization();
   testPinkSparkleThemePresetSurvivesNormalization();
@@ -853,6 +1041,7 @@ function main() {
   testPanelMenuExpandedModulesNormalizeDeterministically();
   testAppearancePreferencesNormalizeAndPersistIndependently();
   testTabStripPreferencesNormalizeAndRoundTrip();
+  testOrganizeSnapshotSurvivesNormalization();
   console.log("layout persistence tests passed");
 }
 

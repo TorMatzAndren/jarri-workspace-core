@@ -127,7 +127,48 @@ function testTemplateBoundsPreserveNegativeOriginAndExpandAroundPanels() {
   );
 }
 
+function testTemplatePanelGeometryPreservesNegativeCoordinates() {
+  const document = normalizeTemplateDocument({
+    kind: "jarri.workspace.tabs",
+    schemaVersion: 1,
+    exportedAt: "2026-08-16T00:00:00.000Z",
+    templates: [
+      {
+        id: "negative-template",
+        title: "Negative",
+        sourceTitle: "Negative",
+        canvasBounds: { x: -720, y: -480, width: 1800, height: 1100 },
+        panels: [
+          {
+            moduleId: "missing",
+            panelType: "missing",
+            title: "Negative panel",
+            geometry: {
+              x: -600,
+              y: -240,
+              width: 360,
+              height: 240,
+              minWidth: 240,
+              minHeight: 180,
+            },
+          },
+        ],
+        createdAt: "2026-08-16T00:00:00.000Z",
+        updatedAt: "2026-08-16T00:00:00.000Z",
+      },
+    ],
+  });
+
+  const template = document.templates[0];
+  assertEqual(template.panels[0].geometry.x, -600, "template normalization preserves negative panel x");
+  assertEqual(template.panels[0].geometry.y, -240, "template normalization preserves negative panel y");
+  const restored = tabFromTemplate(template, createPanelRegistry());
+  assertEqual(restored.panels[0].geometry.x, -600, "template tab creation preserves negative panel x");
+  assertEqual(restored.panels[0].geometry.y, -240, "template tab creation preserves negative panel y");
+}
+
 testTemplateCapturesAndRestoresOriginAwareCanvasBounds();
 testTemplateBoundsPreserveNegativeOriginAndExpandAroundPanels();
+testTemplatePanelGeometryPreservesNegativeCoordinates();
 
 console.log("Workspace tab-template canvas tests passed.");

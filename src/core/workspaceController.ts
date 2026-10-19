@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createId, nowIso } from "./id";
 import {
   GRID_SIZE,
@@ -9,6 +9,9 @@ import {
 } from "./layoutEngine";
 import type { LayoutPersistence } from "./layoutPersistence";
 import { reorderWorkspaceTabs } from "./tabOrder";
+import { planSizePreservingArrangement } from "./panelArrangementPreserve";
+import { searchSpatialLayout } from "./spatialLayoutSearch";
+import { normalizeWorkspaceCanvasBounds } from "./workspaceCanvasBounds";
 import type { PanelRegistry } from "./panelRegistry";
 import {
   createLocalTabTemplateStorage,
@@ -36,6 +39,237 @@ import {
 } from "./types";
 
 const FOCUS_ORDER_COMPACT_THRESHOLD = 500;
+// The six-panel reference takes about 14–20 ms in the current benchmark.
+// Larger tabs retain the deterministic shelf planner before search cost can
+// approach the measured half-second at 24 panels.
+export const PRESERVE_SPATIAL_SEARCH_MAX_PANELS = 8;
+
+type PreservePlan = ReturnType<typeof planSizePreservingArrangement>;
+
+function eligibleArrangementPanels(
+  panels: PanelInstance[],
+  viewport: { width: number; height: number },
+  origin: { x: number; y: number },
+  scale: number,
+): PanelInstance[] {
+  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  const area = {
+    x: origin.x,
+    y: origin.y,
+    width: viewport.width / safeScale,
+    height: viewport.height / safeScale,
+  };
+  return panels.filter((panel) => {
+    const g = panel.geometry;
+    return panel.display?.mode !== "minimized" &&
+      [g.x, g.y, g.width, g.height].every(Number.isFinite) &&
+      g.width > 0 && g.height > 0 &&
+      g.x < area.x + area.width && g.x + g.width > area.x &&
+      g.y < area.y + area.height && g.y + g.height > area.y;
+  });
+}
+
+function validateArrangementPlan(
+  panels: PanelInstance[],
+  eligible: PanelInstance[],
+  geometries: Map<string, PanelGeometry>,
+  gridSize: number,
+  gap: number,
+  canvasBounds: WorkspaceCanvasBounds,
+  camera: { x: number; y: number },
+  scale: number,
+  planCamera: { x: number; y: number },
+  planScale: number,
+): boolean {
+  if (![canvasBounds.x, canvasBounds.y, canvasBounds.width, canvasBounds.height].every(Number.isFinite) ||
+    canvasBounds.width <= 0 || canvasBounds.height <= 0) return false;
+  if (geometries.size !== eligible.length || eligible.some((panel) => !geometries.has(panel.id))) return false;
+  const eligibleIds = new Set(eligible.map((panel) => panel.id));
+  if (planCamera.x !== camera.x || planCamera.y !== camera.y || planScale !== scale) return false;
+  const placed = panels.map((panel) => ({
+    panel,
+    geometry: geometries.get(panel.id) ?? panel.geometry,
+    moved: eligibleIds.has(panel.id),
+  }));
+  const grid = Math.max(1, Math.round(gridSize));
+  const left = canvasBounds.x, top = canvasBounds.y;
+  const right = left + canvasBounds.width, bottom = top + canvasBounds.height;
+  for (const { panel, geometry: g, moved } of placed) {
+    if (![g.x, g.y, g.width, g.height].every(Number.isFinite) ||
+      g.width <= 0 || g.height <= 0 ||
+      g.x < left || g.y < top || g.x + g.width > right || g.y + g.height > bottom) return false;
+    if (!moved) continue;
+    const source = panel.geometry;
+    const alignedWidth = Math.ceil(Math.max(source.width, source.minWidth ?? 0) / grid) * grid;
+    const alignedHeight = Math.ceil(Math.max(source.height, source.minHeight ?? 0) / grid) * grid;
+    if (Math.abs(g.x / grid - Math.round(g.x / grid)) > 1e-7 ||
+      Math.abs(g.y / grid - Math.round(g.y / grid)) > 1e-7 ||
+      (g.width !== source.width && g.width !== alignedWidth) ||
+      (g.height !== source.height && g.height !== alignedHeight) ||
+      g.width < Math.max(source.width, source.minWidth ?? 0) ||
+      g.height < Math.max(source.height, source.minHeight ?? 0)) return false;
+  }
+  const finalPanels = placed.map(({ panel, geometry }) => ({ ...panel, geometry }));
+  const normalizedBounds = normalizeWorkspaceCanvasBounds(canvasBounds, finalPanels);
+  if (normalizedBounds.x !== canvasBounds.x || normalizedBounds.y !== canvasBounds.y ||
+    normalizedBounds.width !== canvasBounds.width || normalizedBounds.height !== canvasBounds.height) return false;
+  for (let i = 0; i < placed.length; i++) for (let j = i + 1; j < placed.length; j++) {
+    const a = placed[i].geometry, b = placed[j].geometry;
+    const xGap = Math.max(0, b.x - a.x - a.width, a.x - b.x - b.width);
+    const yGap = Math.max(0, b.y - a.y - a.height, a.y - b.y - b.height);
+    if (a.x < b.x + b.width && a.x + a.width > b.x &&
+      a.y < b.y + b.height && a.y + a.height > b.y) return false;
+    if (placed[i].moved && placed[j].moved && gap > 0 && xGap < gap && yGap < gap) return false;
+  }
+  return true;
+}
+
+/** Plan Preserve Sizes without mutating workspace state; the hook commits only a complete valid plan. */
+export function planPreserveSizesArrangement({
+  panels, viewport, origin, scale, canvasBounds, gridSize, organizeGapUnits,
+}: {
+  panels: PanelInstance[];
+  viewport: { width: number; height: number };
+  origin: { x: number; y: number };
+  scale: number;
+  canvasBounds: WorkspaceCanvasBounds;
+  gridSize: number;
+  organizeGapUnits: number;
+}): { plan: PreservePlan; strategy: "spatial" | "shelf" | "rejected"; reason?: string } {
+  const gap = Math.max(0, organizeGapUnits) * gridSize;
+  const eligible = eligibleArrangementPanels(panels, viewport, origin, scale);
+  const emptyPlan: PreservePlan = { geometries: new Map(), camera: origin, scale };
+  if (eligible.length === 0) return { plan: emptyPlan, strategy: "rejected", reason: "No eligible panels." };
+  const valid = (plan: PreservePlan) => validateArrangementPlan(
+    panels, eligible, plan.geometries, gridSize, gap, canvasBounds,
+    origin, scale, plan.camera, plan.scale,
+  );
+  const preserveLiveDimensions = (plan: PreservePlan): PreservePlan => ({
+    ...plan,
+    geometries: new Map([...plan.geometries].map(([id, geometry]) => {
+      const source = eligible.find((panel) => panel.id === id)!.geometry;
+      return [id, { ...geometry, width: source.width, height: source.height }];
+    })),
+  });
+  if (eligible.length <= PRESERVE_SPATIAL_SEARCH_MAX_PANELS) {
+    try {
+      const result = searchSpatialLayout(eligible.map((panel) => ({
+        id: panel.id,
+        ...panel.geometry,
+      })), {
+        gridSize,
+        gapGridUnits: organizeGapUnits,
+        canvasBounds,
+        containerBounds: canvasBounds,
+        obstacles: panels.filter((panel) => !eligible.some((item) => item.id === panel.id)).map((panel) => panel.geometry),
+        camera: origin,
+        scale,
+      });
+      const spatialPlan = preserveLiveDimensions({
+        geometries: result.geometries,
+        camera: result.camera,
+        scale: result.scale,
+      });
+      if (valid(spatialPlan)) return { plan: spatialPlan, strategy: "spatial" };
+    } catch (error) {
+      console.warn("Spatial Organize candidate failed validation or search; trying the bounded shelf candidate.", error);
+    }
+  }
+  const logicalViewport = {
+    width: canvasBounds.width * scale,
+    height: canvasBounds.height * scale,
+  };
+  const shelfPlan = preserveLiveDimensions(planSizePreservingArrangement({
+    panels: eligible,
+    viewport: logicalViewport,
+    origin: { x: canvasBounds.x, y: canvasBounds.y },
+    scale,
+    gap,
+    gridSize,
+  }));
+  if (valid(shelfPlan)) return { plan: shelfPlan, strategy: "shelf" };
+  const reason = `No valid ${eligible.length > PRESERVE_SPATIAL_SEARCH_MAX_PANELS ? "bounded shelf" : "spatial or shelf"} arrangement fits the existing canvas without collisions.`;
+  console.warn(`Organize was not applied. ${reason}`);
+  return { plan: emptyPlan, strategy: "rejected", reason };
+}
+
+/** Pure state transition shared by the controller and integration tests. */
+export function organizeWorkspaceState(
+  current: WorkspaceState,
+  viewport: { width: number; height: number },
+  now: string,
+): WorkspaceState {
+  const activeTab = current.tabs.find((tab) => tab.id === current.activeTabId);
+  if (!activeTab) return current;
+  if (activeTab.organizeActive === true) {
+    return {
+      ...current,
+      tabs: current.tabs.map((tab) => tab.id === activeTab.id
+        ? { ...tab, organizeActive: false, updatedAt: now }
+        : tab),
+    };
+  }
+  if (![viewport.width, viewport.height].every(Number.isFinite) || viewport.width <= 0 || viewport.height <= 0) return current;
+
+  const arrangementInput = {
+    panels: activeTab.panels,
+    viewport,
+    origin: activeTab.canvasCamera,
+    scale: activeTab.canvasScale,
+  };
+  if (current.preferences.organizeMode === "uniform") {
+    console.warn("Uniform Organize was not applied because its existing strategy resizes panels or changes camera state, which violates the position-only Organize contract.");
+    return current;
+  }
+  const snapshot = activeTab.organizeSnapshot ?? {
+    canvasBounds: { ...activeTab.canvasBounds },
+    canvasScale: activeTab.canvasScale,
+    canvasCamera: { ...activeTab.canvasCamera },
+    geometries: Object.fromEntries(activeTab.panels.map((panel) => [panel.id, { ...panel.geometry }])),
+  };
+  const { plan, strategy } = planPreserveSizesArrangement({
+    ...arrangementInput,
+    canvasBounds: activeTab.canvasBounds,
+    gridSize: current.preferences.gridSize,
+    organizeGapUnits: current.preferences.organizeGapUnits ?? 0,
+  });
+  if (strategy === "rejected" || plan.geometries.size === 0) return current;
+  return {
+    ...current,
+    tabs: current.tabs.map((tab) => tab.id !== activeTab.id ? tab : {
+      ...tab,
+      panels: tab.panels.map((panel) => {
+        const geometry = plan.geometries.get(panel.id);
+        return geometry ? { ...panel, geometry, updatedAt: now } : panel;
+      }),
+      organizeSnapshot: snapshot,
+      organizeActive: true,
+      updatedAt: now,
+    }),
+  };
+}
+
+export function restoreWorkspaceState(current: WorkspaceState, now: string): WorkspaceState {
+  const activeTab = current.tabs.find((tab) => tab.id === current.activeTabId);
+  const snapshot = activeTab?.organizeSnapshot;
+  if (!activeTab || !snapshot) return current;
+  return {
+    ...current,
+    tabs: current.tabs.map((tab) => tab.id !== activeTab.id ? tab : {
+      ...tab,
+      canvasBounds: { ...snapshot.canvasBounds },
+      canvasScale: snapshot.canvasScale,
+      canvasCamera: { ...snapshot.canvasCamera },
+      panels: tab.panels.map((panel) => {
+        const geometry = snapshot.geometries[panel.id];
+        return geometry ? { ...panel, geometry: { ...geometry }, updatedAt: now } : panel;
+      }),
+      organizeSnapshot: null,
+      organizeActive: false,
+      updatedAt: now,
+    }),
+  };
+}
 
 function panelGeometriesOverlap(
   a: PanelGeometry,
@@ -306,6 +540,10 @@ export type WorkspaceController = {
   togglePanelMinimized: (panelId: string) => void;
   focusPanel: (panelId: string) => void;
   updatePanelGeometry: (panelId: string, geometry: PanelGeometry) => void;
+  toggleActiveTabOrganize: (
+    viewport: { width: number; height: number },
+  ) => void;
+  restoreActiveTabLayout: () => void;
   updatePanelState: (panelId: string, panelState: unknown) => void;
   updatePanelViewPreferences: (
     panelId: string,
@@ -318,6 +556,14 @@ export type WorkspaceController = {
   resetWorkspace: () => void;
 };
 
+export function shouldPersistWorkspaceAfterLoad(
+  currentState: WorkspaceState,
+  initialState: WorkspaceState,
+  initialLoadWasRepaired: boolean,
+) {
+  return currentState !== initialState || !initialLoadWasRepaired;
+}
+
 export function useWorkspaceController({
   registry,
   persistence,
@@ -326,6 +572,7 @@ export function useWorkspaceController({
 }: WorkspaceControllerDependencies): WorkspaceController {
   const [initialLoad] = useState(() => persistence.loadWorkspace());
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialLoad.state);
+  const initialWorkspaceRef = useRef(initialLoad.state);
   const [templateStorage] = useState(
     () => tabTemplateStorage ?? createLocalTabTemplateStorage(),
   );
@@ -334,8 +581,20 @@ export function useWorkspaceController({
   );
 
   useEffect(() => {
+    // Do not overwrite the source document with a repaired in-memory copy on
+    // mount. Keep the user's original bytes available until a deliberate
+    // workspace change is made; clean migrations still persist as before.
+    if (
+      !shouldPersistWorkspaceAfterLoad(
+        workspace,
+        initialWorkspaceRef.current,
+        initialLoad.report.repaired,
+      )
+    ) {
+      return;
+    }
     persistence.saveWorkspace(workspace);
-  }, [persistence, workspace]);
+  }, [initialLoad.report.repaired, persistence, workspace]);
 
   useEffect(() => {
     templateStorage.save(savedTabTemplates);
@@ -713,6 +972,19 @@ export function useWorkspaceController({
     });
   }
 
+  function toggleActiveTabOrganize(
+    viewport: { width: number; height: number },
+  ) {
+    const now = nowIso();
+
+    setWorkspace((current) => organizeWorkspaceState(current, viewport, now));
+  }
+
+  function restoreActiveTabLayout() {
+    const now = nowIso();
+    setWorkspace((current) => restoreWorkspaceState(current, now));
+  }
+
   function updatePanelState(panelId: string, panelState: unknown) {
     const now = nowIso();
     updateActiveTab((panels) =>
@@ -829,6 +1101,8 @@ export function useWorkspaceController({
     togglePanelMinimized,
     focusPanel,
     updatePanelGeometry,
+    toggleActiveTabOrganize,
+    restoreActiveTabLayout,
     updatePanelState,
     updatePanelViewPreferences,
     updatePreferences,

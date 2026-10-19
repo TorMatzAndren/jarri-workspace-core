@@ -6258,6 +6258,49 @@ code {
   min-width: 0;
 }
 
+/* Organize status colours remain distinct from runtime diagnostic surfaces. */
+.workspace-shell {
+  --workspace-organize-off: light-dark(#b93b3b, #e06b6b);
+  --workspace-organize-on: light-dark(#18844f, #45c98a);
+}
+
+/* Two vertically paired controls in the title bar. */
+.workspace-shell__organize-pair {
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  flex: 0 0 auto;
+  min-width: 100px;
+}
+
+.workspace-shell__organize-pair .workspace-shell__action {
+  width: 100%;
+  min-height: 0;
+  padding: 3px 10px;
+  font-size: 0.78em;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.workspace-shell__organize-pair .workspace-shell__action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Organize toggle: semantic state, independent of theme presets. */
+.workspace-shell__organize-button[aria-pressed] .workspace-canvas__organize-indicator {
+  display: inline-block;
+  width: 0.55em;
+  height: 0.55em;
+  margin-right: 0.45em;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--workspace-organize-off);
+}
+
+.workspace-shell__organize-button[aria-pressed="true"] .workspace-canvas__organize-indicator {
+  background: var(--workspace-organize-on);
+}
 
 /* Core Runtime Diagnostics: compact, frame-token-driven data surfaces. */
 .runtime-diagnostics,

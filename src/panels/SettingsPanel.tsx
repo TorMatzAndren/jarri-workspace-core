@@ -39,6 +39,13 @@ const tabStripOverflowOptions: Array<WorkspaceSelectOption<
   { value: "wrap", label: "Wrap to multiple rows" },
 ];
 
+const organizeModeOptions: Array<WorkspaceSelectOption<
+  WorkspacePreferences["organizeMode"]
+>> = [
+  { value: "preserve", label: "Preserve sizes (grid-aligned)" },
+  { value: "uniform", label: "Uniform grid (equal sizes)" },
+];
+
 const zoomAnchorOptions: Array<WorkspaceSelectOption<
   WorkspacePreferences["workspaceZoomAnchorMode"]
 >> = [
@@ -235,6 +242,40 @@ export function SettingsPanel({
               }
             />
             <strong>{preferences.panelSpacing}px</strong>
+          </label>
+
+          <label>
+            <span>Organize mode</span>
+            <WorkspaceSelect
+              value={preferences.organizeMode}
+              options={organizeModeOptions}
+              ariaLabel="Organize mode"
+              onChange={(organizeMode) =>
+                updatePreferences({ organizeMode })
+              }
+            />
+          </label>
+
+          <label>
+            <span>Organize panel gap</span>
+            <WorkspaceNumberInput
+              min={0}
+              max={4}
+              step={1}
+              ariaLabel="Organize panel gap in grid units"
+              value={preferences.organizeGapUnits ?? 0}
+              onChange={(value) =>
+                updatePreferences({
+                  organizeGapUnits: Math.max(
+                    0,
+                    Math.min(4, Math.round(value)),
+                  ),
+                })
+              }
+            />
+            <strong>
+              {(preferences.organizeGapUnits ?? 0) * preferences.gridSize}px
+            </strong>
           </label>
 
           <label>
