@@ -46,7 +46,13 @@ function gapsAreValid(geometries: PanelGeometry[], gap: number) {
     const xGap = Math.max(0, b.x - a.x - a.width, a.x - b.x - b.width);
     const yGap = Math.max(0, b.y - a.y - a.height, a.y - b.y - b.height);
     assert(!overlap, "organized panels do not overlap");
-    if (gap > 0) assert(xGap >= gap || yGap >= gap, "configured clearance is maintained");
+    if (gap > 0 && xGap < gap && yGap < gap) {
+      throw new Error(
+        `Configured clearance violation: panels ${i} and ${j}; ` +
+        `required=${gap}, xGap=${xGap}, yGap=${yGap}; ` +
+        `A=${JSON.stringify(a)}; B=${JSON.stringify(b)}`
+      );
+    }
   }
 }
 function hasTouchingFrames(geometries: PanelGeometry[]) {
@@ -193,10 +199,23 @@ function testGapAndEligibility() {
   assert(hasTouchingFrames([...zero.plan.geometries.values()]), "zero gap permits adjacent frames to touch");
   const finalState = organizeWorkspaceState(source, { width: 3440, height: 910 }, stamp).tabs[0];
   assert(finalState.organizeActive, "eligible panels are arranged while excluded panels remain stationary");
-  for (const excluded of source.tabs[0].panels.slice(6)) {
-    const after = finalState.panels.find((item) => item.id === excluded.id)!;
-    equal(JSON.stringify(after.geometry), JSON.stringify(excluded.geometry), `${excluded.id} excluded geometry remains unchanged`);
-  }
+  const newlyEligible = source.tabs[0].panels[6];
+  const movedPanel = finalState.panels.find((item) => item.id === newlyEligible.id)!;
+  assert(
+    movedPanel.geometry.x !== newlyEligible.geometry.x ||
+    movedPanel.geometry.y !== newlyEligible.geometry.y,
+    "normal panel outside camera viewport participates in canvas-wide Organize",
+  );
+  equal(movedPanel.geometry.width, newlyEligible.geometry.width, "eligible width preserved");
+  equal(movedPanel.geometry.height, newlyEligible.geometry.height, "eligible height preserved");
+
+  const minimized = source.tabs[0].panels[7];
+  const stationary = finalState.panels.find((item) => item.id === minimized.id)!;
+  equal(
+    JSON.stringify(stationary.geometry),
+    JSON.stringify(minimized.geometry),
+    "minimized panel remains stationary",
+  );
 }
 
 function testRepeatUnlockRestoreAndUniformCompatibility() {
@@ -272,3 +291,152 @@ testGapAndEligibility();
 testRepeatUnlockRestoreAndUniformCompatibility();
 testInteractiveBudgetFallsBackAboveThreshold();
 console.log("Spatial Organize controller integration tests passed");
+
+
+function testOrganizeGapAppliesOutsideVisibleCameraViewport() {
+  const source = state();
+  const tab = source.tabs[0];
+  const previous = tab.panels.map((panel) => ({
+    id: panel.id,
+    geometry: { ...panel.geometry },
+  }));
+  const beforeBounds = JSON.stringify(tab.canvasBounds);
+
+  source.preferences.gridSize = 24;
+  source.preferences.organizeGapUnits = 3;
+
+  // Camera sees no part of the canvas. It must not determine
+  // which panels belong to the logical canvas arrangement.
+  tab.canvasCamera = {
+    x: tab.canvasBounds.x + tab.canvasBounds.width + 1000,
+    y: tab.canvasBounds.y + tab.canvasBounds.height + 1000,
+  };
+
+  const beforeCamera = JSON.stringify(tab.canvasCamera);
+  const beforeScale = tab.canvasScale;
+
+  const viewport = { width: 48, height: 48 };
+
+  const result = planPreserveSizesArrangement({
+    panels: tab.panels,
+    viewport,
+    origin: tab.canvasCamera,
+    scale: tab.canvasScale,
+    canvasBounds: tab.canvasBounds,
+    gridSize: 24,
+    organizeGapUnits: 3,
+  });
+
+  equal(
+    result.plan.geometries.size,
+    tab.panels.length,
+    "every normal canvas panel participates independently of camera",
+  );
+
+  assert(
+    result.strategy !== "rejected",
+    "valid canvas-wide arrangement is accepted",
+  );
+
+  gapsAreValid(
+    [...result.plan.geometries.values()],
+    72,
+  );
+
+  const organized = organizeWorkspaceState(
+    source,
+    viewport,
+    stamp,
+  ).tabs[0];
+
+  assert(
+    organized.organizeActive === true,
+    "canvas-wide arrangement commits successfully",
+  );
+
+  const participating = organized.panels.filter(
+    (panel) => panel.display?.mode !== "minimized",
+  );
+
+  const stationary = organized.panels.filter(
+    (panel) => panel.display?.mode === "minimized",
+  );
+
+  gapsAreValid(
+    participating.map((panel) => panel.geometry),
+    72,
+  );
+
+  for (const obstacle of stationary) {
+    const original = tab.panels.find(
+      (panel) => panel.id === obstacle.id,
+    );
+
+    assert(original !== undefined, "stationary panel exists");
+
+    equal(
+      JSON.stringify(obstacle.geometry),
+      JSON.stringify(original.geometry),
+      "minimized panel remains stationary",
+    );
+
+    for (const panel of participating) {
+      const a = panel.geometry;
+      const b = obstacle.geometry;
+
+      const overlaps =
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y;
+
+      assert(
+        !overlaps,
+        "organized panel does not overlap stationary obstacle",
+      );
+    }
+  }
+
+  for (const oldPanel of previous) {
+    const currentPanel = organized.panels.find(
+      (panel) => panel.id === oldPanel.id,
+    );
+
+    assert(
+      currentPanel !== undefined,
+      "every original panel remains in the workspace",
+    );
+
+    equal(
+      currentPanel.geometry.width,
+      oldPanel.geometry.width,
+      "Preserve Sizes retains panel width",
+    );
+
+    equal(
+      currentPanel.geometry.height,
+      oldPanel.geometry.height,
+      "Preserve Sizes retains panel height",
+    );
+  }
+
+  equal(
+    JSON.stringify(organized.canvasBounds),
+    beforeBounds,
+    "Organize does not resize the canvas",
+  );
+
+  equal(
+    JSON.stringify(organized.canvasCamera),
+    beforeCamera,
+    "Organize does not move the camera",
+  );
+
+  equal(
+    organized.canvasScale,
+    beforeScale,
+    "Organize does not change zoom",
+  );
+}
+
+testOrganizeGapAppliesOutsideVisibleCameraViewport();

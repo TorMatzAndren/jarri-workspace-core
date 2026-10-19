@@ -1,6 +1,7 @@
 import { normalizeGeometry } from "./layoutEngine";
 import {
   resolvePanelCreationGeometry,
+  closeWorkspacePanel,
   shouldPersistWorkspaceAfterLoad,
 } from "./workspaceController";
 import type { PanelGeometry, PanelInstance } from "./types";
@@ -383,3 +384,115 @@ function main() {
 }
 
 main();
+
+
+function testClosingPanelCapturesFinalGeometry() {
+  const geometry: PanelGeometry = {
+    x: -480,
+    y: -240,
+    width: 1008,
+    height: 744,
+    minWidth: 360,
+    minHeight: 336,
+  };
+
+  const closingPanel = {
+    id: "settings-instance",
+    moduleId: "core",
+    panelType: "settings",
+    geometry,
+    focusOrder: 1,
+  } as PanelInstance;
+
+  const remainingPanel = {
+    ...closingPanel,
+    id: "file-browser-instance",
+    panelType: "file-browser",
+    focusOrder: 2,
+  };
+
+  const workspace = {
+    activeTabId: "tab-1",
+    tabs: [
+      {
+        id: "tab-1",
+        panels: [closingPanel, remainingPanel],
+      },
+    ],
+    preferences: {
+      panelViews: {
+        "settings-instance": { fontScale: 1 },
+        "file-browser-instance": { fontScale: 1 },
+      },
+    },
+    surfacePresentationMemory: {},
+  } as unknown as Parameters<typeof closeWorkspacePanel>[0];
+
+  const closed = closeWorkspacePanel(
+    workspace,
+    closingPanel,
+    "2026-10-19T00:00:00Z",
+    true,
+  );
+
+  const remembered =
+    closed.surfacePresentationMemory["panel:core:settings"];
+
+  if (!remembered?.geometry) {
+    throw new Error("Closing a supported panel must remember its geometry");
+  }
+
+  assertGeometry(
+    remembered.geometry,
+    geometry,
+    "closing a panel preserves final signed geometry",
+  );
+
+  assertEqual(
+    closed.tabs[0].panels.length,
+    1,
+    "closed panel is removed from active tab",
+  );
+
+  assertEqual(
+    closed.tabs[0].panels[0].id,
+    remainingPanel.id,
+    "other panel instances remain open",
+  );
+
+  assertEqual(
+    Object.keys(closed.preferences.panelViews).length,
+    1,
+    "closed instance preferences are removed",
+  );
+
+  const reopened = resolve({
+    seededGeometry: normalizeGeometry(
+      remembered.geometry,
+      canonicalGeometry,
+      { allowNegativePosition: true },
+    ),
+    hasRememberedGeometry: true,
+  });
+
+  assertGeometry(
+    reopened,
+    geometry,
+    "reopen restores final signed geometry",
+  );
+
+  const withoutMemory = closeWorkspacePanel(
+    workspace,
+    closingPanel,
+    "2026-10-19T00:00:00Z",
+    false,
+  );
+
+  assertEqual(
+    Object.keys(withoutMemory.surfacePresentationMemory).length,
+    0,
+    "panels without memory policy do not create memory",
+  );
+}
+
+testClosingPanelCapturesFinalGeometry();

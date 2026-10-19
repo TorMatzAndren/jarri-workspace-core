@@ -78,7 +78,7 @@ assert.match(
 );
 assert.match(
   workspaceController,
-  /panelViews: Object\.fromEntries\([\s\S]*?filter\(\(\[id\]\) => id !== panelId\)/,
+  /export function closeWorkspacePanel\([\s\S]*?panelViews: Object\.fromEntries\([\s\S]*?\(\[id\]\) => id !== closingPanel\.id/,
   "closing a panel prunes its Frame Font preference",
 );
 assert.match(

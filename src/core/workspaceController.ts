@@ -48,24 +48,21 @@ type PreservePlan = ReturnType<typeof planSizePreservingArrangement>;
 
 function eligibleArrangementPanels(
   panels: PanelInstance[],
-  viewport: { width: number; height: number },
-  origin: { x: number; y: number },
-  scale: number,
+  canvasBounds: WorkspaceCanvasBounds,
 ): PanelInstance[] {
-  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
-  const area = {
-    x: origin.x,
-    y: origin.y,
-    width: viewport.width / safeScale,
-    height: viewport.height / safeScale,
-  };
+  const left = canvasBounds.x;
+  const top = canvasBounds.y;
+  const right = left + canvasBounds.width;
+  const bottom = top + canvasBounds.height;
+
   return panels.filter((panel) => {
     const g = panel.geometry;
+
     return panel.display?.mode !== "minimized" &&
       [g.x, g.y, g.width, g.height].every(Number.isFinite) &&
       g.width > 0 && g.height > 0 &&
-      g.x < area.x + area.width && g.x + g.width > area.x &&
-      g.y < area.y + area.height && g.y + g.height > area.y;
+      g.x < right && g.x + g.width > left &&
+      g.y < bottom && g.y + g.height > top;
   });
 }
 
@@ -137,8 +134,24 @@ export function planPreserveSizesArrangement({
   organizeGapUnits: number;
 }): { plan: PreservePlan; strategy: "spatial" | "shelf" | "rejected"; reason?: string } {
   const gap = Math.max(0, organizeGapUnits) * gridSize;
-  const eligible = eligibleArrangementPanels(panels, viewport, origin, scale);
   const emptyPlan: PreservePlan = { geometries: new Map(), camera: origin, scale };
+
+  if (
+    ![
+      canvasBounds.x,
+      canvasBounds.y,
+      canvasBounds.width,
+      canvasBounds.height,
+    ].every(Number.isFinite) ||
+    canvasBounds.width <= 0 ||
+    canvasBounds.height <= 0
+  ) {
+    const reason = "Invalid logical canvas bounds.";
+    console.warn(`Organize was not applied. ${reason}`);
+    return { plan: emptyPlan, strategy: "rejected", reason };
+  }
+
+  const eligible = eligibleArrangementPanels(panels, canvasBounds);
   if (eligible.length === 0) return { plan: emptyPlan, strategy: "rejected", reason: "No eligible panels." };
   const valid = (plan: PreservePlan) => validateArrangementPlan(
     panels, eligible, plan.geometries, gridSize, gap, canvasBounds,
@@ -434,6 +447,53 @@ export function clampOpeningGeometryToCanvasBounds(
   );
 }
 
+export function closeWorkspacePanel(
+  current: WorkspaceState,
+  closingPanel: PanelInstance,
+  now: string,
+  rememberGeometry: boolean,
+): WorkspaceState {
+  const surfaceId = panelSurfacePresentationKey(
+    closingPanel.moduleId,
+    closingPanel.panelType,
+  );
+
+  return {
+    ...current,
+    tabs: current.tabs.map((tab) =>
+      tab.id === current.activeTabId
+        ? {
+            ...tab,
+            panels: repairFocusOrder(
+              tab.panels.filter((panel) => panel.id !== closingPanel.id),
+            ),
+            updatedAt: now,
+          }
+        : tab,
+    ),
+    preferences: {
+      ...current.preferences,
+      panelViews: Object.fromEntries(
+        Object.entries(current.preferences.panelViews).filter(
+          ([id]) => id !== closingPanel.id,
+        ),
+      ),
+    },
+    surfacePresentationMemory: rememberGeometry
+      ? {
+          ...current.surfacePresentationMemory,
+          [surfaceId]: {
+            kind: "panel",
+            moduleId: closingPanel.moduleId,
+            panelType: closingPanel.panelType,
+            geometry: { ...closingPanel.geometry },
+            updatedAt: now,
+          },
+        }
+      : current.surfacePresentationMemory,
+  };
+}
+
 export function resolvePanelCreationGeometry({
   seededGeometry,
   hasRememberedGeometry,
@@ -621,24 +681,30 @@ export function useWorkspaceController({
 
   function closePanel(panelId: string) {
     const now = nowIso();
-    setWorkspace((current) => ({
-      ...current,
-      tabs: current.tabs.map((tab) =>
-        tab.id === current.activeTabId
-          ? {
-              ...tab,
-              panels: repairFocusOrder(tab.panels.filter((panel) => panel.id !== panelId)),
-              updatedAt: now,
-            }
-          : tab,
-      ),
-      preferences: {
-        ...current.preferences,
-        panelViews: Object.fromEntries(
-          Object.entries(current.preferences.panelViews).filter(([id]) => id !== panelId),
-        ),
-      },
-    }));
+    setWorkspace((current) => {
+      const activeTab = current.tabs.find(
+        (tab) => tab.id === current.activeTabId,
+      );
+      const closingPanel = activeTab?.panels.find(
+        (panel) => panel.id === panelId,
+      );
+
+      if (!closingPanel) {
+        return current;
+      }
+
+      const definition = registry.getPanel(
+        closingPanel.moduleId,
+        closingPanel.panelType,
+      );
+
+      return closeWorkspacePanel(
+        current,
+        closingPanel,
+        now,
+        Boolean(definition?.surfacePresentationMemory),
+      );
+    });
   }
 
   function createPanel(
@@ -675,7 +741,9 @@ export function useWorkspaceController({
         const rememberedGeometry = surfaceMemory?.geometry;
 
         const seededGeometry = rememberedGeometry
-          ? normalizeGeometry(rememberedGeometry, canonicalGeometry)
+          ? normalizeGeometry(rememberedGeometry, canonicalGeometry, {
+              allowNegativePosition: true,
+            })
           : normalizeGeometry(
               {
                 ...canonicalGeometry,
