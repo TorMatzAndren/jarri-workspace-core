@@ -79,6 +79,7 @@ type Props = {
   onClosePanel: (panelId: string) => void;
   onTogglePanelMinimized: (panelId: string) => void;
   onGeometryChange: (panelId: string, geometry: PanelGeometry) => void;
+  onTogglePanelOrganizeLock: (panelId: string) => void;
   onPanelStateChange: (panelId: string, panelState: unknown) => void;
   onPanelViewPreferencesChange: (
     panelId: string,
@@ -119,6 +120,7 @@ export function WorkspaceCanvas({
   onClosePanel,
   onTogglePanelMinimized,
   onGeometryChange,
+  onTogglePanelOrganizeLock,
   onPanelStateChange,
   onPanelViewPreferencesChange,
   onCanvasBoundsChange,
@@ -889,6 +891,7 @@ export function WorkspaceCanvas({
               onClose={onClosePanel}
               onToggleMinimized={onTogglePanelMinimized}
               onGeometryChange={onGeometryChange}
+              onToggleOrganizeLock={onTogglePanelOrganizeLock}
               onPanelStateChange={onPanelStateChange}
               onPanelViewPreferencesChange={onPanelViewPreferencesChange}
               onPreferencesChange={onPreferencesChange}

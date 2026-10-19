@@ -65,6 +65,7 @@ type Props = {
   onClose: (panelId: string) => void;
   onToggleMinimized: (panelId: string) => void;
   onGeometryChange: (panelId: string, geometry: PanelGeometry) => void;
+  onToggleOrganizeLock: (panelId: string) => void;
   onPanelStateChange: (panelId: string, panelState: unknown) => void;
   onPanelViewPreferencesChange: (
     panelId: string,
@@ -93,6 +94,7 @@ export function PanelFrame({
   onClose,
   onToggleMinimized,
   onGeometryChange,
+  onToggleOrganizeLock,
   onPanelStateChange,
   onPanelViewPreferencesChange,
   onPreferencesChange,
@@ -447,6 +449,10 @@ export function PanelFrame({
         }
         return;
       }
+
+      case "organize-lock":
+        onToggleOrganizeLock(panel.id);
+        return;
     }
   }
 
@@ -488,20 +494,37 @@ export function PanelFrame({
                         ? `panel-frame__projection-copy--${screenshotFeedback}`
                         : ""
                   }`}
-                  aria-label={control.definition.label}
-                  title={
+                  aria-label={control.definition.kind === "organize-lock"
+                    ? panel.organizeLocked === true ? "Unlock Organize" : "Lock Organize"
+                    : control.definition.label}
+                  aria-pressed={control.definition.kind === "organize-lock"
+                    ? panel.organizeLocked === true
+                    : undefined}
+                  title={control.definition.kind === "organize-lock"
+                    ? panel.organizeLocked === true ? "Unlock Organize" : "Lock Organize"
+                    : (
                     control.available
                       ? control.definition.label
                       : control.definition.kind === "copy"
                         ? `${control.definition.label} is waiting for panel content`
                         : control.definition.label
-                  }
+                    )}
                   disabled={!control.available}
                   data-frame-control-status={control.status}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => void invokeFrameControl(control)}
                 >
-                  {control.definition.kind === "copy" && copyFeedback === "copied"
+                  {control.definition.kind === "organize-lock"
+                    ? (
+                      <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="7" width="10" height="7" rx="1.5" />
+                        {panel.organizeLocked === true
+                          ? <path d="M5 7V5a3 3 0 0 1 6 0v2" />
+                          : <path d="M5 7V5a3 3 0 0 1 5.5-1.7" />}
+                        <path d="M8 10v1.5" />
+                      </svg>
+                    )
+                    : control.definition.kind === "copy" && copyFeedback === "copied"
                     ? "Copied"
                     : control.definition.kind === "copy" && copyFeedback === "error"
                       ? "Copy failed"

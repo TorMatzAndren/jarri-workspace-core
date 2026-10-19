@@ -59,6 +59,7 @@ function eligibleArrangementPanels(
     const g = panel.geometry;
 
     return panel.display?.mode !== "minimized" &&
+      panel.organizeLocked !== true &&
       [g.x, g.y, g.width, g.height].every(Number.isFinite) &&
       g.width > 0 && g.height > 0 &&
       g.x < right && g.x + g.width > left &&
@@ -87,6 +88,7 @@ function validateArrangementPlan(
     panel,
     geometry: geometries.get(panel.id) ?? panel.geometry,
     moved: eligibleIds.has(panel.id),
+    lockedObstacle: panel.organizeLocked === true && panel.display?.mode !== "minimized",
   }));
   const grid = Math.max(1, Math.round(gridSize));
   const left = canvasBounds.x, top = canvasBounds.y;
@@ -116,7 +118,10 @@ function validateArrangementPlan(
     const yGap = Math.max(0, b.y - a.y - a.height, a.y - b.y - b.height);
     if (a.x < b.x + b.width && a.x + a.width > b.x &&
       a.y < b.y + b.height && a.y + a.height > b.y) return false;
-    if (placed[i].moved && placed[j].moved && gap > 0 && xGap < gap && yGap < gap) return false;
+    const gapRequired = placed[i].moved && placed[j].moved ||
+      placed[i].moved && placed[j].lockedObstacle ||
+      placed[j].moved && placed[i].lockedObstacle;
+    if (gapRequired && gap > 0 && xGap < gap && yGap < gap) return false;
   }
   return true;
 }
@@ -174,7 +179,13 @@ export function planPreserveSizesArrangement({
         gapGridUnits: organizeGapUnits,
         canvasBounds,
         containerBounds: canvasBounds,
-        obstacles: panels.filter((panel) => !eligible.some((item) => item.id === panel.id)).map((panel) => panel.geometry),
+        obstacles: panels.filter((panel) => !eligible.some((item) => item.id === panel.id)).map((panel) => {
+          const clearance = panel.organizeLocked === true && panel.display?.mode !== "minimized" ? gap : 0;
+          return clearance > 0
+            ? { ...panel.geometry, x: panel.geometry.x - clearance, y: panel.geometry.y - clearance,
+                width: panel.geometry.width + clearance * 2, height: panel.geometry.height + clearance * 2 }
+            : panel.geometry;
+        }),
         camera: origin,
         scale,
       });
@@ -281,6 +292,68 @@ export function restoreWorkspaceState(current: WorkspaceState, now: string): Wor
       organizeActive: false,
       updatedAt: now,
     }),
+  };
+}
+
+/** Toggle only the active tab's named panel instance, leaving snapshots and all other state intact. */
+export function togglePanelOrganizeLockState(
+  current: WorkspaceState,
+  panelId: string,
+  now: string,
+): WorkspaceState {
+  const activeTab = current.tabs.find((tab) => tab.id === current.activeTabId);
+  if (!activeTab?.panels.some((panel) => panel.id === panelId)) return current;
+  return {
+    ...current,
+    tabs: current.tabs.map((tab) => tab.id !== activeTab.id ? tab : {
+      ...tab,
+      panels: tab.panels.map((panel) => panel.id !== panelId ? panel : {
+        ...panel,
+        organizeLocked: panel.organizeLocked !== true,
+        updatedAt: now,
+      }),
+      updatedAt: now,
+    }),
+  };
+}
+
+/** Geometry edits intentionally remain available for locked instances. */
+export function updateActivePanelGeometryState(
+  current: WorkspaceState,
+  panelId: string,
+  geometry: PanelGeometry,
+  now: string,
+  rememberSurface: boolean,
+): WorkspaceState {
+  const activeTab = current.tabs.find((tab) => tab.id === current.activeTabId);
+  const target = activeTab?.panels.find((panel) => panel.id === panelId);
+  if (!target) return current;
+  const tabs = current.tabs.map((tab) => tab.id !== activeTab!.id ? tab : {
+    ...tab,
+    panels: tab.panels.map((panel) => panel.id !== panelId ? panel :
+      panel.display?.mode === "minimized"
+        ? {
+            ...panel, geometry,
+            display: { ...panel.display, restoreGeometry: {
+              ...(panel.display.restoreGeometry ?? panel.geometry), x: geometry.x, y: geometry.y,
+            } },
+            updatedAt: now,
+          }
+        : { ...panel, geometry, updatedAt: now }),
+    updatedAt: now,
+  });
+  if (!rememberSurface) return { ...current, tabs };
+  const surfaceId = panelSurfacePresentationKey(target.moduleId, target.panelType);
+  return {
+    ...current,
+    tabs,
+    surfacePresentationMemory: {
+      ...current.surfacePresentationMemory,
+      [surfaceId]: {
+        kind: "panel", moduleId: target.moduleId, panelType: target.panelType,
+        geometry, updatedAt: now,
+      },
+    },
   };
 }
 
@@ -600,6 +673,7 @@ export type WorkspaceController = {
   togglePanelMinimized: (panelId: string) => void;
   focusPanel: (panelId: string) => void;
   updatePanelGeometry: (panelId: string, geometry: PanelGeometry) => void;
+  togglePanelOrganizeLock: (panelId: string) => void;
   toggleActiveTabOrganize: (
     viewport: { width: number; height: number },
   ) => void;
@@ -959,85 +1033,19 @@ export function useWorkspaceController({
 
   function updatePanelGeometry(panelId: string, geometry: PanelGeometry) {
     const now = nowIso();
-
     setWorkspace((current) => {
-      const activeTab = current.tabs.find(
-        (tab) => tab.id === current.activeTabId,
+      const target = current.tabs.find((tab) => tab.id === current.activeTabId)
+        ?.panels.find((panel) => panel.id === panelId);
+      const definition = target && registry.getPanel(target.moduleId, target.panelType);
+      return updateActivePanelGeometryState(
+        current, panelId, geometry, now, Boolean(definition?.surfacePresentationMemory),
       );
-      const targetPanel = activeTab?.panels.find(
-        (panel) => panel.id === panelId,
-      );
-
-      if (!targetPanel) {
-        return current;
-      }
-
-      const definition = registry.getPanel(
-        targetPanel.moduleId,
-        targetPanel.panelType,
-      );
-
-      const tabs = current.tabs.map((tab) => {
-        if (tab.id !== current.activeTabId) {
-          return tab;
-        }
-
-        return {
-          ...tab,
-          panels: tab.panels.map((panel) => {
-            if (panel.id !== panelId) {
-              return panel;
-            }
-
-            if (panel.display?.mode === "minimized") {
-              return {
-                ...panel,
-                geometry,
-                display: {
-                  ...panel.display,
-                  restoreGeometry: {
-                    ...(panel.display.restoreGeometry ?? panel.geometry),
-                    x: geometry.x,
-                    y: geometry.y,
-                  },
-                },
-                updatedAt: now,
-              };
-            }
-
-            return { ...panel, geometry, updatedAt: now };
-          }),
-          updatedAt: now,
-        };
-      });
-
-      if (!definition?.surfacePresentationMemory) {
-        return {
-          ...current,
-          tabs,
-        };
-      }
-
-      const surfaceId = panelSurfacePresentationKey(
-        targetPanel.moduleId,
-        targetPanel.panelType,
-      );
-
-      return {
-        ...current,
-        tabs,
-        surfacePresentationMemory: {
-          ...current.surfacePresentationMemory,
-          [surfaceId]: {
-            kind: "panel",
-            moduleId: targetPanel.moduleId,
-            panelType: targetPanel.panelType,
-            geometry,
-            updatedAt: now,
-          },
-        },
-      };
     });
+  }
+
+  function togglePanelOrganizeLock(panelId: string) {
+    const now = nowIso();
+    setWorkspace((current) => togglePanelOrganizeLockState(current, panelId, now));
   }
 
   function toggleActiveTabOrganize(
@@ -1169,6 +1177,7 @@ export function useWorkspaceController({
     togglePanelMinimized,
     focusPanel,
     updatePanelGeometry,
+    togglePanelOrganizeLock,
     toggleActiveTabOrganize,
     restoreActiveTabLayout,
     updatePanelState,

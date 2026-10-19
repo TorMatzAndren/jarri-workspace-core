@@ -1621,6 +1621,7 @@ export function WorkspaceShell() {
         onClosePanel={controller.closePanel}
         onTogglePanelMinimized={controller.togglePanelMinimized}
         onGeometryChange={controller.updatePanelGeometry}
+        onTogglePanelOrganizeLock={controller.togglePanelOrganizeLock}
         onPanelStateChange={controller.updatePanelState}
         onPanelViewPreferencesChange={controller.updatePanelViewPreferences}
         onCanvasBoundsChange={controller.updateActiveTabCanvasBounds}

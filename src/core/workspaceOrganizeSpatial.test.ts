@@ -5,6 +5,8 @@ import {
   planPreserveSizesArrangement,
   PRESERVE_SPATIAL_SEARCH_MAX_PANELS,
   restoreWorkspaceState,
+  togglePanelOrganizeLockState,
+  updateActivePanelGeometryState,
 } from "./workspaceController";
 import { measureSpatialLayout } from "./spatialLayoutMetrics";
 import { normalizeWorkspaceCanvasBounds } from "./workspaceCanvasBounds";
@@ -290,7 +292,97 @@ testLivePanelSizeDoesNotRoundUpToConfiguredOrganizeGrid();
 testGapAndEligibility();
 testRepeatUnlockRestoreAndUniformCompatibility();
 testInteractiveBudgetFallsBackAboveThreshold();
+testOrganizeLockKeepsInstanceFixedAndEnforcesGap();
+testImpossibleLockedObstacleRejectsAtomically();
+testLockStateSurvivesOrganizeUnlockRestoreAndManualGeometry();
 console.log("Spatial Organize controller integration tests passed");
+
+function testOrganizeLockKeepsInstanceFixedAndEnforcesGap() {
+  const source = state();
+  const tab = source.tabs[0];
+  // Two instances may share a panel type; only this identity is locked.
+  tab.panels[0].panelType = "file-browser";
+  tab.panels[5].panelType = "file-browser";
+  tab.panels[0].organizeLocked = true;
+  source.preferences.organizeGapUnits = 2;
+  const fixed = { ...tab.panels[0].geometry };
+  const priorSecond = { ...tab.panels[5].geometry };
+  const offscreenPlan = planPreserveSizesArrangement({
+    panels: tab.panels, viewport: { width: 320, height: 200 }, origin: { x: 100000, y: -100000 },
+    scale: 2, canvasBounds: tab.canvasBounds, gridSize: source.preferences.gridSize,
+    organizeGapUnits: source.preferences.organizeGapUnits,
+  });
+  equal(offscreenPlan.plan.geometries.size, tab.panels.length - 1,
+    "camera and zoom do not change unlocked eligible membership");
+  assert(!offscreenPlan.plan.geometries.has(tab.panels[0].id), "locked frame is excluded at every camera position");
+  const zoomOnlyPlan = planPreserveSizesArrangement({
+    panels: tab.panels, viewport: { width: 320, height: 200 }, origin: tab.canvasCamera,
+    scale: 1.75, canvasBounds: tab.canvasBounds, gridSize: source.preferences.gridSize,
+    organizeGapUnits: source.preferences.organizeGapUnits,
+  });
+  equal(zoomOnlyPlan.plan.geometries.size, offscreenPlan.plan.geometries.size,
+    "zoom alone does not change unlocked eligible membership");
+  const committed = organizeWorkspaceState(source, { width: 3440, height: 910 }, stamp).tabs[0];
+  equal(committed.organizeActive, true, "lock-aware layout commits as one plan");
+  equal(JSON.stringify(committed.panels[0].geometry), JSON.stringify(fixed), "locked panel geometry is exact");
+  assert(committed.panels[5].geometry.x !== priorSecond.x || committed.panels[5].geometry.y !== priorSecond.y,
+    "same-type unlocked instance remains eligible");
+  const moved = committed.panels.filter((item) => item.id !== tab.panels[0].id && item.display?.mode !== "minimized");
+  gapsAreValid([...moved.map((item) => item.geometry), fixed], 2 * source.preferences.gridSize);
+  const zeroGap = planPreserveSizesArrangement({ panels: tab.panels, viewport: { width: 3440, height: 910 },
+    origin: tab.canvasCamera, scale: tab.canvasScale, canvasBounds: tab.canvasBounds,
+    gridSize: source.preferences.gridSize, organizeGapUnits: 0 });
+  equal(zeroGap.plan.geometries.size, tab.panels.length - 1,
+    "zero-gap mode also places all unlocked panels around the fixed lock");
+}
+
+function testImpossibleLockedObstacleRejectsAtomically() {
+  const obstacle = panel(50, [6950, 3400], -2400, -1200);
+  obstacle.organizeLocked = true;
+  const mover = panel(51, [768, 624], -1200, -600);
+  const source = state([obstacle, mover]);
+  const original = JSON.stringify(source);
+  const oldWarn = console.warn;
+  console.warn = () => {};
+  let after: WorkspaceState;
+  try { after = organizeWorkspaceState(source, { width: 3440, height: 910 }, stamp); }
+  finally { console.warn = oldWarn; }
+  assert(after === source, "impossible locked obstacle rejects the complete state transition");
+  equal(JSON.stringify(after), original, "no partial panel positions or snapshot are committed");
+}
+
+function testLockStateSurvivesOrganizeUnlockRestoreAndManualGeometry() {
+  const source = state();
+  source.tabs[0].panels[0].organizeLocked = true;
+  source.tabs[0].panels[1].panelType = source.tabs[0].panels[0].panelType;
+  const organized = organizeWorkspaceState(source, { width: 3440, height: 910 }, stamp);
+  const originalSnapshot = JSON.stringify(organized.tabs[0].organizeSnapshot);
+  const toggled = togglePanelOrganizeLockState(organized, source.tabs[0].panels[1].id, stamp);
+  assert(toggled.tabs[0].panels[0].organizeLocked, "same-type first instance remains locked");
+  assert(toggled.tabs[0].panels[1].organizeLocked, "toggle changes the selected instance only");
+  const visibilityHidden = {
+    ...toggled,
+    preferences: { ...toggled.preferences, frameControls: { visibility: {
+      "test:panel-1:organize-lock": false,
+    } } },
+  };
+  assert(visibilityHidden.tabs[0].panels[1].organizeLocked,
+    "Frame Settings visibility changes do not clear per-instance lock state");
+  equal(JSON.stringify(toggled.tabs[0].organizeSnapshot), originalSnapshot,
+    "toggling a lock while organized leaves the original restore snapshot intact");
+  const unlocked = organizeWorkspaceState(toggled, { width: 3440, height: 910 }, stamp);
+  assert(unlocked.tabs[0].panels[0].organizeLocked && unlocked.tabs[0].panels[1].organizeLocked,
+    "Organize and Unlock preserve lock state");
+  const changed = updateActivePanelGeometryState(unlocked, source.tabs[0].panels[0].id,
+    { ...source.tabs[0].panels[0].geometry, x: -1200, y: -500 }, stamp, false);
+  equal(changed.tabs[0].panels[0].geometry.x, -1200, "manual geometry update remains available while locked");
+  assert(changed.tabs[0].panels[0].organizeLocked, "manual movement does not clear lock");
+  const restored = restoreWorkspaceState(unlocked, stamp).tabs[0];
+  assert(restored.panels[0].organizeLocked && restored.panels[1].organizeLocked,
+    "Restore changes geometry without reverting lock state");
+  equal(JSON.stringify(restored.panels[0].geometry), JSON.stringify(toggled.tabs[0].panels[0].geometry),
+    "Restore returns the original locked frame geometry");
+}
 
 
 function testOrganizeGapAppliesOutsideVisibleCameraViewport() {

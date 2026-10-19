@@ -154,6 +154,44 @@ function testPanelInstanceFrameFontPreferenceRoundTrips() {
   assert(roundTrip["instance-new"] === undefined, "new instance begins without inherited Frame Font preference");
 }
 
+function testOrganizeLockPersistenceIsPerInstanceAndSeparateFromSurfaceMemory() {
+  const workspace = basePersistedWorkspace();
+  const tab = (workspace.tabs as Array<Record<string, unknown>>)[0];
+  tab.panels = [
+    { id: "settings-a", moduleId: "core", panelType: "settings", title: "Settings A",
+      geometry: { x: 24, y: 24, width: 420, height: 360 }, focusOrder: 1, stateVersion: 1,
+      panelState: {}, organizeLocked: true, createdAt: "2026-08-19T00:00:00.000Z", updatedAt: "2026-08-19T00:00:00.000Z" },
+    { id: "settings-b", moduleId: "core", panelType: "settings", title: "Settings B",
+      geometry: { x: 480, y: 24, width: 420, height: 360 }, focusOrder: 2, stateVersion: 1,
+      panelState: {}, organizeLocked: false, createdAt: "2026-08-19T00:00:00.000Z", updatedAt: "2026-08-19T00:00:00.000Z" },
+    { id: "missing-lock", moduleId: "removed", panelType: "gone", title: "Missing",
+      geometry: { x: 936, y: 24, width: 420, height: 360 }, focusOrder: 3, stateVersion: 1,
+      panelState: {}, organizeLocked: "yes", createdAt: "2026-08-19T00:00:00.000Z", updatedAt: "2026-08-19T00:00:00.000Z" },
+    { id: "legacy-settings", moduleId: "core", panelType: "settings", title: "Legacy Settings",
+      geometry: { x: 1392, y: 24, width: 420, height: 360 }, focusOrder: 4, stateVersion: 1,
+      panelState: {}, createdAt: "2026-08-19T00:00:00.000Z", updatedAt: "2026-08-19T00:00:00.000Z" },
+  ];
+  const originalMemory = { "panel:core:settings": { kind: "panel", moduleId: "core", panelType: "settings",
+    geometry: { x: 80, y: 90, width: 420, height: 360 }, panelState: { keep: true },
+    updatedAt: "2026-08-19T00:00:00.000Z" } };
+  workspace.surfacePresentationMemory = originalMemory;
+  const storage = createStorage(workspace);
+  const persistence = createLayoutPersistence({ registry: createPanelRegistry(), storageProvider: storage,
+    defaultWorkspaceFactory: createDefaultWorkspace, getModuleRecords: () => [] });
+  const loaded = persistence.loadWorkspace().state;
+  assertEqual(loaded.tabs[0].panels[0].organizeLocked, true, "known panel's true lock persists");
+  assertEqual(loaded.tabs[0].panels[1].organizeLocked, false, "false lock stays unlocked for same type instance");
+  assertEqual(loaded.tabs[0].panels[2].organizeLocked, false, "invalid missing-panel lock normalizes to unlocked");
+  assertEqual(loaded.tabs[0].panels[3].organizeLocked, false, "absent lock value normalizes to unlocked");
+  const memoryBefore = JSON.stringify(loaded.surfacePresentationMemory);
+  persistence.saveWorkspace(loaded);
+  const reloaded = persistence.loadWorkspace().state;
+  assertEqual(reloaded.tabs[0].panels[0].organizeLocked, true, "lock survives save and reload");
+  assertEqual(reloaded.tabs[0].panels[1].organizeLocked, false, "unlocked instance remains independent");
+  assertEqual(JSON.stringify(reloaded.surfacePresentationMemory), memoryBefore,
+    "lock is not stored in or conflated with per-type surface presentation memory");
+}
+
 function testNegativePanelCoordinatesSurviveColdStartPersistenceRoundTrip() {
   const persisted = basePersistedWorkspace();
   const tab = (persisted.tabs as Array<Record<string, unknown>>)[0];
@@ -1026,6 +1064,7 @@ function testOrganizeSnapshotSurvivesNormalization() {
 
 function main() {
   testPanelInstanceFrameFontPreferenceRoundTrips();
+  testOrganizeLockPersistenceIsPerInstanceAndSeparateFromSurfaceMemory();
   testNegativePanelCoordinatesSurviveColdStartPersistenceRoundTrip();
   testLegacyWorkspaceGetsEmptyPresentationMemory();
   testValidPresentationMemorySurvivesNormalization();

@@ -7,6 +7,7 @@ import {
   panelFrameControlKey,
   panelFrameControlViewStates,
   SCREENSHOT_CONTROL_ID,
+  ORGANIZE_LOCK_CONTROL_ID,
   SEMANTIC_COPY_CONTROL_ID,
   WORKSPACE_FRAME_CONTROL_CATALOG,
 } from "./frameControls";
@@ -39,8 +40,8 @@ function copyPayload(text: string) {
 function testWorkspaceOwnsControlCatalog() {
   assertEqual(
     WORKSPACE_FRAME_CONTROL_CATALOG.length,
-    4,
-    "Workspace catalog contains Copy, Screenshot, and Font controls",
+    5,
+    "Workspace catalog contains Copy, Screenshot, Font, and Organize Lock controls",
   );
 
   const copy = WORKSPACE_FRAME_CONTROL_CATALOG.find(
@@ -63,6 +64,21 @@ function testWorkspaceOwnsControlCatalog() {
     true,
     "Screenshot is enabled by default",
   );
+}
+
+function testOrganizeLockVisibilityIsConfigurationOnly() {
+  const lock = WORKSPACE_FRAME_CONTROL_CATALOG.find(
+    (candidate) => candidate.controlId === ORGANIZE_LOCK_CONTROL_ID,
+  );
+  assert(lock, "Organize Lock is a standard configurable frame control");
+  const key = panelFrameControlKey("demo", "file-browser", ORGANIZE_LOCK_CONTROL_ID);
+  const hidden = panelFrameControlViewStates({ controls: [lock], moduleId: "demo", panelType: "file-browser",
+    preferences: { visibility: { [key]: false } }, runtimeSnapshot: { payloads: new Map() } });
+  assertEqual(hidden[0].enabled, false, "Frame Settings visibility hides the control");
+  assertEqual(enabledHeaderPanelFrameControls(hidden).length, 0, "hidden control is not rendered in the header");
+  const visible = panelFrameControlViewStates({ controls: [lock], moduleId: "demo", panelType: "file-browser",
+    preferences: { visibility: { [key]: true } }, runtimeSnapshot: { payloads: new Map() } });
+  assertEqual(visible[0].enabled, true, "the control can be made visible again independently");
 }
 
 function testStablePreferenceKeysAndDefaults() {
@@ -264,13 +280,14 @@ function testIndependentFontControlsAndDeterministicStepping() {
 
   assertEqual(
     enabledHeaderPanelFrameControls(states).length,
-    3,
-    "disabling Copy does not disable Screenshot or Font controls",
+    4,
+    "disabling Copy does not disable Screenshot, Font, or Organize Lock controls",
   );
 }
 
 async function main() {
   testWorkspaceOwnsControlCatalog();
+  testOrganizeLockVisibilityIsConfigurationOnly();
   testStablePreferenceKeysAndDefaults();
   testPreferenceNormalizationAndBackwardCompatibility();
   testPerPanelTypeVisibility();

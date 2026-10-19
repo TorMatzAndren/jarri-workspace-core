@@ -274,6 +274,8 @@ export type PanelInstance = {
   panelType: string;
   title: string;
   geometry: PanelGeometry;
+  /** Keeps this instance fixed during Organize; manual frame controls remain enabled. */
+  organizeLocked?: boolean;
   focusOrder: number;
   stateVersion: number;
   panelState: unknown;

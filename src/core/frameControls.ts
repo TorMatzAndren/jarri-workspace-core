@@ -2,6 +2,7 @@ export const SEMANTIC_COPY_CONTROL_ID = "semantic-copy";
 export const SCREENSHOT_CONTROL_ID = "screenshot";
 export const FONT_DECREASE_CONTROL_ID = "font-decrease";
 export const FONT_INCREASE_CONTROL_ID = "font-increase";
+export const ORGANIZE_LOCK_CONTROL_ID = "organize-lock";
 
 export const PANEL_FONT_SCALE_STEPS = [
   0.75,
@@ -18,7 +19,8 @@ export type PanelFrameControlKind =
   | "copy"
   | "screenshot"
   | "font-decrease"
-  | "font-increase";
+  | "font-increase"
+  | "organize-lock";
 
 export type PanelFrameControlDefinition = {
   controlId: string;
@@ -92,6 +94,12 @@ export const WORKSPACE_FRAME_CONTROL_CATALOG:
       controlId: FONT_INCREASE_CONTROL_ID,
       label: "Font +",
       kind: "font-increase",
+      defaultEnabled: true,
+    },
+    {
+      controlId: ORGANIZE_LOCK_CONTROL_ID,
+      label: "Organize Lock",
+      kind: "organize-lock",
       defaultEnabled: true,
     },
   ];
