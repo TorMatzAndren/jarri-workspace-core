@@ -1560,6 +1560,48 @@ button:disabled {
   font-size: 0.87em;
 }
 
+
+/*
+ * Organize Lock is instance-owned. Its visual state follows aria-pressed,
+ * independently of the global Frame Controls visibility preference.
+ */
+.panel-frame__projection-copy--organize-lock {
+  min-width: 30px;
+  width: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.panel-frame__projection-copy--organize-lock:hover:not(:disabled) {
+  color: var(--color-text);
+}
+
+.workspace-shell button.panel-frame__projection-copy--organize-lock[aria-pressed="true"] {
+  color: #ffd18a;
+  border-color: #d99a38;
+  background-color: rgba(217, 154, 56, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 209, 138, 0.16);
+}
+
+.workspace-shell button.panel-frame__projection-copy--organize-lock[aria-pressed="true"]:hover:not(:disabled) {
+  color: #ffe4b4;
+  border-color: #f5b34f;
+  background-color: rgba(217, 154, 56, 0.32);
+}
+
+.panel-frame__projection-copy--organize-lock:focus-visible {
+  outline: 2px solid #f5b34f;
+  outline-offset: 2px;
+}
+
 .panel-frame__projection-copy[data-frame-control-status="unavailable"] {
   opacity: 0.55;
 }

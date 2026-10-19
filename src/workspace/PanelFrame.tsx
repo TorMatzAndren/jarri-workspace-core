@@ -488,6 +488,10 @@ export function PanelFrame({
                   key={control.definition.controlId}
                   type="button"
                   className={`panel-frame__projection-copy ${
+                    control.definition.kind === "organize-lock"
+                      ? "panel-frame__projection-copy--organize-lock"
+                      : ""
+                  } ${
                     control.definition.kind === "copy" && copyFeedback
                       ? `panel-frame__projection-copy--${copyFeedback}`
                       : control.definition.kind === "screenshot" && screenshotFeedback
