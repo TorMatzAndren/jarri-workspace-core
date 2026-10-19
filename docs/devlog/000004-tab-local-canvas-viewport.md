@@ -1,5 +1,9 @@
 # Devlog 000004 — Tab-Local Canvas Viewport
 
+> Historical engineering record. Its implementation and scope statements are
+> specific to this checkpoint; see the [documentation index](../README.md) for
+> current Core behavior.
+
 Date: 2026-08-19
 
 ## Purpose

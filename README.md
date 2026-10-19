@@ -2,7 +2,7 @@
 
 **Your workspace, your layout.**
 
-Jarri Workspace Core is an open-source, customizable desktop
+Jarri Workspace Core is a source-distributed, customizable desktop
 workspace. Arrange tools, information, and applications in movable
 panels across persistent, zoomable tabs.
 
@@ -19,8 +19,8 @@ extend Workspace with modules of your own.
 
 > **Version 0.4.0 — release candidate.**
 > This version is under final verification and has not yet
-> been tagged or published. Core is distributed as adaptable
-> source code, not as an automatically updated binary.
+> been tagged or published. Core is distributed as source code,
+> not as an automatically updated binary.
 
 [What's new in 0.4.0](docs/releases/0.4.0.md) ·
 [Changelog](CHANGELOG.md) ·
@@ -58,6 +58,13 @@ locally and restored on launch.
   canvas bounds, movable/resizable/minimizable frames, and whole-workspace or
   individual-frame screenshots. Save and restore reusable tab templates when
   you want to reuse a panel setup.
+- **Spatial organization:** Preserve Sizes arranges eligible panels in a
+  compact, canvas-aware cluster while preserving live dimensions, canvas
+  bounds, camera, and zoom. Per-instance Organize Lock keeps selected frames
+  stationary during automatic organization; it does not disable manual frame
+  interactions. Uniform remains a saved setting but is not currently applied
+  by the live Organize operation. See the spatial contract for locked-obstacle
+  and fallback behavior.
 - **Tab controls:** choose a horizontally scrollable or wrapping tab strip,
   optionally compress tab buttons, and drag tabs to reorder them. These options
   are in Settings and persist with workspace preferences.
@@ -84,6 +91,10 @@ locally and restored on launch.
   instrumentation, not a process or GPU memory monitor. Core currently has no
   backend observation producer, so an empty observation list does not mean
   there is no backend activity.
+
+Native Workspace and frame PNG screenshot composition currently has Linux
+implementation only. A Tauri bundle target listed in configuration does not
+establish support for other operating systems.
 
 ## Customization and extension
 
@@ -112,31 +123,47 @@ candidate pending integration and native release review. Specific limits:
 - Runtime lifecycle coordination observes panel membership and presentation;
   it does not suspend services, discard projections, or unmount offscreen
   panels as a new policy.
+- Runtime Diagnostics measures the local Workspace runtime. It does not provide
+  remote or distributed runtime telemetry, execution tracking, or terminal
+  session recovery.
 - Native filesystem access and the application host use Tauri. The separate
   adopted-window native surface host has Linux-specific implementation and
   remains experimental; it does not define a cross-platform plugin system.
 - The update-awareness UI checks a configured source-release metadata endpoint
   only when requested. It can link to release information; it does not download
-  or install a binary update.
+  or install a binary update. It reads the configured Core JSON metadata format;
+  it does not verify Jarri-Distribution publication-event signatures.
 - This repository is source-only as a release/distribution policy. Tauri
-  packaging can produce local bundles, but no Core binary feed or automatic
-  binary upgrade is provided here.
+  can produce local build artifacts, but they are not distributed as Core
+  releases. No Core binary feed, automatic installation, or binary upgrade is
+  provided here.
+
+Core source releases are announced through Jarri-Distribution (JD), which
+records signed, sequential, immutable publication events. A local Git commit
+or GitHub push alone does not advertise a Core release. Core's current
+Update Awareness UI does not consume or authenticate those JD events; it only
+checks its separately configured HTTPS JSON metadata endpoint.
 
 ## Prerequisites and local development
 
 Core is a source repository rather than a prebuilt application download. The
-frontend uses Node.js/npm, React 19, TypeScript 5.8, and Vite 7. Running the
-desktop host also requires Rust (the Tauri crate declares Rust 1.77.2 or newer),
-the Tauri 2 platform prerequisites, and native libraries required by the target.
-On Linux, the native dependencies include WebKitGTK and Cairo; see the official
-[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for the
-platform-specific system packages. A clean-machine dependency recipe has not
-been validated for this release candidate.
+frontend dependency ranges use React 19, TypeScript 5.8, and Vite 7; Node.js and
+npm versions are not pinned by this repository. Running the desktop host also
+requires Rust 1.77.2 or newer, Tauri 2 platform prerequisites, and native
+libraries required by the target. On Linux, native dependencies include
+WebKitGTK and Cairo; see the official
+[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for target
+packages. The repository does not yet declare a verified operating-system
+support matrix. In particular, adopted native-window surfaces and native PNG
+screenshot composition are implemented for Linux; `bundle.targets: all` is a
+packaging setting, not evidence that every target is supported or verified.
+A clean-machine dependency recipe has not been validated for this release
+candidate.
 
 From the repository root:
 
 ```sh
-npm install
+npm ci
 npm run dev -- --host 127.0.0.1
 ```
 
@@ -164,6 +191,13 @@ control guards are available as `npm run test:update-awareness`,
 
 ## Documentation
 
+- [Documentation index](docs/README.md) — navigation, document status, and
+  historical-record guidance.
+- [Contribution and licensing guidance](CONTRIBUTING.md) — contributor
+  expectations, provenance, and downstream licensing boundaries.
+- [Third-party notices](docs/third-party-notices.md) — identified external
+  contributions, asset licensing, and unresolved provenance checks.
+
 - [0.4.0 release notes](docs/releases/0.4.0.md) — user-facing summary and
   limitations.
 - [Changelog](CHANGELOG.md) — changes by release.
@@ -179,6 +213,28 @@ control guards are available as `npm run test:update-awareness`,
   — historical architectural investigation; it records the context at the time
   it was written and is not a current capability list.
 
+Workspace Core documentation applies only to this repository. Workspace Lab
+is a separate development environment, and WSKids has a different
+distribution policy; Core's source-distribution statement must not be used to
+describe either one.
+
 ## License
 
-MIT
+Jarri Workspace Core is free and open-source under the Mozilla Public License
+2.0 (MPL-2.0). The complete license is in [`LICENSE`](LICENSE). When you
+distribute modifications to MPL-covered files, those files remain subject to
+the MPL's source-distribution conditions. Independent modules in a larger work
+may use their own licenses, subject to the MPL and any other applicable terms.
+
+The MPL permits commercial use, customization, and redistribution subject to
+its terms. You may also sell support, customization, redistribution, or
+integration services. The MPL does not grant Jarri or contributor trademark,
+service-mark, or branding rights. It does not require you to contribute
+modifications upstream.
+
+The license applies to covered Core source, not automatically to every
+third-party dependency, theme, or image in the repository or a built
+application. See [third-party notices](docs/third-party-notices.md) for the
+confirmed first-party and collaborator attribution, plus separate dependency
+license information.
+Contributor guidance is in [`CONTRIBUTING.md`](CONTRIBUTING.md).

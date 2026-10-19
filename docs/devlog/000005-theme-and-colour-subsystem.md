@@ -1,5 +1,9 @@
 # Devlog 000005 — Theme And Colour Subsystem
 
+> Historical engineering record. Its implementation and scope statements are
+> specific to this checkpoint; see the [documentation index](../README.md) for
+> current Core behavior.
+
 Date: 2026-08-23
 
 ## Purpose

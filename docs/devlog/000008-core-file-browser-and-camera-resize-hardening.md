@@ -1,5 +1,8 @@
 # Workspace Core File Browser and Camera Resize Hardening
 
+> Historical engineering record; see the [documentation index](../README.md)
+> for the current feature inventory and supported-platform limitations.
+
 Date: 2026-08-25
 Status: Implemented and verified
 
@@ -9,7 +12,7 @@ This campaign establishes the first native File Browser capability in Jarri
 Workspace Core.
 
 The goal is not to reproduce the Jarri Workspace Lab File Browser by importing
-Lab or /opt/jarri ownership into Core. Core now owns a standalone filesystem
+Lab or external Jarri installation code into Core. Core now owns a standalone filesystem
 browser implementation with native Tauri filesystem operations and reusable
 Workspace resource-opening semantics.
 
@@ -76,8 +79,8 @@ breadcrumbs, Up and other explicit navigation operations change Current
 Directory. This prevents ordinary selection or disclosure actions from silently
 changing search scope.
 
-This is a Core-native implementation. It does not require the `/opt/jarri`
-Storage Watcher filesystem index in order to browse the filesystem.
+This is a Core-native implementation. It does not require a separate
+machine-specific Jarri Storage Watcher filesystem index in order to browse.
 
 That separation is intentional: Workspace Core must remain useful as a
 standalone Workspace shell, while richer Jarri-specific observation and indexed
@@ -236,7 +239,8 @@ dependencies of Workspace Core.
 At this stopping point:
 
 - Workspace Core has a native File Browser;
-- Core can inspect and manipulate filesystem state without `/opt/jarri`;
+- Core can inspect and manipulate filesystem state without a separate Jarri
+  installation;
 - files can project into Core-owned resource viewers;
 - file semantics/icons are reusable Core concepts;
 - browser state participates in Workspace persistence;

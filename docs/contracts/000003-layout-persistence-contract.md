@@ -6,6 +6,11 @@ This document defines how Jarri Workspace Core persists, loads, migrates, repair
 
 Layout persistence stores user preference and panel projection state. It does not store canonical runtime truth.
 
+**Current implementation:** the workspace document uses synchronous browser
+`localStorage` at `jarri.workspace.core.layout.v1`; tests also supply an
+in-memory provider. This contract also records future adapter requirements.
+There is no implemented Tauri JSON-file workspace provider in Core 0.4.0.
+
 Semantic projection documents, publication leases, frame-control runtime payloads,
 and clipboard text are runtime-only. Layout persistence may store frame-control
 visibility preferences and panel-view presentation preferences such as font
@@ -50,26 +55,29 @@ Rules:
 - `workspace.surfacePresentationMemory` stores opted-in presentation memory independently of live panel instances.
 - Panel surface presentation memory uses stable panel-type identity derived from `moduleId + panelType`.
 - `workspace.preferences.frameControls` stores frame-control visibility by stable panel-type/control key.
-- `workspace.preferences.panelViews` stores Workspace-owned presentation preferences by stable panel-type key.
+- `workspace.preferences.panelViews` stores Workspace-owned presentation
+  preferences by panel instance ID (for example, per-panel Frame Font scale).
 - `modules` records what was known when the layout was saved.
 
-## Storage Providers
+## Storage Provider Contract
 
-The persistence contract must support multiple storage providers.
+The interface is intentionally replaceable, but the current implementation
+uses a synchronous provider. Future providers must preserve the same repair and
+save semantics.
 
 ```ts
 type LayoutStorageProvider = {
-  load(workspaceId: string): Promise<PersistedWorkspaceDocument | null>;
-  save(workspaceId: string, document: PersistedWorkspaceDocument): Promise<void>;
-  backup?(workspaceId: string, document: PersistedWorkspaceDocument): Promise<void>;
+  load(workspaceId: string): PersistedWorkspaceDocument | null;
+  save(workspaceId: string, document: PersistedWorkspaceDocument): void;
+  remove(workspaceId: string): void;
 };
 ```
 
-Initial acceptable providers:
+Current and possible providers:
 
-- browser `localStorage`
-- Tauri-backed JSON file
-- in-memory test provider
+- browser `localStorage` (implemented)
+- in-memory test provider (test-only)
+- Tauri-backed JSON file (not implemented)
 
 Provider rules:
 
@@ -99,6 +107,13 @@ documents omit newly optional fields that have deterministic defaults. Current
 schema-2 Core layouts without tab-local camera fields or camera preferences
 normalize additively to include them without a schema bump.
 
+The current workspace schema is `2`. Optional `organizeLocked` is normalized
+to `false` when absent or invalid and therefore does not require a schema
+bump. The exact three legacy `core/runtime-*` panel identities migrate to
+`workspace-diagnostics/runtime-*` only when the destination panel definitions
+are registered; when Diagnostics is unavailable, normal missing-panel
+recovery retains the source identity and state.
+
 Version changes are not required when:
 
 - visual styling changes.
@@ -121,7 +136,7 @@ Rules:
 
 ## Load Pipeline
 
-The load pipeline is:
+The normalization pipeline is:
 
 1. Read persisted document from provider.
 2. If no document exists, create default workspace.
@@ -135,7 +150,9 @@ The load pipeline is:
 10. Normalize panel state through registered panel definitions.
 11. Repair active tab and focus order.
 12. Emit repair warnings.
-13. Save repaired document if repair changed persisted state.
+13. Return repair warnings. The controller does not silently save a repaired
+    document on initial mount; subsequent explicit workspace changes use the
+    normal persistence effect.
 
 Load must never execute domain mutation.
 
@@ -151,6 +168,15 @@ Migration rules:
 - Migrations must not call LLM/advisory providers.
 - Migrations must not execute domain actions.
 - Failed migrations fall back to default workspace only after preserving a backup when a backup provider exists.
+
+The implemented Diagnostics identity migration is deliberately narrow: it
+matches only `runtime-diagnostics`, `runtime-events`, and `runtime-inspector`
+under module `core`. It preserves panel ID, panel state, geometry, tab
+placement, selection-channel state, Events virtualization/scroll preferences,
+and migrates associated type-keyed surface presentation memory. If old and
+canonical memory keys both exist, canonical memory takes precedence and the
+legacy value remains available under its old key. Tab templates migrate the
+same identities while retaining their existing geometry-only panel format.
 
 ## Repair Rules
 
@@ -171,7 +197,10 @@ Required repair behavior:
 - Duplicate panel IDs -> stable regenerated IDs for duplicates.
 - Invalid geometry -> default geometry from panel definition or safe fallback.
 - Width/height below minimum -> clamp to minimum.
-- Negative x/y -> clamp to zero.
+- Finite negative panel x/y -> preserve and grid-normalize; invalid or
+  non-finite values use a safe fallback.
+- Missing or non-boolean `PanelInstance.organizeLocked` -> normalize to
+  `false` for both registered panels and recoverable Missing Panel instances.
 - Invalid focus order -> recompute sequential focus order.
 - Unknown panel definition -> missing-panel projection.
 - Invalid panel state -> panel definition normalizes or resets it.
@@ -204,7 +233,8 @@ type PanelGeometry = {
 Geometry rules:
 
 - Values are numbers in workspace canvas coordinates.
-- `x` and `y` must be zero or positive after repair.
+- Finite `x` and `y` may be negative; persisted values are grid-normalized
+  without clamping signed positions to zero.
 - `width` and `height` must be clamped to panel minimums.
 - Layout engine may snap values before persistence.
 - Future dock/split layout must either migrate this shape or add a new layout mode with explicit schema versioning.
@@ -227,16 +257,18 @@ Canvas-bound rules:
 - Values are numbers in workspace canvas coordinates.
 - `x` and `y` may be negative. Negative canvas origins are valid.
 - `width` and `height` must be repaired to safe minimum extents.
-- Bounds must expand to contain current panel geometry plus the Workspace
-  canvas margin.
+- Bounds preserve the proposed extent, expand to contain panel extents when
+  required, and enforce origin-relative minimum dimensions. No additional
+  panel-clearance margin is added. Contraction requires an explicit proposed
+  canvas resize; panel removal or shrinking does not contract automatically.
 - Legacy width/height-only bounds normalize by adding origin fields rather than
   by changing the storage namespace.
-- Panel geometry remains nonnegative in the current freeform panel model even
-  when the owning canvas has a negative origin.
+- Finite negative panel x/y positions are valid, are grid-normalized, and may
+  be preserved when the owning canvas has a negative origin.
 
 ## Camera Preferences
 
-Workspace Core persists camera preference fields before runtime consumption:
+Workspace Core persists and currently consumes these camera/navigation fields:
 
 - `gridSize`
 - `workspaceZoomIncrement`
@@ -246,8 +278,9 @@ Workspace Core persists camera preference fields before runtime consumption:
 These fields are distinct from `preferences.scale`. `preferences.scale` remains
 the global presentation scale currently consumed by Workspace rendering.
 
-Runtime ctrl-wheel zoom, canvas panning behavior, navigation alignment behavior,
-and Settings UI exposure for the camera preferences are explicitly deferred.
+Runtime Ctrl+wheel zoom, canvas panning, navigation alignment, zoom anchoring,
+and Settings controls are implemented. `preferences.scale` remains the global
+interface scale; tab-local `canvasScale` and `canvasCamera` hold camera state.
 
 ## Tab Templates
 
@@ -270,6 +303,10 @@ old width/height-only bounds normalize to `{ x, y, width, height }`.
 Restored template tabs start with `canvasScale: 1` regardless of the source
 tab's current scale. Template bounds and panel geometry are layout preference,
 not runtime truth.
+
+The current template shape stores panel module/type/title/geometry, not panel
+instance IDs, panel state, or `organizeLocked`. Instantiated template panels
+receive fresh identities and default to unlocked.
 
 ## Surface Presentation Memory
 
@@ -402,15 +439,18 @@ Restore or replay mutations require fresh preflight after reload.
 
 ## Save Pipeline
 
-The save pipeline is:
+The current save pipeline is:
 
 1. Accept in-memory `WorkspaceState`.
-2. Strip non-persistable runtime handles.
-3. Validate document envelope.
-4. Normalize serializable shape.
-5. Stamp `savedAt`.
-6. Save through provider.
-7. Report provider errors without mutating domain truth.
+2. Wrap it in the persisted document envelope with current schema and module
+   records.
+3. Stamp `savedAt`.
+4. Save through the configured synchronous provider. The browser provider
+   serializes the workspace to JSON in localStorage.
+
+Normalization and repair occur when loading; save does not run a second
+normalization pass. The current browser provider reports storage exceptions to
+its caller rather than mutating domain truth.
 
 Save must not call domain mutation services.
 

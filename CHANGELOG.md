@@ -5,8 +5,22 @@
 Workspace Core 0.4.0 is a source-only release candidate. It has not been tagged
 or published. See [the user-facing release notes](docs/releases/0.4.0.md).
 
+First-party Core source is licensed under MPL-2.0. See `LICENSE` and the
+third-party provenance and licensing inventory in
+`docs/third-party-notices.md`; dependency and asset licenses remain separate
+where applicable.
+
 ### Workspace navigation and discovery
 
+- Added persistent per-panel Organize Lock to Frame Controls. Locked frames
+  remain fixed during Preserve Sizes organization, constrain arranged panels
+  with the configured grid-unit gap, and remain fully available for manual
+  movement and resizing. Minimized panels retain their existing overlap-only
+  obstacle behavior.
+- Integrated canvas-aware Preserve Sizes organization with a bounded spatial
+  search for up to eight eligible panels and a validated deterministic shelf
+  fallback. Invalid plans are rejected without partial geometry changes;
+  Uniform currently remains a preference without a live arrangement result.
 - Added workspace-wide Open Panel search and a searchable Add Panel catalogue
   for registered modules and panels.
 - Added spatial catalogue controls, viewport-anchored placement, resizing,
@@ -106,9 +120,12 @@ or published. See [the user-facing release notes](docs/releases/0.4.0.md).
 - Runtime Events history virtualization is user-selectable and persisted per
   panel; normal rendering remains the default. Other Core panels are not
   automatically virtualized.
-- Clean-machine native build, desktop integration review, and separate
-  distribution-repository alignment remain release checks. No final release,
-  tag, binary publication, or distribution-format change is implied.
+- Clean-machine native build and desktop integration review remain release
+  checks. Jarri-Distribution
+  schema 2 has been independently verified for staging publications, but Core
+  0.4.0 has not been published through it. A local commit or GitHub push does
+  not create a publication event. No final release, tag, or binary publication
+  is implied.
 
 ---
 

@@ -1,5 +1,9 @@
 # Devlog 000007 — Spatial Navigation And Generic Media Controls
 
+> Historical engineering record. Its verification and future-work statements
+> reflect the point before later panel promotions; see the
+> [documentation index](../README.md) for current Core behavior.
+
 ## Summary
 
 This campaign completed the generic Workspace camera/navigation runtime begun
@@ -161,8 +165,9 @@ Core/Tauri browser resource path.
 
 ### Manual verification limitation
 
-Core does not currently ship a File Browser or another ordinary operator
-surface from which to choose an image.
+At this checkpoint, before the File Browser promotion recorded in
+`000008-core-file-browser-and-camera-resize-hardening.md`, Core did not yet
+ship an ordinary operator surface from which to choose an image.
 
 For that reason, real end-to-end manual image selection/rendering was not
 performed during this campaign.

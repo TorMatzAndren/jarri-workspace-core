@@ -4,6 +4,13 @@
 
 This document defines the first architecture contract for Jarri Workspace Core. It is a contract, not an implementation plan for a specific app. React, Tauri, persistence providers, and domain modules may evolve, but the boundaries in this document should remain stable unless a later contract supersedes them.
 
+**Implementation status:** this contract combines current Core behavior with
+longer-term architectural doctrine. Provider, preflight, truth/advisory, and
+temporal shapes below are extension contracts, not claims that Core ships
+those domain services. For the current capability set, see the repository
+[README](../../README.md), [0.4.0 release notes](../releases/0.4.0.md), and
+[spatial workspace contract](../spatial-workspace.md).
+
 Workspace Core exists to provide a reusable workspace substrate:
 
 - shell
@@ -73,7 +80,9 @@ Domain services return truth snapshots and action results. They do not persist p
 
 ## Core State Model
 
-The canonical state objects are `WorkspaceState`, `WorkspaceTab`, and `PanelInstance`.
+The canonical state objects are `WorkspaceState`, `WorkspaceTab`, and
+`PanelInstance`. The following is an abbreviated architectural shape; the
+authoritative complete declarations are in `src/core/types.ts`.
 
 ```ts
 type WorkspaceState = {
@@ -91,6 +100,8 @@ type WorkspacePreferences = {
   showGrid: boolean;
   gridSize: number;
   panelSpacing: number;
+  organizeMode: "preserve" | "uniform";
+  organizeGapUnits: number;
   workspaceZoomIncrement: number;
   workspaceZoomAnchorMode:
     | "viewport-center"
@@ -137,7 +148,10 @@ type WorkspaceTab = {
   title: string;
   canvasBounds: WorkspaceCanvasBounds;
   canvasScale: number;
+  canvasCamera: WorkspaceCanvasCamera;
   panels: PanelInstance[];
+  organizeSnapshot?: WorkspaceOrganizeSnapshot | null;
+  organizeActive?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -155,10 +169,12 @@ type PanelInstance = {
   panelType: string;
   title: string;
   geometry: PanelGeometry;
+  organizeLocked?: boolean;
   focusOrder: number;
   stateVersion: number;
   panelState: unknown;
   dirty?: DirtyStateSnapshot;
+  display?: PanelDisplayState;
   createdAt: string;
   updatedAt: string;
 };
@@ -182,15 +198,18 @@ Field rules:
 - `preferences` are user preferences, not runtime truth.
 - `preferences.scale` is the global Workspace presentation scale currently
   consumed by shell/canvas rendering.
-- `preferences.gridSize`, `preferences.workspaceZoomIncrement`,
+- `preferences.gridSize`, `preferences.panelSpacing`,
+  `preferences.workspaceZoomIncrement`,
   `preferences.workspaceZoomAnchorMode`, and
-  `preferences.panelNavigationAlignment` are persisted camera/navigation
-  preferences. They are schema-owned but not yet consumed by runtime behavior.
+  `preferences.panelNavigationAlignment` are consumed by current grid,
+  placement, zoom, and navigation behavior.
 - `WorkspaceTab.canvasBounds` is the tab-local logical canvas extent. It is
   origin-aware and uses `{ x, y, width, height }`.
 - `WorkspaceTab.canvasScale` is tab-local camera scale and defaults to `1`.
 - `moduleId` and `panelType` resolve a panel through the registry.
 - `panelState` is panel-local presentation state only.
+- `organizeLocked` is an optional instance setting; it affects automatic
+  Preserve Sizes organization only and does not block manual frame actions.
 - `focusOrder` controls z-order/focus ordering without relying on array order.
 - `dirty` is a snapshot used by the shell to coordinate close/save/discard prompts.
 
@@ -198,9 +217,13 @@ Canvas-bound rules:
 
 - Negative `WorkspaceCanvasBounds.x` and `WorkspaceCanvasBounds.y` are valid
   logical canvas origins.
-- Panel geometry remains nonnegative in the current freeform panel model.
-- Runtime ctrl-wheel zoom, panning, navigation alignment, and Settings exposure
-  for the new camera preferences are deferred to later phases.
+- Finite negative panel x/y coordinates are valid and preserved by persistence
+  normalization. Nonfinite geometry remains invalid.
+- Runtime panning, Ctrl+wheel zoom, navigation alignment, and their Settings
+  controls are implemented; see the spatial-navigation contract below.
+- `PanelInstance.organizeLocked` is instance-scoped persisted layout state. It
+  controls automatic Preserve Sizes participation only; it does not disable
+  manual panel interactions.
 
 ## Panel Registry
 
@@ -543,9 +566,9 @@ Restoration is recomputed when viewport or canvas geometry settles.
 
     { x, y, width, height }
 
-Negative canvas origins are valid. Current panel geometry remains
-non-negative, but Workspace camera and canvas architecture must not assume
-that logical Workspace coordinates begin at zero.
+Negative canvas origins and finite negative panel positions are valid.
+Workspace camera and canvas architecture must not assume that logical
+Workspace coordinates begin at zero.
 
 Spatial interaction rules:
 
@@ -658,7 +681,8 @@ Tauri commands and frontend providers.
 The Core File Browser is a presentation and interaction surface over native
 filesystem truth. Browser state does not become authoritative filesystem state.
 
-Core filesystem functionality must remain usable without `/opt/jarri`.
+Core filesystem functionality must remain usable without a separate,
+machine-specific Jarri Workspace installation.
 Jarri-specific filesystem observation, historical evidence, indexing and
 semantic knowledge belong behind explicit integration boundaries rather than
 becoming implicit dependencies of Workspace Core.
@@ -730,7 +754,7 @@ camera position unless an actual navigation operation occurs.
 
 Completed history is bounded to 100 traces, aggregate keys to 100 groups, active spans to 1,000 and marks to 100 per span. Aggregate statistics describe observations during the runtime lifetime and are not recomputed from the retained trace window. Runtime Events virtualization is an opt-in presentation preference and retains scroll position in panel state; the normal history view remains available. Trace selection is runtime-owned and keyed by persisted selection channel, so multiple inspectors do not depend on active-tab state. Evicted selections render as unavailable.
 
-Observation rows represent only active leases registered by real producers. Resource rows represent only explicit `exact-known` byte claims and include current lease reference counts. Neither empty observation nor empty claims imply zero activity or zero physical memory. Core currently has no demand source, projection store, execution registry, physical-memory provider or Core observation/resource producer. Lab's Runtime Demands and those richer provenance/event views remain application extensions until their source registries and consumers exist in Core. Runtime panel identities are `workspace-diagnostics/runtime-diagnostics`, `workspace-diagnostics/runtime-events`, and `workspace-diagnostics/runtime-inspector`; their module title is Workspace Diagnostics and catalogue category is observability. Layout loading migrates only the exact legacy `core/runtime-diagnostics`, `core/runtime-events`, and `core/runtime-inspector` identities when the target panel is registered. This preserves instance IDs, panel state (including selection channels and Events virtualization/scroll preferences), geometry, tab placement and associated surface presentation memory. Canonical and colliding legacy presentation-memory entries are both retained, with the canonical entry taking precedence. If the module is unavailable, the old identity is left for ordinary missing-panel recovery. Saved tab templates migrate those identities and retain geometry, while their existing schema continues to omit panel state. Jarri-Distribution alignment is a separate pending pre-GitHub gate.
+Observation rows represent only active leases registered by real producers. Resource rows represent only explicit `exact-known` byte claims and include current lease reference counts. Neither empty observation nor empty claims imply zero activity or zero physical memory. Core currently has no demand source, projection store, execution registry, physical-memory provider or Core observation/resource producer. Lab's Runtime Demands and those richer provenance/event views remain application extensions until their source registries and consumers exist in Core. Runtime panel identities are `workspace-diagnostics/runtime-diagnostics`, `workspace-diagnostics/runtime-events`, and `workspace-diagnostics/runtime-inspector`; their module title is Workspace Diagnostics and catalogue category is observability. Layout loading migrates only the exact legacy `core/runtime-diagnostics`, `core/runtime-events`, and `core/runtime-inspector` identities when the target panel is registered. This preserves instance IDs, panel state (including selection channels and Events virtualization/scroll preferences), geometry, tab placement and associated surface presentation memory. Canonical and colliding legacy presentation-memory entries are both retained, with the canonical entry taking precedence. If the module is unavailable, the old identity is left for ordinary missing-panel recovery. Saved tab templates migrate those identities and retain geometry, while their existing schema continues to omit panel state. Jarri-Distribution schema 2 is independently verified for staged publications, but Core's source-release checker does not consume or verify its signed publication events. A local commit or GitHub push does not advertise a Core release; final source publication is a separate JD operation.
 
 Diagnostics run in the existing React DOM host using React Profiler and the JavaScript monotonic performance clock. They introduce no native platform dependency and do not change the desktop platform support matrix. No OS process-memory measurement is available in this implementation.
 
@@ -758,8 +782,12 @@ The Core repository's release policy is source distribution. Its Tauri
 configuration can build local application bundles, but Core does not publish a
 binary update feed or implement binary installation/restart. Update awareness
 only reads an explicitly configured HTTPS metadata document; it does not fetch
-Git revisions or update a checkout. Distribution composition and alignment are
-handled outside this repository.
+Git revisions or update a checkout. Jarri-Distribution schema 2 is the
+separate source-publication system for signed, sequential, immutable release
+events. It has been independently verified for staging publications, but
+Core's Update Awareness provider does not consume or authenticate those events.
+A local commit or GitHub push does not create a release event; publication of a
+Core source archive is an explicit JD operation.
 
 The native filesystem bridge is part of the Tauri host. A separate adopted
 native-window surface implementation currently has Linux-specific code and

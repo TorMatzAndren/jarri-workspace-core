@@ -1,6 +1,7 @@
 {
   "name": "jarri-workspace-core",
   "version": "0.4.0",
+  "license": "MPL-2.0",
   "private": true,
   "type": "module",
   "scripts": {

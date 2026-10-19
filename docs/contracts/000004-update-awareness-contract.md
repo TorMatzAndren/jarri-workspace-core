@@ -17,12 +17,21 @@ The metadata document is JSON with this shape:
 ```json
 {
   "schemaVersion": 1,
-  "version": "0.5.0",
-  "releaseUrl": "https://example.invalid/releases/0.5.0"
+  "version": "1.2.3",
+  "releaseUrl": "https://example.invalid/releases/1.2.3"
 }
 ```
 
+The values above are format examples only and do not announce a Core release.
+
 `releaseUrl` is optional and, when supplied, must be HTTPS. Versions use Semantic Versioning. Failed HTTP/JSON/schema checks report `error`; a rejected request reports `offline` when the browser reports an offline connection and otherwise `error`. Successful checks update `lastSuccessfulCheck`.
+
+This provider checks only the configured JSON document. It does not consume or
+verify Jarri-Distribution's signed publication-event stream. Jarri-Distribution
+schema 2 is the separate source-publication system: its signed, sequential,
+immutable events are created by a publication operation, not by a local Core
+commit or GitHub push. Core's Update Awareness UI does not currently integrate
+with that event stream.
 
 This contract only reports status. It does not fetch Git data, change source files or Git state, install dependencies, build, or restart the application.
 

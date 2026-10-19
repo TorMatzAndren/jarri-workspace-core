@@ -1,5 +1,9 @@
 # Devlog 000003 — Workspace Screenshot Architecture
 
+> Historical engineering record. Its implementation and verification notes
+> are specific to this checkpoint; see the [documentation index](../README.md)
+> for current Core behavior and platform limitations.
+
 Date: 2026-08-19
 Updated: 2026-08-31
 

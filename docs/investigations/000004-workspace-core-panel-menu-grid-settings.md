@@ -1,5 +1,9 @@
 # Workspace Core Panel Menu, Grid, And Settings Hardening
 
+> Historical implementation checkpoint; later catalogue, tab, and settings
+> work may supersede present-tense statements. See the
+> [documentation index](../README.md).
+
 ## Scope
 
 This document records the Workspace Core hardening pass for panel menu UX, grid doctrine, and framework-level settings.

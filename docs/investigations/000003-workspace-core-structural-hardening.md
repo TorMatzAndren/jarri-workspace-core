@@ -1,5 +1,8 @@
 # Workspace Core Structural Hardening
 
+> Historical hardening record from before later runtime and panel promotions;
+> see the [documentation index](../README.md) for current behavior.
+
 ## Scope
 
 This document records the structural hardening pass performed before any GTI or other domain implementation.

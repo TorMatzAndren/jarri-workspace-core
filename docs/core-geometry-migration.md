@@ -1,5 +1,9 @@
 # Core Geometry Migration
 
+> Historical geometry migration record. Findings and verification statements
+> refer to that implementation pass; see the [documentation index](README.md)
+> for current documentation.
+
 ## Baseline findings (before this pass)
 
 - Core already establishes a projection-scoped Frame Font boundary: `PanelFrame` publishes a scale and `.panel-frame__body` applies it. Workspace Font remains inherited by shell and frame chrome. `WorkspaceSelect` explicitly forwards its owning panel scale into its portal.

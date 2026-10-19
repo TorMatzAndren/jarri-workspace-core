@@ -1,5 +1,8 @@
 # Workspace Core Manual UX Hardening
 
+> Historical UX hardening record; see the [documentation index](../README.md)
+> for current settings, tab, template, and lifecycle behavior.
+
 ## Scope
 
 This pass addresses manual-testing issues in the framework shell without adding GTI behavior, minimization, smart fill, docking, or a new state-management layer. The work stays inside Workspace Core primitives: preferences, tabs, panel projections, theme tokens, grid visibility, and local panel setup data.

@@ -1,5 +1,9 @@
 # Workspace Core Entropy Risks
 
+> Historical architecture risk review of an early Core scaffold. Its
+> recommendations are not a current roadmap; see the
+> [documentation index](../README.md) and current contracts.
+
 ## Scope
 
 Investigation of architectural entropy risks in the current minimal Jarri Workspace Core scaffold.

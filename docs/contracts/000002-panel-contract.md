@@ -6,6 +6,11 @@ This document defines how panels are registered, instantiated, rendered, focused
 
 Panels are projections over domain truth. A panel may cache presentation state, but canonical runtime truth belongs to domain services.
 
+This is a mixed normative contract: lifecycle hooks, dirty close workflows, and
+truth/advisory provider patterns describe extension boundaries and are not all
+implemented by the 0.4.0 shell. Current runtime lifecycle behavior is scoped in
+[contract 000005](000005-panel-lifecycle-contract.md).
+
 ## Terms
 
 - Panel Definition: registry metadata and lifecycle hooks for one panel type.
@@ -28,10 +33,12 @@ type PanelInstance = {
   panelType: string;
   title: string;
   geometry: PanelGeometry;
+  organizeLocked?: boolean;
   focusOrder: number;
   stateVersion: number;
   panelState: unknown;
   dirty?: DirtyStateSnapshot;
+  display?: PanelDisplayState;
   createdAt: string;
   updatedAt: string;
 };
@@ -52,6 +59,10 @@ Panel instance rules:
 - `moduleId + panelType` resolves to exactly one `PanelDefinition`.
 - `title` may be user-facing and editable if the definition allows it.
 - `geometry` is layout preference only.
+- `organizeLocked` is optional per-instance layout state. It defaults to
+  unlocked, excludes that instance from Preserve Sizes movement, and leaves
+  manual movement, resizing, minimizing, closing, focus, and content
+  interaction available.
 - `focusOrder` is the canonical focus/z-order value.
 - `stateVersion` is the definition-specific panel state version.
 - `panelState` must not contain canonical runtime truth.
@@ -138,7 +149,7 @@ Workspace Core renders normal panels through one synchronous `PanelFrame`.
 
 Ownership rules:
 
-- The frame owns title chrome, focus, movement, resize, minimize/restore, close controls, body loading boundary, body failure boundary, whole-panel semantic Copy, clipboard transport, frame-control feedback, and panel font scaling.
+- The frame owns title chrome, focus, movement, resize, minimize/restore, close controls, body loading boundary, body failure boundary, whole-panel semantic Copy, clipboard transport, frame-control feedback, panel font scaling, and the per-instance Organize Lock control.
 - The panel body owns substantive content, local interaction, panel-local presentation state, domain reads, and semantic projection meaning.
 - Semantic projection is the runtime document consumed by Workspace-owned frame capabilities. It is not the DOM and it is not persisted panel state.
 - Frame capabilities are generic Workspace controls. Panels may publish runtime payloads for a control, but panels do not own the Workspace catalog, labels, visibility preferences, transport, or feedback.
@@ -179,8 +190,13 @@ Dynamic publication rules:
 Frame-control rules:
 
 - Workspace owns the frame-control catalog and stable control IDs.
-- Current generic controls are `semantic-copy`, `font-decrease`, and `font-increase`.
+- Current generic controls are `semantic-copy`, `screenshot`, `font-decrease`,
+  `font-increase`, and `organize-lock`.
 - Frame-control visibility preferences are keyed by `moduleId:panelType:controlId`.
+- Visibility is shared by panel type, while `organizeLocked` belongs to the
+  individual panel instance. Hiding the control does not clear lock state.
+- The lock button exposes `Lock Organize` or `Unlock Organize` as its
+  accessible name and reports the current state with `aria-pressed`.
 - Font scaling is Workspace presentation state keyed by panel type, not document/editor/domain state.
 - Runtime frame-control payloads are per panel instance and are never persisted.
 

@@ -1,5 +1,9 @@
 # Panel Lifecycle Coordination — Workspace Core 0.4.0 Work
 
+> Engineering record for the 0.4.0 lifecycle implementation; see the
+> [lifecycle contract](../contracts/000005-panel-lifecycle-contract.md) for
+> current behavior and limits.
+
 ## Status
 
 The generic panel lifecycle foundation is implemented in Core. It adapts the

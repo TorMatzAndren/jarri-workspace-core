@@ -1,5 +1,8 @@
 # Devlog 000006 — Camera State Foundation
 
+> Historical engineering record. Later spatial-navigation work supersedes its
+> deferred-runtime statements; see the [documentation index](../README.md).
+
 Date: 2026-08-23
 
 ## Purpose
@@ -23,12 +26,9 @@ type WorkspaceCanvasBounds = {
 };
 ```
 
-Negative canvas origins are valid. This lets a tab's logical canvas grow left
-or upward without pretending that the logical origin must always be zero.
-
-Current panel geometry remains nonnegative after repair. The richer canvas
-bounds contract therefore expands the canvas coordinate model without changing
-the existing freeform panel geometry rules.
+Negative canvas origins and finite negative panel positions are valid in the
+current implementation. The persistence normalizer retains signed positions
+while applying the configured geometry normalization rules.
 
 Legacy width/height-only canvas bounds normalize to the richer shape by adding
 origin fields.
@@ -52,11 +52,9 @@ Workspace preferences now include persisted camera/navigation settings:
 - `workspaceZoomAnchorMode`
 - `panelNavigationAlignment`
 
-These fields are normalized and saved as Core layout preference. They are not
-yet consumed by runtime behavior.
-
-Ctrl+wheel zoom, pan behavior, panel navigation alignment, and Settings
-exposure for these preferences remain deferred to later phases.
+These fields are normalized, saved as Core layout preferences, and consumed by
+the current runtime. Ctrl+wheel zoom, panning, panel navigation alignment, and
+their Settings controls were added in later work.
 
 ## Persistence Compatibility
 

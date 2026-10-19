@@ -1,14 +1,18 @@
 # Jarri Workspace Core Source Audit
 
+> Historical source-comparison record. The 0.4.0 source-reality addendum near
+> the end updates specific Core facts that changed; other proposals and local
+> verification notes are archival. See the [documentation index](../README.md).
+
 ## Scope
 
 Investigation-only audit of three existing UI/codebases to extract reusable foundations for a future Jarri Workspace Core. No source project code was changed. This report focuses on workspace layouts, panels, tabs, high-density operational views, temporal/replay concepts, state persistence, visual hierarchy, and component boundaries.
 
-Sources inspected:
+Sources inspected at that time:
 
-- `/home/dretski/projects/spooty-hardened`
-- `/opt/jarri/ui/workspace`
-- `/home/dretski/projects/ChronoGit`
+- Spooty source repository
+- Jarri Workspace installation
+- ChronoGit source repository
 
 ## Source Projects
 
@@ -344,20 +348,12 @@ Do not start with GitHub Traffic Intelligence. First build and verify the reusab
 
 Then add a migration path for domain modules to register real GTI panels.
 
-## Verification Notes
+## Historical Verification Notes
 
-- `git -C /home/dretski/projects/spooty-hardened status --short` printed no changes.
-- `git -C /opt/jarri/ui/workspace status --short` printed no changes.
-- `git -C /home/dretski/projects/ChronoGit status --short` showed pre-existing local changes:
-  - `chronogit-app/src-tauri/src/lib.rs`
-  - `chronogit-app/src/App.css`
-  - `chronogit-app/src/App.tsx`
-  - `chronogit-app/src/core/chronogitRuntimeTypes.ts`
-  - `chronogit-app/src/panels/BranchPanel.tsx`
-  - `chronogit-app/src/core/branchTopology.ts`
-- `/home/dretski/projects/workspace-core/.git` exists as an empty/nonstandard directory, and `git -C /home/dretski/projects/workspace-core status --short` fails with `fatal: not a git repository (or any of the parent directories): .git`.
-- Intended workspace-core write set for this investigation:
-  - `docs/investigations/000001-workspace-core-source-audit.md`
+Repository status checks were made against the source projects at the time of
+the investigation. Machine-specific filesystem paths and working-tree details
+are omitted; they are not reproducible Core instructions or current publication
+facts.
 
 
 ## Current Core source-reality addendum (0.4.0)
@@ -366,7 +362,7 @@ This original investigation remains historical. Core now has a first-party Works
 
 Timing sources are bootstrap elapsed time and synchronous panel lifecycle reconciliation measured by the timing engine's monotonic clock, plus React Profiler `actualDuration` callbacks for non-diagnostics panels. The latter is React render work duration, not elapsed wall-clock time. Timing retains 100 completed traces; aggregate group cardinality is capped at 100; at most 1,000 active spans and 100 marks per trace are retained. Runtime disposal releases timing subscribers and in-flight spans while retaining the immutable completed snapshot for already-held readers. Diagnostics panels are excluded from Profiler recording to avoid a render/measurement feedback loop.
 
-The observations and resource evidence registries are runtime-owned, but Core currently has no producer for backend/execution/projection observation leases or byte claims. Empty tables describe missing evidence providers, not zero activity or zero memory. Explicit byte claims are semantic application claims with reference counts and are not total physical process RAM. Runtime Demands, execution event streams, projection provenance, demand registries, and Lab's broad linked-selection services depend on Lab-specific registries and producers; they are not supported by Core and were not imported. Runtime Diagnostics, Runtime Events, and Runtime Inspector use the minimal Core-owned selection-channel service. Jarri-Distribution alignment remains the separate pre-GitHub integration gate.
+The observations and resource evidence registries are runtime-owned, but Core currently has no producer for backend/execution/projection observation leases or byte claims. Empty tables describe missing evidence providers, not zero activity or zero memory. Explicit byte claims are semantic application claims with reference counts and are not total physical process RAM. Runtime Demands, execution event streams, projection provenance, demand registries, and Lab's broad linked-selection services depend on Lab-specific registries and producers; they are not supported by Core and were not imported. Runtime Diagnostics, Runtime Events, and Runtime Inspector use the minimal Core-owned selection-channel service. This historical audit's earlier statement that Jarri-Distribution alignment was pending has been superseded: JD schema 2 is now independently verified for staging publications. Core's source-release checker still does not consume or verify the signed JD event stream; see the current [Update Awareness contract](../contracts/000004-update-awareness-contract.md).
 
 
 The Runtime panels are registered under `workspace-diagnostics/runtime-diagnostics`, `workspace-diagnostics/runtime-events`, and `workspace-diagnostics/runtime-inspector`; Core infrastructure remains runtime-owned and in `src/core/`. Layout loading deterministically remaps only these three exact legacy `core/runtime-*` identities when the Diagnostics panels are registered, preserving panel IDs/state/geometry/tab placement and migrating keyed surface presentation memory. If keys collide, canonical memory takes precedence while the legacy entry remains recoverable. Without the module, ordinary missing-panel recovery retains original identity and state. Template normalization migrates the same identities and preserves geometry; templates do not persist panel state.

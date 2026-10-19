@@ -1,5 +1,8 @@
 # Workspace Core Theme And Panel Menu Arrangement
 
+> Historical appearance and catalogue investigation; see the
+> [documentation index](../README.md) for current features and settings.
+
 ## Scope
 
 This investigation note records the fixes for Workspace Core theme preset behavior and Panels menu arrangement settings.

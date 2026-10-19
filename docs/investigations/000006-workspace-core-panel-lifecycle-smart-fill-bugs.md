@@ -1,5 +1,9 @@
 # Workspace Core Panel Lifecycle, Smart Fill, And Bug Investigation
 
+> Historical investigation from before the lifecycle coordinator and spatial
+> Preserve Sizes work. Recommendations below are not a current roadmap; see
+> the [documentation index](../README.md) and current contracts.
+
 ## Scope
 
 Investigation-only review of Workspace Core panel lifecycle, minimization, smart tab fill, and obvious implementation bugs/risks.
@@ -417,9 +421,6 @@ Requested verification commands:
 - `npm run build`
 - `git status --short`
 
-External source projects to verify:
-
-- `/home/dretski/projects/spooty-hardened`
-- `/opt/jarri/ui/workspace`
-- `/home/dretski/projects/ChronoGit`
+External source projects were checked at that time; their local paths and
+current status are not part of this Core record.
 

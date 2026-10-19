@@ -1,5 +1,8 @@
 # Workspace Core Geometry And Scale Hardening
 
+> Historical geometry review; see the [documentation index](../README.md) and
+> spatial contract for current signed-coordinate and Organize behavior.
+
 ## Scope
 
 This document records the Workspace Core geometry/scale/layout-lifecycle hardening pass before minimization, smart fill, docking, or GTI.
@@ -100,7 +103,8 @@ Panel focus order is now bounded, while the Panels menu remains at a high z-inde
 - `dist/`
 - `*.tsbuildinfo`
 
-However, `dist/index.html` is currently tracked, so production builds can still produce tracked build-output diffs. That should be handled separately if the project wants source-only commits.
+At that checkpoint `dist/index.html` was tracked. It is not tracked in the
+current repository; `dist/` is ignored by the root `.gitignore`.
 
 ## Remaining Blockers Before Minimization
 

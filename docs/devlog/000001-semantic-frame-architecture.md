@@ -1,11 +1,15 @@
 # Semantic Frame Architecture Promotion
 
+> Historical engineering record. Its implementation and scope statements are
+> specific to this checkpoint; see the [documentation index](../README.md) for
+> current Core behavior.
+
 Date: 2026-08-19
 
 ## Scope
 
-This pass promotes the generic Workspace semantic/frame substrate from
-`/home/dretski/projects/workspace-lab` into Core without syncing Lab domain
+This pass promotes the generic Workspace semantic/frame substrate from the
+separate Workspace Lab repository into Core without syncing Lab domain
 modules.
 
 Core HEAD at start: `05a1a07 Workspace Core: add Jarri Workspace branding`.
